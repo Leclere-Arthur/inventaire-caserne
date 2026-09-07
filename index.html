@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <meta
+        name="theme-color"
+        content="#1f2937"
+    >
+
+    <meta
+        name="description"
+        content="Gestion du matériel de la caserne"
+    >
+
+    <meta
+        name="apple-mobile-web-app-capable"
+        content="yes"
+    >
+
+    <meta
+        name="apple-mobile-web-app-status-bar-style"
+        content="default"
+    >
+
+    <meta
+        name="apple-mobile-web-app-title"
+        content="Inventaire Caserne"
+    >
+
+    <link
+        rel="manifest"
+        href="./manifest.json"
+    >
+
+    <link
+        rel="apple-touch-icon"
+        href="./apple-touch-icon.png"
+    >
+
+    <title>
+        Inventaire Caserne
+    </title>
+
+    <link
+        rel="stylesheet"
+        href="./style.css"
+    >
+
+</head>
+
+
+<body>
+
+    <div id="app">
+
+        <main class="page">
+
+            <header class="accueil-header">
+
+                <h1>
+                    🚒 Inventaire Caserne
+                </h1>
+
+                <p>
+                    Gestion du matériel
+                </p>
+
+            </header>
+
+
+            <section class="menu-principal">
+
+                <button
+                    class="menu-button"
+                    id="btn-inventaire"
+                    type="button"
+                >
+
+                    <span class="menu-icon">
+                        📦
+                    </span>
+
+                    <span>
+
+                        <strong>
+                            Inventaire
+                        </strong>
+
+                        <small>
+                            Consulter le matériel
+                        </small>
+
+                    </span>
+
+                </button>
+
+
+                <button
+                    class="menu-button"
+                    id="btn-retour"
+                    type="button"
+                >
+
+                    <span class="menu-icon">
+                        🚒
+                    </span>
+
+                    <span>
+
+                        <strong>
+                            Retour d'intervention
+                        </strong>
+
+                        <small>
+                            Enregistrer le matériel utilisé
+                        </small>
+
+                    </span>
+
+                </button>
+
+
+                <button
+                    class="menu-button"
+                    id="btn-historique"
+                    type="button"
+                >
+
+                    <span class="menu-icon">
+                        📊
+                    </span>
+
+                    <span>
+
+                        <strong>
+                            Historique
+                        </strong>
+
+                        <small>
+                            Consulter les consommations
+                        </small>
+
+                    </span>
+
+                </button>
+
+
+                <button
+                    class="menu-button"
+                    id="btn-administration"
+                    type="button"
+                >
+
+                    <span class="menu-icon">
+                        ⚙️
+                    </span>
+
+                    <span>
+
+                        <strong>
+                            Administration
+                        </strong>
+
+                        <small>
+                            Gestion du matériel
+                        </small>
+
+                    </span>
+
+                </button>
+
+            </section>
+
+        </main>
+
+    </div>
+
+
+    <!--
+        Bibliothèque officielle Supabase.
+        Elle doit être chargée AVANT app.js.
+    -->
+
+    <script
+        src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"
+    ></script>
+
+
+    <!-- Configuration Supabase -->
+
+    <script
+        src="./supabase-config.js"
+    ></script>
+
+
+    <!-- Application -->
+
+    <script
+        src="./app.js"
+    ></script>
+
+
+    <!-- Service Worker / hors connexion -->
+
+    <script>
+
+        if (
+            "serviceWorker" in navigator
+        ) {
+
+            window.addEventListener(
+                "load",
+                function () {
+
+                    navigator.serviceWorker
+                        .register(
+                            "./service-worker.js"
+                        )
+                        .then(
+                            function (registration) {
+
+                                console.log(
+                                    "Service Worker actif :",
+                                    registration.scope
+                                );
+
+                            }
+                        )
+                        .catch(
+                            function (error) {
+
+                                console.error(
+                                    "Erreur Service Worker :",
+                                    error
+                                );
+
+                            }
+                        );
+
+                }
+            );
+
+        }
+
+    </script>
+
+
+</body>
+
+</html>
