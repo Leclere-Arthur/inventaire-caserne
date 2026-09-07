@@ -41,6 +41,8 @@ let materielEnModification = null;
 
 document.addEventListener("DOMContentLoaded", async function () {
 
+    initialiserIndicateurSynchronisation();
+
     chargerToutesLesDonnees();
 
     connecterBoutonsAccueil();
@@ -664,8 +666,8 @@ function sauvegarderToutesLesDonnees() {
     );
 
     // La sauvegarde locale reste immédiate et fonctionne hors connexion.
-    // Une synchronisation Supabase est lancée en arrière-plan lorsqu'elle est active.
-    programmerSynchronisationSupabase();
+    // La synchronisation Supabase est volontairement déclenchée uniquement
+    // lors des actions prévues dans l'application.
 
 }
 
@@ -681,8 +683,387 @@ let synchronisationSupabaseProgrammee = false;
 let abonnementSupabase = null;
 
 const STORAGE_SYNC = {
-    snapshot: "inventaire_caserne_supabase_snapshot_v1"
+    snapshot: "inventaire_caserne_supabase_snapshot_v1",
+    modificationsEnAttente: "inventaire_caserne_supabase_modifications_en_attente_v1"
 };
+
+let nombreSynchronisationsVisuelles = 0;
+
+function initialiserIndicateurSynchronisation() {
+
+    if (document.getElementById("indicateur-synchronisation")) {
+        return;
+    }
+
+    const style = document.createElement("style");
+
+    style.textContent = `
+        #indicateur-synchronisation {
+            position: fixed;
+            top: calc(12px + env(safe-area-inset-top, 0px));
+            right: calc(12px + env(safe-area-inset-right, 0px));
+            width: 38px;
+            height: 38px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 99999;
+            pointer-events: auto;
+            opacity: 0.95;
+            border: 0;
+            padding: 0;
+            margin: 0;
+            background: transparent;
+            cursor: pointer;
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        #indicateur-synchronisation:active {
+            transform: scale(0.94);
+        }
+
+        #indicateur-synchronisation:focus-visible {
+            outline: 2px solid #1687ff;
+            outline-offset: 2px;
+            border-radius: 50%;
+        }
+
+        #indicateur-synchronisation svg {
+            width: 27px;
+            height: 27px;
+            display: block;
+            transform-origin: center;
+        }
+
+        #indicateur-synchronisation.en-cours svg {
+            animation: rotation-synchronisation 0.8s linear infinite;
+        }
+
+        @keyframes rotation-synchronisation {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+    `;
+
+    document.head.appendChild(style);
+
+    const indicateur = document.createElement("button");
+    indicateur.id = "indicateur-synchronisation";
+    indicateur.type = "button";
+    indicateur.setAttribute(
+        "aria-label",
+        "Synchroniser maintenant"
+    );
+    indicateur.setAttribute(
+        "title",
+        "Synchroniser maintenant"
+    );
+
+    indicateur.addEventListener(
+        "click",
+        function () {
+            void synchroniserManuellement();
+        }
+    );
+
+    indicateur.innerHTML = `
+        <svg viewBox="0 0 32 32" aria-hidden="true">
+            <path
+                d="M25.5 10.5A11 11 0 0 0 7.2 7.8"
+                fill="none"
+                stroke="#1687ff"
+                stroke-width="3"
+                stroke-linecap="round"
+            />
+            <path
+                d="M7.1 7.8l5.2-.4-2.2 4.8"
+                fill="none"
+                stroke="#1687ff"
+                stroke-width="3"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+            />
+            <path
+                d="M6.5 21.5a11 11 0 0 0 18.3 2.7"
+                fill="none"
+                stroke="#1687ff"
+                stroke-width="3"
+                stroke-linecap="round"
+            />
+            <path
+                d="M24.9 24.2l-5.2.4 2.2-4.8"
+                fill="none"
+                stroke="#1687ff"
+                stroke-width="3"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+            />
+        </svg>
+    `;
+
+    document.body.appendChild(indicateur);
+
+}
+
+function demarrerIndicateurSynchronisation() {
+
+    nombreSynchronisationsVisuelles += 1;
+
+    const indicateur =
+        document.getElementById("indicateur-synchronisation");
+
+    if (indicateur) {
+        indicateur.classList.add("en-cours");
+    }
+
+}
+
+function arreterIndicateurSynchronisation() {
+
+    nombreSynchronisationsVisuelles =
+        Math.max(
+            0,
+            nombreSynchronisationsVisuelles - 1
+        );
+
+    if (nombreSynchronisationsVisuelles > 0) {
+        return;
+    }
+
+    const indicateur =
+        document.getElementById("indicateur-synchronisation");
+
+    if (indicateur) {
+        indicateur.classList.remove("en-cours");
+    }
+
+}
+
+function marquerModificationsEnAttente() {
+
+    localStorage.setItem(
+        STORAGE_SYNC.modificationsEnAttente,
+        "1"
+    );
+
+}
+
+function effacerModificationsEnAttente() {
+
+    localStorage.removeItem(
+        STORAGE_SYNC.modificationsEnAttente
+    );
+
+}
+
+function existeModificationsEnAttente() {
+
+    return (
+        localStorage.getItem(
+            STORAGE_SYNC.modificationsEnAttente
+        ) === "1"
+    );
+
+}
+
+async function synchroniserManuellement() {
+
+    if (!navigator.onLine) {
+
+        alert(
+            "📴 Pas de connexion Internet. La synchronisation sera possible dès que la connexion reviendra."
+        );
+
+        return;
+    }
+
+    demarrerIndicateurSynchronisation();
+
+    try {
+
+        const supabase = obtenirClientSupabase();
+
+        if (!supabase) {
+
+            alert(
+                "⚠️ Supabase n'est pas disponible."
+            );
+
+            return;
+        }
+
+        // S'il reste une modification locale en attente,
+        // on l'envoie d'abord vers Supabase.
+        if (existeModificationsEnAttente()) {
+
+            synchronisationSupabaseEnCours = true;
+
+            try {
+
+                await envoyerDonneesLocalesVersSupabase();
+                effacerModificationsEnAttente();
+
+            } finally {
+
+                synchronisationSupabaseEnCours = false;
+
+            }
+
+        }
+
+        // Puis on relit la base centrale.
+        const donnees =
+            await recupererDonneesSupabase();
+
+        synchronisationSupabaseEnCours = true;
+
+        try {
+
+            await appliquerDonneesSupabaseLocalement(
+                donnees
+            );
+
+        } finally {
+
+            synchronisationSupabaseEnCours = false;
+
+        }
+
+        synchronisationSupabaseActive = true;
+
+        console.log(
+            "🔄 Synchronisation manuelle terminée."
+        );
+
+    } catch (erreur) {
+
+        console.warn(
+            "⚠️ Synchronisation manuelle impossible.",
+            erreur
+        );
+
+        alert(
+            "⚠️ La synchronisation n'a pas pu être effectuée."
+        );
+
+    } finally {
+
+        arreterIndicateurSynchronisation();
+
+    }
+
+}
+
+async function synchroniserAvantNavigation() {
+
+    const supabase = obtenirClientSupabase();
+
+    if (!supabase || !navigator.onLine) {
+        return;
+    }
+
+    demarrerIndicateurSynchronisation();
+
+    try {
+
+        // Si une modification a été faite hors connexion,
+        // elle est envoyée avant de récupérer la base centrale.
+        if (existeModificationsEnAttente()) {
+
+            synchronisationSupabaseEnCours = true;
+
+            try {
+                await envoyerDonneesLocalesVersSupabase();
+                effacerModificationsEnAttente();
+            } finally {
+                synchronisationSupabaseEnCours = false;
+            }
+
+        }
+
+        const donnees =
+            await recupererDonneesSupabase();
+
+        synchronisationSupabaseEnCours = true;
+
+        try {
+            await appliquerDonneesSupabaseLocalement(
+                donnees
+            );
+        } finally {
+            synchronisationSupabaseEnCours = false;
+        }
+
+        synchronisationSupabaseActive = true;
+
+        console.log(
+            "🔄 Synchronisation avant affichage terminée."
+        );
+
+    } catch (erreur) {
+
+        console.warn(
+            "⚠️ Synchronisation avant affichage impossible. Les données locales restent disponibles.",
+            erreur
+        );
+
+    } finally {
+
+        arreterIndicateurSynchronisation();
+
+    }
+
+}
+
+async function synchroniserApresModification() {
+
+    marquerModificationsEnAttente();
+
+    const supabase = obtenirClientSupabase();
+
+    if (!supabase || !navigator.onLine) {
+
+        console.log(
+            "📴 Modification enregistrée localement. Elle sera synchronisée lors de la prochaine action en ligne."
+        );
+
+        return;
+    }
+
+    demarrerIndicateurSynchronisation();
+
+    try {
+
+        synchronisationSupabaseEnCours = true;
+
+        try {
+            await envoyerDonneesLocalesVersSupabase();
+            effacerModificationsEnAttente();
+        } finally {
+            synchronisationSupabaseEnCours = false;
+        }
+
+        synchronisationSupabaseActive = true;
+
+        console.log(
+            "✅ Modification envoyée à Supabase."
+        );
+
+    } catch (erreur) {
+
+        console.warn(
+            "⚠️ La modification reste enregistrée localement et sera renvoyée plus tard.",
+            erreur
+        );
+
+    } finally {
+
+        arreterIndicateurSynchronisation();
+
+    }
+
+}
 
 function obtenirClientSupabase() {
 
@@ -1005,10 +1386,6 @@ async function appliquerDonneesSupabaseLocalement(donnees) {
     }
 
     enregistrerSnapshotSynchronisation();
-
-    // Met immédiatement à jour l'écran actuellement affiché
-    // lorsqu'une modification arrive depuis Supabase.
-    rafraichirAffichageApresSynchronisation();
 
 }
 
@@ -1462,10 +1839,6 @@ async function synchroniserVersSupabase() {
     try {
         await envoyerDonneesLocalesVersSupabase();
         console.log("✅ Synchronisation Supabase terminée.");
-
-        // Relit ensuite la version centrale afin que l'écran local
-        // reflète exactement les données enregistrées dans Supabase.
-        programmerRechargementDepuisSupabase();
     } catch (erreur) {
         console.warn(
             "⚠️ Synchronisation Supabase échouée. Les données locales sont conservées.",
@@ -1660,8 +2033,9 @@ async function initialiserSynchronisationSupabase() {
 
         synchronisationSupabaseActive = true;
         enregistrerSnapshotSynchronisation();
-        installerAbonnementTempsReelSupabase();
 
+        // Pas de rafraîchissement Realtime automatique :
+        // les synchronisations se font uniquement lors des actions utilisateur.
         console.log(
             "✅ Connexion Supabase opérationnelle."
         );
@@ -1679,34 +2053,13 @@ async function initialiserSynchronisationSupabase() {
 
 }
 
-window.addEventListener("online", async function () {
+window.addEventListener("online", function () {
 
-    if (!clientSupabase || !synchronisationSupabaseActive) {
-        await initialiserSynchronisationSupabase();
-        return;
-    }
-
-    await synchroniserVersSupabase();
-    programmerRechargementDepuisSupabase();
+    // Aucune synchronisation automatique ici.
+    // La prochaine ouverture d'un écran ou validation lancera la synchronisation.
+    console.log("🌐 Connexion Internet disponible.");
 
 });
-
-
-// Sécurité supplémentaire : même si un événement Realtime est manqué,
-// l'application relit automatiquement Supabase toutes les 5 secondes.
-// Cela permet au PC, à l'iPad et aux autres appareils d'afficher rapidement
-// le même stock et les mêmes interventions.
-setInterval(function () {
-
-    if (
-        synchronisationSupabaseActive &&
-        navigator.onLine &&
-        !synchronisationSupabaseEnCours
-    ) {
-        programmerRechargementDepuisSupabase();
-    }
-
-}, 5000);
 
 
 /* =========================================================
@@ -2032,7 +2385,9 @@ function afficherAccueil() {
    INVENTAIRE
    ========================================================= */
 
-function afficherInventaire() {
+async function afficherInventaire() {
+
+    await synchroniserAvantNavigation();
 
     document.getElementById(
         "app"
@@ -2531,7 +2886,9 @@ function genererCarteInventaire(
    RETOUR D'INTERVENTION
    ========================================================= */
 
-function afficherRetourIntervention() {
+async function afficherRetourIntervention() {
+
+    await synchroniserAvantNavigation();
 
     consommationsEnCours = {};
 
@@ -3447,6 +3804,8 @@ function validerRetourIntervention() {
 
     sauvegarderToutesLesDonnees();
 
+    void synchroniserApresModification();
+
 
     consommationsEnCours = {};
 
@@ -3465,7 +3824,9 @@ function validerRetourIntervention() {
    HISTORIQUE
    ========================================================= */
 
-function afficherHistorique() {
+async function afficherHistorique() {
+
+    await synchroniserAvantNavigation();
 
     document.getElementById(
         "app"
@@ -4335,7 +4696,9 @@ function afficherDetailIntervention(
    ADMINISTRATION
    ========================================================= */
 
-function ouvrirAdministration() {
+async function ouvrirAdministration() {
+
+    await synchroniserAvantNavigation();
 
     document.getElementById(
         "app"
@@ -5423,6 +5786,8 @@ function enregistrerMateriel() {
 
                     sauvegarderToutesLesDonnees();
 
+    void synchroniserApresModification();
+
 
                     materielEnModification =
                         null;
@@ -5441,6 +5806,8 @@ function enregistrerMateriel() {
         } else {
 
             sauvegarderToutesLesDonnees();
+
+    void synchroniserApresModification();
 
 
             materielEnModification =
@@ -5515,6 +5882,8 @@ function enregistrerMateriel() {
 
                 sauvegarderToutesLesDonnees();
 
+    void synchroniserApresModification();
+
 
                 alert(
                     "✅ Matériel créé."
@@ -5534,6 +5903,8 @@ function enregistrerMateriel() {
 
 
         sauvegarderToutesLesDonnees();
+
+    void synchroniserApresModification();
 
 
         alert(
@@ -5756,6 +6127,8 @@ function ajouterCategorie() {
 
     sauvegarderToutesLesDonnees();
 
+    void synchroniserApresModification();
+
 
     alert(
         "✅ Catégorie créée."
@@ -5875,6 +6248,8 @@ function modifierCategorie(
 
     sauvegarderToutesLesDonnees();
 
+    void synchroniserApresModification();
+
 
     alert(
         "✅ Catégorie modifiée."
@@ -5972,6 +6347,8 @@ function supprimerCategorie(
 
     sauvegarderToutesLesDonnees();
 
+    void synchroniserApresModification();
+
 
     alert(
         "✅ Catégorie supprimée."
@@ -6057,6 +6434,8 @@ function modifierStock(
 
 
     sauvegarderToutesLesDonnees();
+
+    void synchroniserApresModification();
 
 
     alert(
@@ -6146,6 +6525,8 @@ function supprimerMateriel(
 
     sauvegarderToutesLesDonnees();
 
+    void synchroniserApresModification();
+
 
     alert(
         "✅ Matériel supprimé."
@@ -6225,6 +6606,8 @@ function remiseZeroHistorique() {
 
 
     sauvegarderToutesLesDonnees();
+
+    void synchroniserApresModification();
 
 
     alert(
