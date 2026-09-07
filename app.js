@@ -727,8 +727,8 @@ function estUUID(value) {
 
 function genererUUID() {
 
-    if (crypto && typeof crypto.randomUUID === "function") {
-        return crypto.randomUUID();
+    if (window.crypto && typeof window.crypto.randomUUID === "function") {
+        return window.crypto.randomUUID();
     }
 
     return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(
@@ -1005,6 +1005,54 @@ async function appliquerDonneesSupabaseLocalement(donnees) {
     }
 
     enregistrerSnapshotSynchronisation();
+
+    // Met immédiatement à jour l'écran actuellement affiché
+    // lorsqu'une modification arrive depuis Supabase.
+    rafraichirAffichageApresSynchronisation();
+
+}
+
+function rafraichirAffichageApresSynchronisation() {
+
+    // Inventaire
+    if (document.getElementById("inventaire-contenu")) {
+        afficherResultatsInventaire();
+        return;
+    }
+
+    // Gestion du matériel (administration)
+    if (document.getElementById("liste-admin")) {
+        afficherListeAdmin();
+        return;
+    }
+
+    // Historique
+    if (
+        document.getElementById("historique-total") ||
+        document.getElementById("historique-interventions")
+    ) {
+        afficherHistoriqueTotal();
+        afficherHistoriqueInterventions();
+        return;
+    }
+
+    // Retour d'intervention :
+    // on actualise les stocks sans effacer les quantités déjà sélectionnées.
+    if (document.getElementById("categories-retour")) {
+        afficherCategoriesRetour();
+
+        const champRecherche =
+            document.getElementById("recherche-retour");
+
+        if (
+            champRecherche &&
+            String(champRecherche.value || "").trim()
+        ) {
+            rechercherMaterielRetour();
+        }
+
+        mettreAJourResume();
+    }
 
 }
 
@@ -1414,6 +1462,10 @@ async function synchroniserVersSupabase() {
     try {
         await envoyerDonneesLocalesVersSupabase();
         console.log("✅ Synchronisation Supabase terminée.");
+
+        // Relit ensuite la version centrale afin que l'écran local
+        // reflète exactement les données enregistrées dans Supabase.
+        programmerRechargementDepuisSupabase();
     } catch (erreur) {
         console.warn(
             "⚠️ Synchronisation Supabase échouée. Les données locales sont conservées.",
@@ -1629,16 +1681,32 @@ async function initialiserSynchronisationSupabase() {
 
 window.addEventListener("online", async function () {
 
-    if (!clientSupabase) {
+    if (!clientSupabase || !synchronisationSupabaseActive) {
         await initialiserSynchronisationSupabase();
         return;
     }
 
-    synchronisationSupabaseActive = true;
     await synchroniserVersSupabase();
     programmerRechargementDepuisSupabase();
 
 });
+
+
+// Sécurité supplémentaire : même si un événement Realtime est manqué,
+// l'application relit automatiquement Supabase toutes les 5 secondes.
+// Cela permet au PC, à l'iPad et aux autres appareils d'afficher rapidement
+// le même stock et les mêmes interventions.
+setInterval(function () {
+
+    if (
+        synchronisationSupabaseActive &&
+        navigator.onLine &&
+        !synchronisationSupabaseEnCours
+    ) {
+        programmerRechargementDepuisSupabase();
+    }
+
+}, 5000);
 
 
 /* =========================================================
