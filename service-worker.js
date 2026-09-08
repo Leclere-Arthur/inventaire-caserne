@@ -15,7 +15,7 @@
  */
 
 const CACHE_NAME =
-    "inventaire-caserne-v8";
+    "inventaire-caserne-v9";
 
 
 /*
@@ -55,7 +55,7 @@ self.addEventListener(
     function (event) {
 
         console.log(
-            "Installation du Service Worker V8..."
+            "Installation du Service Worker V9..."
         );
 
 
@@ -107,7 +107,7 @@ self.addEventListener(
     function (event) {
 
         console.log(
-            "Activation du Service Worker V8..."
+            "Activation du Service Worker V9..."
         );
 
 
@@ -181,14 +181,33 @@ self.addEventListener(
         /*
          * On ne traite que les requêtes GET.
          */
-
         if (
             event.request.method !==
             "GET"
         ) {
-
             return;
+        }
 
+
+        const url =
+            new URL(
+                event.request.url
+            );
+
+
+        /*
+         * IMPORTANT :
+         * on ne met JAMAIS en cache les requêtes vers
+         * Supabase, le CDN JavaScript ou un autre domaine.
+         *
+         * Ainsi les stocks, interventions et consommations
+         * sont toujours lus directement depuis Supabase.
+         */
+        if (
+            url.origin !==
+            self.location.origin
+        ) {
+            return;
         }
 
 
@@ -202,33 +221,21 @@ self.addEventListener(
                     function (reponseCache) {
 
                         /*
-                         * Si la ressource est déjà
-                         * en cache, on la retourne.
+                         * Pour les fichiers locaux de l'application,
+                         * on peut utiliser le cache hors connexion.
                          */
-
                         if (
                             reponseCache
                         ) {
-
                             return reponseCache;
-
                         }
 
-
-                        /*
-                         * Sinon, on essaie le réseau.
-                         */
 
                         return fetch(
                             event.request
                         )
                             .then(
                                 function (reponseReseau) {
-
-                                    /*
-                                     * Si la réponse est correcte,
-                                     * on la garde dans le cache.
-                                     */
 
                                     if (
                                         reponseReseau &&
@@ -267,12 +274,6 @@ self.addEventListener(
                             .catch(
                                 function () {
 
-                                    /*
-                                     * Sans Internet, lors d'une
-                                     * navigation, on retourne
-                                     * la page principale.
-                                     */
-
                                     if (
                                         event.request.mode ===
                                         "navigate"
@@ -284,11 +285,6 @@ self.addEventListener(
 
                                     }
 
-
-                                    /*
-                                     * Pour les autres ressources,
-                                     * on renvoie une erreur hors ligne.
-                                     */
 
                                     return new Response(
                                         "",
