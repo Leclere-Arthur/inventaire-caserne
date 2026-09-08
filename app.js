@@ -729,6 +729,22 @@ function initialiserIndicateurSynchronisation() {
             border-radius: 50%;
         }
 
+        .historique-total.historique-rupture-stock {
+            background: #d71920 !important;
+            border-color: #d71920 !important;
+            color: #ffffff !important;
+        }
+
+        .historique-total.historique-rupture-stock *,
+        .historique-total .texte-rupture-stock,
+        .historique-total .texte-rupture-stock * {
+            color: #ffffff !important;
+        }
+
+        .historique-total.historique-rupture-stock:active {
+            background: #b80f15 !important;
+        }
+
         #indicateur-synchronisation svg {
             width: 27px;
             height: 27px;
@@ -869,6 +885,19 @@ function existeModificationsEnAttente() {
 
 async function synchroniserManuellement() {
 
+    const debutAnimationSynchronisation =
+        Date.now();
+
+    while (synchronisationSupabaseEnCours) {
+
+        await new Promise(
+            function (resolve) {
+                setTimeout(resolve, 80);
+            }
+        );
+
+    }
+
     if (!navigator.onLine) {
 
         alert(
@@ -932,6 +961,10 @@ async function synchroniserManuellement() {
 
         synchronisationSupabaseActive = true;
 
+        // Le clic sur les flèches est une action volontaire :
+        // on met donc immédiatement à jour l'écran affiché.
+        rafraichirAffichageApresSynchronisation();
+
         console.log(
             "🔄 Synchronisation manuelle terminée."
         );
@@ -949,6 +982,31 @@ async function synchroniserManuellement() {
 
     } finally {
 
+        const tempsEcoule =
+            Date.now() -
+            debutAnimationSynchronisation;
+
+        const tempsRestant =
+            Math.max(
+                0,
+                2000 - tempsEcoule
+            );
+
+        if (tempsRestant > 0) {
+
+            await new Promise(
+                function (resolve) {
+
+                    setTimeout(
+                        resolve,
+                        tempsRestant
+                    );
+
+                }
+            );
+
+        }
+
         arreterIndicateurSynchronisation();
 
     }
@@ -956,6 +1014,16 @@ async function synchroniserManuellement() {
 }
 
 async function synchroniserAvantNavigation() {
+
+    while (synchronisationSupabaseEnCours) {
+
+        await new Promise(
+            function (resolve) {
+                setTimeout(resolve, 80);
+            }
+        );
+
+    }
 
     const supabase = obtenirClientSupabase();
 
@@ -1018,6 +1086,16 @@ async function synchroniserAvantNavigation() {
 
 async function synchroniserApresModification() {
 
+    while (synchronisationSupabaseEnCours) {
+
+        await new Promise(
+            function (resolve) {
+                setTimeout(resolve, 80);
+            }
+        );
+
+    }
+
     marquerModificationsEnAttente();
 
     const supabase = obtenirClientSupabase();
@@ -1038,16 +1116,43 @@ async function synchroniserApresModification() {
         synchronisationSupabaseEnCours = true;
 
         try {
+
             await envoyerDonneesLocalesVersSupabase();
             effacerModificationsEnAttente();
+
         } finally {
+
             synchronisationSupabaseEnCours = false;
+
+        }
+
+        // Une fois l'envoi terminé, on relit immédiatement la base centrale.
+        // Cela évite qu'un iPhone/iPad garde une ancienne copie locale.
+        const donnees =
+            await recupererDonneesSupabase();
+
+        synchronisationSupabaseEnCours = true;
+
+        try {
+
+            await appliquerDonneesSupabaseLocalement(
+                donnees
+            );
+
+        } finally {
+
+            synchronisationSupabaseEnCours = false;
+
         }
 
         synchronisationSupabaseActive = true;
 
+        // Cette actualisation n'a lieu qu'après une validation utilisateur,
+        // jamais pendant la saisie d'un formulaire.
+        rafraichirAffichageApresSynchronisation();
+
         console.log(
-            "✅ Modification envoyée à Supabase."
+            "✅ Modification synchronisée avec Supabase."
         );
 
     } catch (erreur) {
@@ -3973,9 +4078,61 @@ function afficherHistoriqueTotal() {
 
                 }
             )
+
+            // Dans l'historique, on affiche uniquement
+            // les matériels qui ont réellement été consommés.
+            .filter(
+                function (ligne) {
+
+                    return (
+                        Number(ligne.total) > 0
+                    );
+
+                }
+            )
+
             .sort(
                 function (a, b) {
 
+                    const aStockFaible =
+                        a.materiel.minimum > 0 &&
+                        a.materiel.stock <=
+                        a.materiel.minimum;
+
+                    const bStockFaible =
+                        b.materiel.minimum > 0 &&
+                        b.materiel.stock <=
+                        b.materiel.minimum;
+
+                    // Les ruptures de stock sont tout en haut.
+                    const aRupture =
+                        Number(a.materiel.stock) === 0;
+
+                    const bRupture =
+                        Number(b.materiel.stock) === 0;
+
+                    if (aRupture !== bRupture) {
+
+                        return (
+                            aRupture
+                                ? -1
+                                : 1
+                        );
+
+                    }
+
+                    // Puis viennent les stocks faibles.
+                    if (aStockFaible !== bStockFaible) {
+
+                        return (
+                            aStockFaible
+                                ? -1
+                                : 1
+                        );
+
+                    }
+
+                    // Ensuite on classe par quantité consommée.
                     return (
                         b.total -
                         a.total
@@ -3993,7 +4150,7 @@ function afficherHistoriqueTotal() {
 
             <div class="materiel">
 
-                Aucun matériel enregistré.
+                Aucun matériel consommé.
 
             </div>
 
@@ -4014,11 +4171,20 @@ function afficherHistoriqueTotal() {
                         ligne.materiel.stock <=
                         ligne.materiel.minimum;
 
+                    const ruptureStock =
+                        Number(
+                            ligne.materiel.stock
+                        ) === 0;
+
 
                     const classeAlerte =
-                        stockMinimum
-                            ? " historique-stock-faible"
-                            : "";
+                        ruptureStock
+                            ? " historique-rupture-stock"
+                            : (
+                                stockMinimum
+                                    ? " historique-stock-faible"
+                                    : ""
+                            );
 
 
                     return `
@@ -4041,7 +4207,11 @@ function afficherHistoriqueTotal() {
                                     historique-icone
                                 "
                             >
-                                📦
+                                ${
+                                    ruptureStock
+                                        ? "⛔"
+                                        : "📦"
+                                }
                             </span>
 
 
@@ -4049,11 +4219,13 @@ function afficherHistoriqueTotal() {
                                 class="
                                     historique-nom
                                     ${
-                                        stockMinimum
-                                        ?
-                                        "texte-stock-faible"
-                                        :
-                                        ""
+                                        ruptureStock
+                                            ? "texte-rupture-stock"
+                                            : (
+                                                stockMinimum
+                                                    ? "texte-stock-faible"
+                                                    : ""
+                                            )
                                     }
                                 "
                             >
@@ -4067,11 +4239,13 @@ function afficherHistoriqueTotal() {
 
                                 <small>
                                     ${
-                                        stockMinimum
-                                        ?
-                                        "⚠️ Stock minimum"
-                                        :
-                                        "Voir le détail"
+                                        ruptureStock
+                                            ? "⛔ RUPTURE DE STOCK"
+                                            : (
+                                                stockMinimum
+                                                    ? "⚠️ Stock minimum"
+                                                    : "Voir le détail"
+                                            )
                                     }
                                 </small>
 
@@ -4082,11 +4256,13 @@ function afficherHistoriqueTotal() {
                                 class="
                                     historique-chiffre
                                     ${
-                                        stockMinimum
-                                        ?
-                                        "texte-stock-faible"
-                                        :
-                                        ""
+                                        ruptureStock
+                                            ? "texte-rupture-stock"
+                                            : (
+                                                stockMinimum
+                                                    ? "texte-stock-faible"
+                                                    : ""
+                                            )
                                     }
                                 "
                             >
@@ -4116,7 +4292,6 @@ function afficherHistoriqueTotal() {
             .join("");
 
 }
-
 
 /* =========================================================
    DETAIL PAR MATERIEL

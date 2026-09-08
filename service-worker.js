@@ -15,7 +15,7 @@
  */
 
 const CACHE_NAME =
-    "inventaire-caserne-v7";
+    "inventaire-caserne-v8";
 
 
 /*
@@ -55,7 +55,7 @@ self.addEventListener(
     function (event) {
 
         console.log(
-            "Installation du Service Worker V7..."
+            "Installation du Service Worker V8..."
         );
 
 
@@ -107,7 +107,7 @@ self.addEventListener(
     function (event) {
 
         console.log(
-            "Activation du Service Worker V7..."
+            "Activation du Service Worker V8..."
         );
 
 
