@@ -849,19 +849,23 @@ function initialiserBandeauConnexion() {
                 right: 0;
                 bottom: 0;
                 width: 100%;
+                min-height: 64px;
                 box-sizing: border-box;
                 z-index: 100000;
                 padding:
-                    8px
-                    12px
-                    calc(8px + env(safe-area-inset-bottom, 0px));
+                    16px
+                    14px
+                    calc(16px + env(safe-area-inset-bottom, 0px));
                 background: #fff3cd;
                 border-top: 1px solid #e6cf75;
                 color: #5c4b00;
                 text-align: center;
-                font-size: 13px;
+                font-size: 15px;
                 font-weight: 700;
-                line-height: 1.25;
+                line-height: 1.3;
+                display: flex;
+                align-items: center;
+                justify-content: center;
                 box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.08);
             }
 
@@ -1026,12 +1030,13 @@ async function synchroniserManuellement() {
 
     try {
 
-        const supabase = obtenirClientSupabase();
+        const supabase =
+            await assurerBibliothequeSupabaseDisponible();
 
         if (!supabase) {
 
             alert(
-                "⚠️ Supabase n'est pas disponible."
+                "⚠️ La connexion Internet vient peut-être de revenir. Impossible de joindre Supabase pour le moment. Réessayez dans quelques secondes."
             );
 
             return;
@@ -1140,9 +1145,14 @@ async function synchroniserAvantNavigation() {
 
     }
 
-    const supabase = obtenirClientSupabase();
+    if (!navigator.onLine) {
+        return;
+    }
 
-    if (!supabase || !navigator.onLine) {
+    const supabase =
+        await assurerBibliothequeSupabaseDisponible();
+
+    if (!supabase) {
         return;
     }
 
@@ -1213,15 +1223,27 @@ async function synchroniserApresModification() {
 
     marquerModificationsEnAttente();
 
-    const supabase = obtenirClientSupabase();
-
-    if (!supabase || !navigator.onLine) {
+    if (!navigator.onLine) {
 
         console.log(
             "📴 Modification enregistrée localement. Elle sera synchronisée lors de la prochaine action en ligne."
         );
 
         return;
+    }
+
+
+    const supabase =
+        await assurerBibliothequeSupabaseDisponible();
+
+    if (!supabase) {
+
+        console.log(
+            "⚠️ Supabase n'est pas encore joignable. La modification reste enregistrée localement."
+        );
+
+        return;
+
     }
 
     demarrerIndicateurSynchronisation();
@@ -1284,6 +1306,108 @@ async function synchroniserApresModification() {
     }
 
 }
+
+
+async function assurerBibliothequeSupabaseDisponible() {
+
+    if (
+        window.supabase &&
+        typeof window.supabase.createClient === "function"
+    ) {
+
+        return obtenirClientSupabase();
+
+    }
+
+
+    if (!navigator.onLine) {
+
+        return null;
+
+    }
+
+
+    const scriptExistant =
+        document.getElementById(
+            "supabase-reconnexion"
+        );
+
+
+    if (scriptExistant) {
+
+        scriptExistant.remove();
+
+    }
+
+
+    return await new Promise(
+        function (resolve) {
+
+            const script =
+                document.createElement(
+                    "script"
+                );
+
+            script.id =
+                "supabase-reconnexion";
+
+            script.src =
+                "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2";
+
+            script.async =
+                true;
+
+
+            const minuterie =
+                setTimeout(
+                    function () {
+
+                        resolve(
+                            obtenirClientSupabase()
+                        );
+
+                    },
+                    8000
+                );
+
+
+            script.onload =
+                function () {
+
+                    clearTimeout(
+                        minuterie
+                    );
+
+                    resolve(
+                        obtenirClientSupabase()
+                    );
+
+                };
+
+
+            script.onerror =
+                function () {
+
+                    clearTimeout(
+                        minuterie
+                    );
+
+                    resolve(
+                        null
+                    );
+
+                };
+
+
+            document.head.appendChild(
+                script
+            );
+
+        }
+    );
+
+}
+
 
 function obtenirClientSupabase() {
 
@@ -2200,78 +2324,148 @@ function installerAbonnementTempsReelSupabase() {
 
 async function initialiserSynchronisationSupabase() {
 
-    const supabase = obtenirClientSupabase();
-
-    if (!supabase) {
-        console.log(
-            "ℹ️ Supabase n'est pas configuré. L'application reste en mode local."
-        );
-        return;
-    }
-
     if (!navigator.onLine) {
+
         console.log(
             "📴 Hors connexion : utilisation des données locales."
         );
-        synchronisationSupabaseActive = false;
+
+        synchronisationSupabaseActive =
+            false;
+
         return;
+
     }
+
+
+    const supabase =
+        await assurerBibliothequeSupabaseDisponible();
+
+
+    if (!supabase) {
+
+        console.log(
+            "ℹ️ Supabase n'est pas encore disponible. L'application reste en mode local."
+        );
+
+        return;
+
+    }
+
 
     try {
 
+        /*
+         * IMPORTANT :
+         * s'il existe un retour d'intervention enregistré hors connexion,
+         * on l'envoie AVANT de télécharger les données de Supabase.
+         * Sinon les données distantes pourraient écraser la copie locale
+         * avant que le retour hors connexion ait été envoyé.
+         */
+        if (
+            existeModificationsEnAttente()
+        ) {
+
+            synchronisationSupabaseEnCours =
+                true;
+
+            try {
+
+                await envoyerDonneesLocalesVersSupabase();
+
+                effacerModificationsEnAttente();
+
+            } finally {
+
+                synchronisationSupabaseEnCours =
+                    false;
+
+            }
+
+        }
+
+
         const donneesDistantes =
             await recupererDonneesSupabase();
+
 
         const baseDistanteContientDesDonnees =
             donneesDistantes.materiels.length > 0 ||
             donneesDistantes.interventions.length > 0;
 
+
         const baseLocaleContientDesDonnees =
             materiels.length > 0 ||
             historique.length > 0;
 
-        if (baseDistanteContientDesDonnees) {
+
+        if (
+            baseDistanteContientDesDonnees
+        ) {
 
             await appliquerDonneesSupabaseLocalement(
                 donneesDistantes
             );
 
-        } else if (baseLocaleContientDesDonnees) {
+        } else if (
+            baseLocaleContientDesDonnees
+        ) {
 
-            synchronisationSupabaseEnCours = true;
+            synchronisationSupabaseEnCours =
+                true;
+
             try {
+
                 await envoyerDonneesLocalesVersSupabase();
+
             } finally {
-                synchronisationSupabaseEnCours = false;
+
+                synchronisationSupabaseEnCours =
+                    false;
+
             }
 
         } else {
 
-            // Première connexion : on envoie au moins les catégories par défaut.
-            synchronisationSupabaseEnCours = true;
+            synchronisationSupabaseEnCours =
+                true;
+
             try {
+
                 await envoyerDonneesLocalesVersSupabase();
+
             } finally {
-                synchronisationSupabaseEnCours = false;
+
+                synchronisationSupabaseEnCours =
+                    false;
+
             }
 
         }
 
-        synchronisationSupabaseActive = true;
+
+        synchronisationSupabaseActive =
+            true;
+
         enregistrerSnapshotSynchronisation();
 
-        // Pas de rafraîchissement Realtime automatique :
-        // les synchronisations se font uniquement lors des actions utilisateur.
+
         console.log(
             "✅ Connexion Supabase opérationnelle."
         );
 
     } catch (erreur) {
 
-        synchronisationSupabaseActive = false;
+        synchronisationSupabaseActive =
+            false;
 
+        /*
+         * On NE supprime PAS le marqueur de modification en attente
+         * si l'envoi échoue. Le retour hors connexion reste donc
+         * conservé localement pour une prochaine tentative.
+         */
         console.warn(
-            "⚠️ Supabase indisponible. L'application continue avec les données locales.",
+            "⚠️ Supabase indisponible. Les données locales en attente sont conservées.",
             erreur
         );
 
