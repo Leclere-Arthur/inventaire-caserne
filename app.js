@@ -250,10 +250,11 @@ function creerNotificationStockSiNecessaire(
             id:
                 genererId(),
             titre:
-                "🚨 Rupture de stock",
+                "⚠️ ALERTE STOCK ⚠️",
             message:
+                "⚠️ " +
                 materiel.nom +
-                " est épuisé. Stock restant : 0.",
+                " — RUPTURE DE STOCK ⚠️",
             creeLe:
                 new Date().toISOString()
         };
@@ -275,14 +276,11 @@ function creerNotificationStockSiNecessaire(
             id:
                 genererId(),
             titre:
-                "⚠️ Stock minimum atteint",
+                "⚠️ ALERTE STOCK ⚠️",
             message:
+                "⚠️ " +
                 materiel.nom +
-                " : stock " +
-                apres +
-                " (minimum " +
-                minimum +
-                ").",
+                " — STOCK MINIMUM ⚠️",
             creeLe:
                 new Date().toISOString()
         };
