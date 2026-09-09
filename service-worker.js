@@ -14,8 +14,7 @@
  * à récupérer le nouvel app.js.
  */
 
-const CACHE_NAME =
-    "inventaire-caserne-v12";
+const CACHE_NAME = "inventaire-caserne-v13";
 
 
 /*
@@ -173,6 +172,156 @@ self.addEventListener(
 /* =========================================================
    REQUETES
    ========================================================= */
+
+
+
+/* =========================================================
+   NOTIFICATIONS WEB PUSH
+   Compatible Android + PWA iPhone/iPad
+   ========================================================= */
+
+self.addEventListener(
+    "push",
+    function (event) {
+
+        let donnees = {};
+
+        try {
+
+            donnees =
+                event.data
+                    ? event.data.json()
+                    : {};
+
+        } catch (erreur) {
+
+            donnees = {
+                body:
+                    event.data
+                        ? event.data.text()
+                        : ""
+            };
+
+        }
+
+
+        const titre =
+            donnees.title ||
+            "Inventaire Caserne";
+
+        const options = {
+            body:
+                donnees.body ||
+                "Nouvelle notification",
+            icon:
+                donnees.icon ||
+                "./icon-192.png",
+            badge:
+                donnees.badge ||
+                "./icon-192.png",
+            data: {
+                url:
+                    donnees.url ||
+                    "./"
+            }
+        };
+
+
+        event.waitUntil(
+            self.registration
+                .showNotification(
+                    titre,
+                    options
+                )
+        );
+
+    }
+);
+
+
+self.addEventListener(
+    "notificationclick",
+    function (event) {
+
+        event.notification.close();
+
+        const urlCible =
+            new URL(
+                event.notification
+                    .data?.url ||
+                "./",
+                self.location.origin
+            ).href;
+
+
+        event.waitUntil(
+
+            clients
+                .matchAll({
+                    type: "window",
+                    includeUncontrolled: true
+                })
+                .then(
+                    function (fenetres) {
+
+                        for (
+                            const fenetre
+                            of fenetres
+                        ) {
+
+                            if (
+                                "focus" in fenetre
+                            ) {
+
+                                try {
+
+                                    const urlFenetre =
+                                        new URL(
+                                            fenetre.url
+                                        );
+
+                                    const urlNotification =
+                                        new URL(
+                                            urlCible
+                                        );
+
+
+                                    if (
+                                        urlFenetre.origin ===
+                                        urlNotification.origin
+                                    ) {
+
+                                        return fenetre.focus();
+
+                                    }
+
+                                } catch (_) {
+                                    // On continue.
+                                }
+
+                            }
+
+                        }
+
+
+                        if (
+                            clients.openWindow
+                        ) {
+
+                            return clients.openWindow(
+                                urlCible
+                            );
+
+                        }
+
+                    }
+                )
+
+        );
+
+    }
+);
+
 
 self.addEventListener(
     "fetch",

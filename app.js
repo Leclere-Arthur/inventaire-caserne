@@ -7,6 +7,17 @@
 
 const CODE_ADMIN = "1234";
 
+/*
+ * Notifications Web Push
+ * Compatible PWA Android + iPhone/iPad (iOS/iPadOS 16.4+,
+ * lorsque l'application est ajoutée à l'écran d'accueil).
+ * La clé VAPID publique peut être présente dans le navigateur.
+ */
+const VAPID_PUBLIC_KEY =
+    "BBl_OlQR456avmsTxk4ywCSvGvedYFaPe4RV8M-evqk6wkEwQFnQIjWHpRFQw74reIo8AazwCgeueutZjDATGCI";
+
+let activationNotificationsEnCours = false;
+
 const STORAGE = {
     materiels: "materiels",
     categories: "categories",
@@ -45,6 +56,7 @@ document.addEventListener("DOMContentLoaded", async function () {
 
     initialiserIndicateurSynchronisation();
     initialiserBandeauConnexion();
+    initialiserBoutonNotifications();
 
     chargerToutesLesDonnees();
 
@@ -69,6 +81,520 @@ function chargerToutesLesDonnees() {
 
 }
 
+
+
+/* =========================================================
+   NOTIFICATIONS WEB PUSH - IOS + ANDROID
+   ========================================================= */
+
+function convertirCleVapidEnUint8Array(cleBase64) {
+
+    const remplissage =
+        "=".repeat(
+            (4 - cleBase64.length % 4) % 4
+        );
+
+    const base64 =
+        (cleBase64 + remplissage)
+            .replace(/-/g, "+")
+            .replace(/_/g, "/");
+
+    const donneesBrutes =
+        window.atob(base64);
+
+    return Uint8Array.from(
+        Array.from(donneesBrutes).map(
+            function (caractere) {
+                return caractere.charCodeAt(0);
+            }
+        )
+    );
+
+}
+
+
+function notificationsWebPushDisponibles() {
+
+    return (
+        "serviceWorker" in navigator &&
+        "PushManager" in window &&
+        "Notification" in window
+    );
+
+}
+
+
+function estAppareilIOS() {
+
+    return (
+        /iPhone|iPad|iPod/i.test(
+            navigator.userAgent || ""
+        ) ||
+        (
+            navigator.platform === "MacIntel" &&
+            navigator.maxTouchPoints > 1
+        )
+    );
+
+}
+
+
+function estPwaInstallee() {
+
+    return (
+        window.matchMedia &&
+        window.matchMedia(
+            "(display-mode: standalone)"
+        ).matches
+    ) ||
+    window.navigator.standalone === true;
+
+}
+
+
+async function obtenirAbonnementPushActuel() {
+
+    if (!notificationsWebPushDisponibles()) {
+        return null;
+    }
+
+    const inscription =
+        await navigator.serviceWorker.ready;
+
+    return inscription.pushManager.getSubscription();
+
+}
+
+
+function mettreAJourBoutonNotifications(
+    bouton,
+    etat
+) {
+
+    if (!bouton) {
+        return;
+    }
+
+    bouton.disabled =
+        activationNotificationsEnCours;
+
+    if (activationNotificationsEnCours) {
+
+        bouton.textContent =
+            "🔔 …";
+
+        bouton.title =
+            "Activation des notifications…";
+
+        return;
+    }
+
+
+    if (etat === "active") {
+
+        bouton.textContent =
+            "🔔 ✓";
+
+        bouton.title =
+            "Notifications activées";
+
+        bouton.setAttribute(
+            "aria-label",
+            "Notifications activées"
+        );
+
+        return;
+    }
+
+
+    if (etat === "bloque") {
+
+        bouton.textContent =
+            "🔕";
+
+        bouton.title =
+            "Notifications bloquées dans les réglages de l'appareil";
+
+        bouton.setAttribute(
+            "aria-label",
+            "Notifications bloquées"
+        );
+
+        return;
+    }
+
+
+    bouton.textContent =
+        "🔔";
+
+    bouton.title =
+        "Activer les notifications";
+
+    bouton.setAttribute(
+        "aria-label",
+        "Activer les notifications"
+    );
+
+}
+
+
+async function rafraichirEtatBoutonNotifications() {
+
+    const bouton =
+        document.getElementById(
+            "btn-notifications-push"
+        );
+
+    if (!bouton) {
+        return;
+    }
+
+    if (!notificationsWebPushDisponibles()) {
+
+        bouton.hidden = true;
+        return;
+    }
+
+    bouton.hidden = false;
+
+
+    if (
+        Notification.permission ===
+        "denied"
+    ) {
+
+        mettreAJourBoutonNotifications(
+            bouton,
+            "bloque"
+        );
+
+        return;
+    }
+
+
+    try {
+
+        const abonnement =
+            await obtenirAbonnementPushActuel();
+
+        mettreAJourBoutonNotifications(
+            bouton,
+            abonnement
+                ? "active"
+                : "inactive"
+        );
+
+    } catch (erreur) {
+
+        console.warn(
+            "État notifications indisponible :",
+            erreur
+        );
+
+        mettreAJourBoutonNotifications(
+            bouton,
+            "inactive"
+        );
+
+    }
+
+}
+
+
+async function enregistrerAbonnementPushSupabase(
+    abonnement
+) {
+
+    const supabase =
+        await assurerBibliothequeSupabaseDisponible();
+
+    if (!supabase) {
+
+        throw new Error(
+            "Supabase n'est pas disponible."
+        );
+
+    }
+
+
+    const json =
+        abonnement.toJSON();
+
+    const endpoint =
+        json.endpoint ||
+        abonnement.endpoint;
+
+    const p256dh =
+        json.keys?.p256dh || "";
+
+    const auth =
+        json.keys?.auth || "";
+
+
+    if (
+        !endpoint ||
+        !p256dh ||
+        !auth
+    ) {
+
+        throw new Error(
+            "Abonnement Push incomplet."
+        );
+
+    }
+
+
+    const { error } =
+        await supabase
+            .from("push_subscriptions")
+            .upsert(
+                {
+                    endpoint: endpoint,
+                    p256dh: p256dh,
+                    auth: auth,
+                    user_agent:
+                        navigator.userAgent || "",
+                    actif: true,
+                    updated_at:
+                        new Date().toISOString()
+                },
+                {
+                    onConflict: "endpoint"
+                }
+            );
+
+
+    if (error) {
+        throw error;
+    }
+
+}
+
+
+async function activerNotificationsPush() {
+
+    if (activationNotificationsEnCours) {
+        return;
+    }
+
+
+    if (!navigator.onLine) {
+
+        alert(
+            "⚠️ Une connexion Internet est nécessaire pour activer les notifications."
+        );
+
+        return;
+    }
+
+
+    if (!notificationsWebPushDisponibles()) {
+
+        alert(
+            "⚠️ Les notifications Push ne sont pas disponibles sur ce navigateur."
+        );
+
+        return;
+    }
+
+
+    /*
+     * Sur iPhone/iPad, Web Push fonctionne pour une PWA
+     * ajoutée à l'écran d'accueil.
+     */
+    if (
+        estAppareilIOS() &&
+        !estPwaInstallee()
+    ) {
+
+        alert(
+            "📱 Sur iPhone/iPad, ouvre Inventaire Caserne depuis l’icône ajoutée à l’écran d’accueil pour activer les notifications."
+        );
+
+        return;
+    }
+
+
+    activationNotificationsEnCours =
+        true;
+
+    await rafraichirEtatBoutonNotifications();
+
+
+    try {
+
+        let autorisation =
+            Notification.permission;
+
+
+        if (autorisation === "default") {
+
+            autorisation =
+                await Notification.requestPermission();
+
+        }
+
+
+        if (autorisation !== "granted") {
+
+            if (autorisation === "denied") {
+
+                alert(
+                    "🔕 Les notifications ont été refusées. Tu pourras les autoriser plus tard dans les réglages de ton appareil."
+                );
+
+            }
+
+            return;
+        }
+
+
+        const inscription =
+            await navigator.serviceWorker.ready;
+
+
+        let abonnement =
+            await inscription
+                .pushManager
+                .getSubscription();
+
+
+        if (!abonnement) {
+
+            abonnement =
+                await inscription
+                    .pushManager
+                    .subscribe({
+                        userVisibleOnly: true,
+                        applicationServerKey:
+                            convertirCleVapidEnUint8Array(
+                                VAPID_PUBLIC_KEY
+                            )
+                    });
+
+        }
+
+
+        await enregistrerAbonnementPushSupabase(
+            abonnement
+        );
+
+
+        alert(
+            "✅ Notifications activées sur cet appareil."
+        );
+
+    } catch (erreur) {
+
+        console.error(
+            "Activation notifications impossible :",
+            erreur
+        );
+
+        alert(
+            "⚠️ Impossible d'activer les notifications pour le moment."
+        );
+
+    } finally {
+
+        activationNotificationsEnCours =
+            false;
+
+        await rafraichirEtatBoutonNotifications();
+
+    }
+
+}
+
+
+function initialiserBoutonNotifications() {
+
+    if (
+        document.getElementById(
+            "btn-notifications-push"
+        )
+    ) {
+        return;
+    }
+
+
+    const style =
+        document.createElement("style");
+
+    style.textContent = `
+        #btn-notifications-push {
+            position: fixed;
+            top: calc(
+                12px + env(safe-area-inset-top, 0px)
+            );
+            right: 72px;
+            z-index: 10020;
+            width: 46px;
+            height: 46px;
+            border: 0;
+            border-radius: 999px;
+            background: #ffffff;
+            box-shadow:
+                0 4px 14px
+                rgba(0, 0, 0, 0.14);
+            font-size: 23px;
+            line-height: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            -webkit-tap-highlight-color:
+                transparent;
+        }
+
+        #btn-notifications-push:disabled {
+            opacity: 0.65;
+            cursor: default;
+        }
+
+        #btn-notifications-push[hidden] {
+            display: none !important;
+        }
+    `;
+
+    document.head.appendChild(style);
+
+
+    const bouton =
+        document.createElement("button");
+
+    bouton.id =
+        "btn-notifications-push";
+
+    bouton.type =
+        "button";
+
+    bouton.textContent =
+        "🔔";
+
+    bouton.title =
+        "Activer les notifications";
+
+    bouton.setAttribute(
+        "aria-label",
+        "Activer les notifications"
+    );
+
+
+    bouton.addEventListener(
+        "click",
+        activerNotificationsPush
+    );
+
+
+    document.body.appendChild(
+        bouton
+    );
+
+
+    rafraichirEtatBoutonNotifications();
+
+}
 
 /* =========================================================
    NORMALISATION
