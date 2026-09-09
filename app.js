@@ -12,7 +12,7 @@ const DOMAINE_EMAIL_INTERNE =
     "inventaire-caserne.local";
 
 const VERSION_APPLICATION =
-    "2.8.17";
+    "2.8.18";
 
 const CLE_PROFIL_UTILISATEUR_CACHE =
     "profil_utilisateur_connecte_v1";
@@ -953,6 +953,43 @@ function obtenirRoleUtilisateur() {
     return Array.isArray(roles)
         ? roles[0] || null
         : roles || null;
+
+}
+
+
+function utilisateurEstSPVAdmin() {
+
+    const role =
+        obtenirRoleUtilisateur();
+
+    return Boolean(
+        profilUtilisateurConnecte &&
+        profilUtilisateurConnecte.actif === true &&
+        role &&
+        String(role.nom || "")
+            .trim()
+            .toUpperCase() ===
+            "SPV ADMIN"
+    );
+
+}
+
+
+function verifierAccesAdministrateurAppli() {
+
+    if (
+        utilisateurEstSPVAdmin()
+    ) {
+        return true;
+    }
+
+    alert(
+        "Accès réservé au rôle SPV ADMIN."
+    );
+
+    afficherAccueil();
+
+    return false;
 
 }
 
@@ -6220,6 +6257,33 @@ function afficherAccueil() {
     }
 
 
+    if (
+        utilisateurEstSPVAdmin()
+    ) {
+
+        boutons.push(`
+            <button
+                class="menu-button"
+                type="button"
+                onclick="afficherMenuAdministrateurAppli()"
+            >
+                <span class="menu-icon">
+                    🛠️
+                </span>
+                <span>
+                    <strong>
+                        Administrateur APPLI
+                    </strong>
+                    <small>
+                        Utilisateurs et notifications
+                    </small>
+                </span>
+            </button>
+        `);
+
+    }
+
+
     document.getElementById(
         "app"
     ).innerHTML = `
@@ -9481,33 +9545,6 @@ function afficherMenuAdministration() {
     }
 
 
-    const boutonGestionUtilisateurs =
-        utilisateurAPermission(
-            "acces_gestion_utilisateurs"
-        )
-            ? `
-                <button
-                    class="menu-button"
-                    onclick="afficherGestionUtilisateurs()"
-                >
-                    <span class="menu-icon">
-                        👥
-                    </span>
-
-                    <span>
-                        <strong>
-                            Gestion des utilisateurs
-                        </strong>
-
-                        <small>
-                            Comptes, rôles et permissions
-                        </small>
-                    </span>
-                </button>
-            `
-            : "";
-
-
     document.getElementById(
         "app"
     ).innerHTML = `
@@ -9529,8 +9566,6 @@ function afficherMenuAdministration() {
             <div
                 class="menu-administration"
             >
-
-                ${boutonGestionUtilisateurs}
 
                 <button
                     class="menu-button"
@@ -9606,30 +9641,6 @@ function afficherMenuAdministration() {
 
                 <button
                     class="menu-button"
-                    onclick="afficherNotificationsAdministration()"
-                >
-
-                    <span class="menu-icon">
-                        🔔
-                    </span>
-
-                    <span>
-
-                        <strong>
-                            Envoyer une notification
-                        </strong>
-
-                        <small>
-                            Écrire et envoyer un message
-                        </small>
-
-                    </span>
-
-                </button>
-
-
-                <button
-                    class="menu-button"
                     onclick="remiseZeroHistorique()"
                 >
 
@@ -9661,6 +9672,97 @@ function afficherMenuAdministration() {
 
 
 
+
+/* =========================================================
+   ADMINISTRATEUR APPLI
+   ========================================================= */
+
+function afficherMenuAdministrateurAppli() {
+
+    if (
+        !verifierAccesAdministrateurAppli()
+    ) {
+        return;
+    }
+
+
+    document.getElementById(
+        "app"
+    ).innerHTML = `
+
+        <main class="page">
+
+            <button
+                class="retour-button"
+                onclick="afficherAccueil()"
+            >
+                ← Retour
+            </button>
+
+
+            <h2>
+                Administrateur APPLI
+            </h2>
+
+
+            <div class="menu-administration">
+
+                <button
+                    class="menu-button"
+                    onclick="afficherGestionUtilisateurs()"
+                >
+
+                    <span class="menu-icon">
+                        👥
+                    </span>
+
+                    <span>
+
+                        <strong>
+                            Gestion des utilisateurs
+                        </strong>
+
+                        <small>
+                            Comptes, rôles et permissions
+                        </small>
+
+                    </span>
+
+                </button>
+
+
+                <button
+                    class="menu-button"
+                    onclick="afficherNotificationsAdministration()"
+                >
+
+                    <span class="menu-icon">
+                        🔔
+                    </span>
+
+                    <span>
+
+                        <strong>
+                            Envoyer une notification
+                        </strong>
+
+                        <small>
+                            Écrire et envoyer un message
+                        </small>
+
+                    </span>
+
+                </button>
+
+            </div>
+
+        </main>
+
+    `;
+
+}
+
+
 /* =========================================================
    GESTION DES UTILISATEURS ET DES RÔLES
    ========================================================= */
@@ -9677,6 +9779,7 @@ async function appelerGestionUtilisateurs(
 ) {
 
     if (
+        !utilisateurEstSPVAdmin() ||
         !utilisateurAPermission(
             "acces_gestion_utilisateurs"
         )
@@ -9810,9 +9913,7 @@ function permissionRoleHTML(
 async function afficherGestionUtilisateurs() {
 
     if (
-        !verifierPermissionOuRetourAccueil(
-            "acces_gestion_utilisateurs"
-        )
+        !verifierAccesAdministrateurAppli()
     ) {
         return;
     }
@@ -9829,7 +9930,7 @@ async function afficherGestionUtilisateurs() {
 
             <button
                 class="retour-button"
-                onclick="afficherMenuAdministration()"
+                onclick="afficherMenuAdministrateurAppli()"
             >
                 ← Retour
             </button>
@@ -10102,7 +10203,7 @@ function rendreGestionUtilisateurs() {
 
             <button
                 class="retour-button"
-                onclick="afficherMenuAdministration()"
+                onclick="afficherMenuAdministrateurAppli()"
             >
                 ← Retour
             </button>
@@ -10746,9 +10847,9 @@ async function supprimerRoleGestion(
 
 function afficherNotificationsAdministration() {
 
-    if (!verifierPermissionOuRetourAccueil(
-        "acces_administration"
-    )) {
+    if (
+        !verifierAccesAdministrateurAppli()
+    ) {
         return;
     }
 
@@ -10761,7 +10862,7 @@ function afficherNotificationsAdministration() {
 
             <button
                 class="retour-button"
-                onclick="afficherMenuAdministration()"
+                onclick="afficherMenuAdministrateurAppli()"
             >
                 ← Retour
             </button>
@@ -10815,6 +10916,13 @@ function afficherNotificationsAdministration() {
 
 
 async function envoyerNotificationAdministration() {
+
+    if (
+        !verifierAccesAdministrateurAppli()
+    ) {
+        return;
+    }
+
 
     const zone =
         document.getElementById(
@@ -12544,6 +12652,9 @@ window.changerMonMotDePasse =
 
 window.changerNotificationsProfil =
     changerNotificationsProfil;
+
+window.afficherMenuAdministrateurAppli =
+    afficherMenuAdministrateurAppli;
 
 window.afficherGestionUtilisateurs =
     afficherGestionUtilisateurs;
