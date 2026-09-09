@@ -17,6 +17,10 @@ const VAPID_PUBLIC_KEY =
     "BBl_OlQR456avmsTxk4ywCSvGvedYFaPe4RV8M-evqk6wkEwQFnQIjWHpRFQw74reIo8AazwCgeueutZjDATGCI";
 
 let activationNotificationsEnCours = false;
+let envoiNotificationsStockEnCours = false;
+
+const CLE_NOTIFICATIONS_STOCK_EN_ATTENTE =
+    "notifications_stock_en_attente_v1";
 
 const STORAGE = {
     materiels: "materiels",
@@ -81,6 +85,337 @@ function chargerToutesLesDonnees() {
 
 }
 
+
+
+/* =========================================================
+   ENVOI DES NOTIFICATIONS
+   ========================================================= */
+
+async function envoyerNotificationPush(
+    titre,
+    message
+) {
+
+    if (!navigator.onLine) {
+
+        throw new Error(
+            "Connexion Internet indisponible."
+        );
+
+    }
+
+
+    const supabase =
+        await assurerBibliothequeSupabaseDisponible();
+
+    if (!supabase) {
+
+        throw new Error(
+            "Supabase n'est pas disponible."
+        );
+
+    }
+
+
+    const { data, error } =
+        await supabase.functions.invoke(
+            "envoyer-notification",
+            {
+                body: {
+                    titre:
+                        String(
+                            titre ||
+                            "Inventaire Caserne"
+                        ),
+                    message:
+                        String(
+                            message || ""
+                        )
+                }
+            }
+        );
+
+
+    if (error) {
+        throw error;
+    }
+
+
+    if (
+        data &&
+        data.ok === false
+    ) {
+
+        throw new Error(
+            data.error ||
+            "L'envoi de la notification a échoué."
+        );
+
+    }
+
+
+    return data;
+
+}
+
+
+function chargerNotificationsStockEnAttente() {
+
+    try {
+
+        const valeur =
+            localStorage.getItem(
+                CLE_NOTIFICATIONS_STOCK_EN_ATTENTE
+            );
+
+        if (!valeur) {
+            return [];
+        }
+
+
+        const liste =
+            JSON.parse(valeur);
+
+        return Array.isArray(liste)
+            ? liste
+            : [];
+
+    } catch (erreur) {
+
+        console.warn(
+            "File notifications illisible :",
+            erreur
+        );
+
+        return [];
+
+    }
+
+}
+
+
+function sauvegarderNotificationsStockEnAttente(
+    liste
+) {
+
+    localStorage.setItem(
+        CLE_NOTIFICATIONS_STOCK_EN_ATTENTE,
+        JSON.stringify(liste)
+    );
+
+}
+
+
+function creerNotificationStockSiNecessaire(
+    materiel,
+    ancienStock,
+    nouveauStock
+) {
+
+    const avant =
+        Math.max(
+            0,
+            Math.floor(
+                Number(ancienStock) || 0
+            )
+        );
+
+    const apres =
+        Math.max(
+            0,
+            Math.floor(
+                Number(nouveauStock) || 0
+            )
+        );
+
+    const minimum =
+        Math.max(
+            0,
+            Math.floor(
+                Number(materiel.minimum) || 0
+            )
+        );
+
+
+    /*
+     * Rupture : on prévient uniquement au moment
+     * où le stock passe réellement à zéro.
+     */
+    if (
+        apres === 0 &&
+        avant > 0
+    ) {
+
+        return {
+            id:
+                genererId(),
+            titre:
+                "🚨 Rupture de stock",
+            message:
+                materiel.nom +
+                " est épuisé. Stock restant : 0.",
+            creeLe:
+                new Date().toISOString()
+        };
+
+    }
+
+
+    /*
+     * Stock minimum : on prévient uniquement quand
+     * le stock franchit le seuil, pour éviter le spam.
+     */
+    if (
+        apres > 0 &&
+        apres <= minimum &&
+        avant > minimum
+    ) {
+
+        return {
+            id:
+                genererId(),
+            titre:
+                "⚠️ Stock minimum atteint",
+            message:
+                materiel.nom +
+                " : stock " +
+                apres +
+                " (minimum " +
+                minimum +
+                ").",
+            creeLe:
+                new Date().toISOString()
+        };
+
+    }
+
+
+    return null;
+
+}
+
+
+function mettreNotificationStockEnAttente(
+    notification
+) {
+
+    if (!notification) {
+        return;
+    }
+
+
+    const liste =
+        chargerNotificationsStockEnAttente();
+
+
+    liste.push(
+        notification
+    );
+
+
+    sauvegarderNotificationsStockEnAttente(
+        liste
+    );
+
+
+    if (navigator.onLine) {
+
+        void envoyerNotificationsStockEnAttente();
+
+    }
+
+}
+
+
+async function envoyerNotificationsStockEnAttente() {
+
+    if (
+        envoiNotificationsStockEnCours ||
+        !navigator.onLine
+    ) {
+        return;
+    }
+
+
+    envoiNotificationsStockEnCours =
+        true;
+
+
+    try {
+
+        let liste =
+            chargerNotificationsStockEnAttente();
+
+
+        while (
+            liste.length > 0 &&
+            navigator.onLine
+        ) {
+
+            const notification =
+                liste[0];
+
+
+            try {
+
+                await envoyerNotificationPush(
+                    notification.titre,
+                    notification.message
+                );
+
+            } catch (erreur) {
+
+                console.warn(
+                    "Notification stock conservée en attente :",
+                    erreur
+                );
+
+                break;
+
+            }
+
+
+            liste.shift();
+
+
+            sauvegarderNotificationsStockEnAttente(
+                liste
+            );
+
+        }
+
+    } finally {
+
+        envoiNotificationsStockEnCours =
+            false;
+
+    }
+
+}
+
+
+function preparerNotificationStock(
+    materiel,
+    ancienStock
+) {
+
+    const notification =
+        creerNotificationStockSiNecessaire(
+            materiel,
+            ancienStock,
+            materiel.stock
+        );
+
+
+    if (notification) {
+
+        mettreNotificationStockEnAttente(
+            notification
+        );
+
+    }
+
+}
 
 
 /* =========================================================
@@ -590,6 +925,19 @@ function initialiserBoutonNotifications() {
     document.body.appendChild(
         bouton
     );
+
+
+    window.addEventListener(
+        "online",
+        function () {
+            void envoyerNotificationsStockEnAttente();
+        }
+    );
+
+
+    if (navigator.onLine) {
+        void envoyerNotificationsStockEnAttente();
+    }
 
 
     rafraichirEtatBoutonNotifications();
@@ -4726,14 +5074,24 @@ async function validerRetourIntervention() {
                 );
 
 
+            const ancienStock =
+                Number(
+                    materiel.stock
+                );
+
+
             materiel.stock =
                 Math.max(
                     0,
-                    Number(
-                        materiel.stock
-                    ) -
+                    ancienStock -
                     quantite
                 );
+
+
+            preparerNotificationStock(
+                materiel,
+                ancienStock
+            );
 
 
             consommations.push({
@@ -5985,6 +6343,30 @@ function afficherMenuAdministration() {
 
                 <button
                     class="menu-button"
+                    onclick="afficherNotificationsAdministration()"
+                >
+
+                    <span class="menu-icon">
+                        🔔
+                    </span>
+
+                    <span>
+
+                        <strong>
+                            Envoyer une notification
+                        </strong>
+
+                        <small>
+                            Écrire et envoyer un message
+                        </small>
+
+                    </span>
+
+                </button>
+
+
+                <button
+                    class="menu-button"
                     onclick="remiseZeroHistorique()"
                 >
 
@@ -6011,6 +6393,186 @@ function afficherMenuAdministration() {
         </main>
 
     `;
+
+}
+
+
+/* =========================================================
+   NOTIFICATIONS MANUELLES - ADMINISTRATION
+   ========================================================= */
+
+function afficherNotificationsAdministration() {
+
+    document.getElementById(
+        "app"
+    ).innerHTML = `
+
+        <main class="page">
+
+            <button
+                class="retour-button"
+                onclick="afficherMenuAdministration()"
+            >
+                ← Retour
+            </button>
+
+
+            <h2>
+                🔔 Envoyer une notification
+            </h2>
+
+
+            <div class="formulaire">
+
+                <label for="notification-admin-message">
+                    Message à envoyer
+                </label>
+
+
+                <textarea
+                    id="notification-admin-message"
+                    rows="7"
+                    maxlength="500"
+                    placeholder="Écrivez ici le message que vous souhaitez envoyer..."
+                ></textarea>
+
+
+                <button
+                    class="add-button"
+                    id="btn-envoyer-notification-admin"
+                    onclick="envoyerNotificationAdministration()"
+                >
+                    📣 Envoyer la notification
+                </button>
+
+            </div>
+
+        </main>
+
+    `;
+
+
+    const zone =
+        document.getElementById(
+            "notification-admin-message"
+        );
+
+
+    if (zone) {
+        zone.focus();
+    }
+
+}
+
+
+async function envoyerNotificationAdministration() {
+
+    const zone =
+        document.getElementById(
+            "notification-admin-message"
+        );
+
+    const bouton =
+        document.getElementById(
+            "btn-envoyer-notification-admin"
+        );
+
+
+    const message =
+        zone?.value.trim() || "";
+
+
+    if (!message) {
+
+        alert(
+            "Veuillez écrire un message."
+        );
+
+        return;
+
+    }
+
+
+    if (!navigator.onLine) {
+
+        alert(
+            "⚠️ Une connexion Internet est nécessaire pour envoyer une notification."
+        );
+
+        return;
+
+    }
+
+
+    if (
+        !confirm(
+            "Envoyer cette notification à tous les appareils inscrits ?"
+        )
+    ) {
+
+        return;
+
+    }
+
+
+    if (bouton) {
+        bouton.disabled = true;
+        bouton.textContent =
+            "📣 Envoi en cours…";
+    }
+
+
+    try {
+
+        const resultat =
+            await envoyerNotificationPush(
+                "Inventaire Caserne",
+                message
+            );
+
+
+        const nombre =
+            Number(
+                resultat?.envoyees || 0
+            );
+
+
+        alert(
+            "✅ Notification envoyée à " +
+            nombre +
+            (
+                nombre > 1
+                    ? " appareils."
+                    : " appareil."
+            )
+        );
+
+
+        if (zone) {
+            zone.value = "";
+        }
+
+    } catch (erreur) {
+
+        console.error(
+            "Envoi notification admin impossible :",
+            erreur
+        );
+
+
+        alert(
+            "⚠️ Impossible d'envoyer la notification."
+        );
+
+    } finally {
+
+        if (bouton) {
+            bouton.disabled = false;
+            bouton.textContent =
+                "📣 Envoyer la notification";
+        }
+
+    }
 
 }
 
@@ -6812,6 +7374,12 @@ function enregistrerMateriel() {
         }
 
 
+        const ancienStock =
+            Number(
+                materiel.stock
+            );
+
+
         materiel.nom =
             nom;
 
@@ -6832,6 +7400,12 @@ function enregistrerMateriel() {
 
         materiel.categories =
             categoriesSelectionnees;
+
+
+        preparerNotificationStock(
+            materiel,
+            ancienStock
+        );
 
 
         if (fichier) {
@@ -7487,10 +8061,22 @@ function modifierStock(
     }
 
 
+    const ancienStock =
+        Number(
+            materiel.stock
+        );
+
+
     materiel.stock =
         Math.floor(
             stock
         );
+
+
+    preparerNotificationStock(
+        materiel,
+        ancienStock
+    );
 
 
     sauvegarderToutesLesDonnees();
