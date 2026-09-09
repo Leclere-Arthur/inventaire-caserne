@@ -510,6 +510,33 @@ function initialiserStyleConnexion() {
         "style-auth-utilisateurs";
 
     style.textContent = `
+        html,
+        body {
+            min-height: 100%;
+        }
+
+        body.mode-connexion {
+            min-height: 100vh;
+            min-height: 100dvh;
+            margin: 0;
+            background-image:
+                url("./fond-connexion.png");
+            background-position:
+                center center;
+            background-size:
+                100% 100%;
+            background-repeat:
+                no-repeat;
+            background-attachment:
+                fixed;
+        }
+
+        body.mode-connexion #app {
+            min-height: 100vh;
+            min-height: 100dvh;
+            background: transparent;
+        }
+
         .connexion-page {
             min-height: 100vh;
             min-height: 100dvh;
@@ -521,41 +548,37 @@ function initialiserStyleConnexion() {
                 calc(24px + env(safe-area-inset-top, 0px))
                 22px
                 calc(24px + env(safe-area-inset-bottom, 0px));
-            background:
-                url("./fond-connexion.png")
-                center center / cover
-                no-repeat fixed;
+            background: transparent;
         }
 
         .connexion-carte {
-            width: min(100%, 390px);
+            width: min(100%, 370px);
             box-sizing: border-box;
-            padding: 30px 22px 24px;
-            border-radius: 24px;
-            background: rgba(255,255,255,.74);
-            -webkit-backdrop-filter: blur(12px);
-            backdrop-filter: blur(12px);
+            padding: 22px 20px 22px;
+            border-radius: 22px;
+            background: rgba(255,255,255,.76);
+            -webkit-backdrop-filter: blur(10px);
+            backdrop-filter: blur(10px);
             box-shadow:
-                0 18px 45px rgba(0,0,0,.13);
+                0 16px 38px rgba(0,0,0,.12);
             border:
-                1px solid rgba(255,255,255,.78);
+                1px solid rgba(255,255,255,.82);
         }
 
         .connexion-titre {
             text-align: center;
-            margin-bottom: 24px;
+            margin-bottom: 18px;
         }
 
         .connexion-titre h1 {
             margin: 0;
-            font-size: 28px;
-            line-height: 1.1;
+            font-size: 18px;
+            line-height: 1.2;
+            font-weight: 800;
         }
 
         .connexion-titre p {
-            margin: 7px 0 0;
-            opacity: .65;
-            font-weight: 600;
+            display: none;
         }
 
         .connexion-carte label {
@@ -628,10 +651,19 @@ function initialiserStyleConnexion() {
         .bouton-profil-accueil {
             appearance: none;
             -webkit-appearance: none;
-            border: 0;
-            background: transparent;
+            display: inline-flex;
+            flex-direction: column;
+            align-items: flex-start;
+            justify-content: center;
+            width: auto;
+            max-width: 78%;
+            border: 1px solid rgba(0,0,0,.08);
+            border-radius: 13px;
+            background: rgba(255,255,255,.92);
+            box-shadow:
+                0 3px 10px rgba(0,0,0,.06);
             margin: 0;
-            padding: 3px 2px;
+            padding: 9px 12px;
             text-align: left;
             cursor: pointer;
             color: inherit;
@@ -639,19 +671,55 @@ function initialiserStyleConnexion() {
             -webkit-tap-highlight-color: transparent;
         }
 
+        .bouton-profil-accueil:active {
+            transform: scale(.985);
+            background: #f3f4f6;
+        }
+
         .bouton-profil-accueil strong {
             display: block;
+            width: 100%;
             font-size: 16px;
             line-height: 1.2;
+            white-space: nowrap;
         }
 
         .bouton-profil-accueil span {
             display: block;
-            margin-top: 3px;
+            width: 100%;
+            margin-top: 4px;
             font-size: 12px;
-            opacity: .65;
-            font-weight: 700;
+            line-height: 1.2;
+            opacity: .62;
+            font-weight: 750;
             letter-spacing: .02em;
+            white-space: nowrap;
+        }
+
+        .retour-button {
+            appearance: none;
+            -webkit-appearance: none;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: fit-content;
+            min-height: 40px;
+            padding: 8px 13px;
+            border: 1px solid rgba(0,0,0,.09);
+            border-radius: 12px;
+            background: #ffffff;
+            box-shadow:
+                0 3px 10px rgba(0,0,0,.06);
+            color: #202124;
+            font: inherit;
+            font-weight: 750;
+            cursor: pointer;
+            text-decoration: none;
+        }
+
+        .retour-button:active {
+            transform: scale(.985);
+            background: #f2f3f5;
         }
 
         .profil-page {
@@ -886,6 +954,10 @@ function afficherConnexion() {
 
     initialiserStyleConnexion();
 
+    document.body.classList.add(
+        "mode-connexion"
+    );
+
     appliquerVisibiliteElementsConnectes(
         false
     );
@@ -902,12 +974,8 @@ function afficherConnexion() {
                 <div class="connexion-titre">
 
                     <h1>
-                        Inventaire Caserne
-                    </h1>
-
-                    <p>
                         Connexion
-                    </p>
+                    </h1>
 
                 </div>
 
@@ -1137,6 +1205,10 @@ async function seConnecterApplication() {
 
         appliquerVisibiliteElementsConnectes(
             true
+        );
+
+        document.body.classList.remove(
+            "mode-connexion"
         );
 
 
@@ -5257,6 +5329,12 @@ function connecterBoutonsAccueil() {
 
 
 function afficherAccueil() {
+
+    initialiserStyleConnexion();
+
+    document.body.classList.remove(
+        "mode-connexion"
+    );
 
     if (!profilUtilisateurConnecte) {
         afficherConnexion();
