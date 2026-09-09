@@ -6057,6 +6057,16 @@ function initialiserStylesStockEtRetour() {
         "style-stock-retour-v21";
 
     style.textContent = `
+        input[type="date"] {
+            display: block;
+            width: 100%;
+            max-width: 100%;
+            min-width: 0;
+            box-sizing: border-box;
+            -webkit-appearance: none;
+            appearance: none;
+        }
+
         .quantite-retour-zone {
             display: flex;
             justify-content: flex-start;
@@ -6914,10 +6924,10 @@ function genererCarteRetour(
 
                         <button
                             type="button"
-                            aria-label="Augmenter"
-                            onclick="augmenterConsommation('${id}')"
+                            aria-label="Diminuer"
+                            onclick="diminuerConsommation('${id}')"
                         >
-                            +
+                            −
                         </button>
 
 
@@ -6933,10 +6943,10 @@ function genererCarteRetour(
 
                         <button
                             type="button"
-                            aria-label="Diminuer"
-                            onclick="diminuerConsommation('${id}')"
+                            aria-label="Augmenter"
+                            onclick="augmenterConsommation('${id}')"
                         >
-                            −
+                            +
                         </button>
 
                     </div>
