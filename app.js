@@ -5,7 +5,18 @@
    APP.JS COMPLET
    ========================================================= */
 
-const CODE_ADMIN = "1234";
+/*
+ * Authentification et rôles
+ */
+const DOMAINE_EMAIL_INTERNE =
+    "inventaire-caserne.local";
+
+const CLE_PROFIL_UTILISATEUR_CACHE =
+    "profil_utilisateur_connecte_v1";
+
+let utilisateurConnecte = null;
+let profilUtilisateurConnecte = null;
+let connexionApplicationEnCours = false;
 
 /*
  * Notifications Web Push
@@ -60,11 +71,18 @@ document.addEventListener("DOMContentLoaded", async function () {
 
     initialiserIndicateurSynchronisation();
     initialiserBandeauConnexion();
-    initialiserBoutonNotifications();
 
     chargerToutesLesDonnees();
 
-    connecterBoutonsAccueil();
+    const authentifie =
+        await initialiserAuthentificationApplication();
+
+    if (!authentifie) {
+        afficherConnexion();
+        return;
+    }
+
+    initialiserBoutonNotifications();
 
     await initialiserSynchronisationSupabase();
 
@@ -85,6 +103,982 @@ function chargerToutesLesDonnees() {
 
 }
 
+
+
+
+/* =========================================================
+   AUTHENTIFICATION ET RÔLES
+   ========================================================= */
+
+function normaliserIdentifiantConnexion(
+    valeur
+) {
+
+    return String(
+        valeur || ""
+    )
+        .trim()
+        .toUpperCase()
+        .replace(
+            /[^A-Z0-9_-]/g,
+            ""
+        );
+
+}
+
+
+function construireEmailTechnique(
+    identifiant
+) {
+
+    return (
+        normaliserIdentifiantConnexion(
+            identifiant
+        ).toLowerCase() +
+        "@" +
+        DOMAINE_EMAIL_INTERNE
+    );
+
+}
+
+
+function sauvegarderProfilUtilisateurCache() {
+
+    try {
+
+        if (!profilUtilisateurConnecte) {
+            localStorage.removeItem(
+                CLE_PROFIL_UTILISATEUR_CACHE
+            );
+            return;
+        }
+
+        localStorage.setItem(
+            CLE_PROFIL_UTILISATEUR_CACHE,
+            JSON.stringify(
+                profilUtilisateurConnecte
+            )
+        );
+
+    } catch (erreur) {
+
+        console.warn(
+            "Impossible de sauvegarder le profil utilisateur :",
+            erreur
+        );
+
+    }
+
+}
+
+
+function chargerProfilUtilisateurCache() {
+
+    try {
+
+        const texte =
+            localStorage.getItem(
+                CLE_PROFIL_UTILISATEUR_CACHE
+            );
+
+        if (!texte) {
+            return null;
+        }
+
+        const profil =
+            JSON.parse(texte);
+
+        if (
+            !profil ||
+            profil.actif !== true ||
+            !profil.roles
+        ) {
+            return null;
+        }
+
+        return profil;
+
+    } catch (erreur) {
+
+        console.warn(
+            "Profil utilisateur en cache illisible :",
+            erreur
+        );
+
+        return null;
+
+    }
+
+}
+
+
+function obtenirRoleUtilisateur() {
+
+    if (!profilUtilisateurConnecte) {
+        return null;
+    }
+
+    const roles =
+        profilUtilisateurConnecte.roles;
+
+    return Array.isArray(roles)
+        ? roles[0] || null
+        : roles || null;
+
+}
+
+
+function utilisateurAPermission(
+    permission
+) {
+
+    const role =
+        obtenirRoleUtilisateur();
+
+    return Boolean(
+        profilUtilisateurConnecte &&
+        profilUtilisateurConnecte.actif === true &&
+        role &&
+        role[permission] === true
+    );
+
+}
+
+
+function verifierPermissionOuRetourAccueil(
+    permission,
+    message
+) {
+
+    if (
+        utilisateurAPermission(
+            permission
+        )
+    ) {
+        return true;
+    }
+
+    alert(
+        message ||
+        "⛔ Vous n'avez pas accès à cette rubrique."
+    );
+
+    afficherAccueil();
+
+    return false;
+
+}
+
+
+async function chargerProfilUtilisateurDepuisSupabase(
+    utilisateur
+) {
+
+    const supabase =
+        obtenirClientSupabase();
+
+    if (
+        !supabase ||
+        !utilisateur?.id
+    ) {
+        throw new Error(
+            "Supabase indisponible."
+        );
+    }
+
+    const {
+        data,
+        error
+    } =
+        await supabase
+            .from(
+                "profils_utilisateurs"
+            )
+            .select(`
+                id,
+                identifiant,
+                nom,
+                prenom,
+                actif,
+                role_id,
+                roles (
+                    id,
+                    nom,
+                    acces_inventaire,
+                    acces_retour_intervention,
+                    acces_historique,
+                    acces_administration,
+                    acces_gestion_utilisateurs
+                )
+            `)
+            .eq(
+                "id",
+                utilisateur.id
+            )
+            .single();
+
+    if (error) {
+        throw error;
+    }
+
+    if (
+        !data ||
+        data.actif !== true
+    ) {
+        throw new Error(
+            "Ce compte est désactivé."
+        );
+    }
+
+    utilisateurConnecte =
+        utilisateur;
+
+    profilUtilisateurConnecte =
+        data;
+
+    sauvegarderProfilUtilisateurCache();
+
+    return data;
+
+}
+
+
+async function initialiserAuthentificationApplication() {
+
+    const profilCache =
+        chargerProfilUtilisateurCache();
+
+
+    if (!navigator.onLine) {
+
+        if (profilCache) {
+
+            profilUtilisateurConnecte =
+                profilCache;
+
+            utilisateurConnecte = {
+                id:
+                    profilCache.id
+            };
+
+            return true;
+
+        }
+
+        return false;
+
+    }
+
+
+    const supabase =
+        await assurerBibliothequeSupabaseDisponible();
+
+    if (!supabase) {
+
+        if (profilCache) {
+
+            profilUtilisateurConnecte =
+                profilCache;
+
+            utilisateurConnecte = {
+                id:
+                    profilCache.id
+            };
+
+            return true;
+
+        }
+
+        return false;
+
+    }
+
+
+    try {
+
+        const {
+            data,
+            error
+        } =
+            await supabase.auth
+                .getSession();
+
+
+        if (error) {
+            throw error;
+        }
+
+
+        const session =
+            data?.session;
+
+
+        if (!session?.user) {
+            return false;
+        }
+
+
+        await chargerProfilUtilisateurDepuisSupabase(
+            session.user
+        );
+
+
+        return true;
+
+    } catch (erreur) {
+
+        console.warn(
+            "Session utilisateur non disponible :",
+            erreur
+        );
+
+
+        if (profilCache) {
+
+            profilUtilisateurConnecte =
+                profilCache;
+
+            utilisateurConnecte = {
+                id:
+                    profilCache.id
+            };
+
+            return true;
+
+        }
+
+
+        return false;
+
+    }
+
+}
+
+
+function appliquerVisibiliteElementsConnectes(
+    connecte
+) {
+
+    const synchronisation =
+        document.getElementById(
+            "indicateur-synchronisation"
+        );
+
+    if (synchronisation) {
+        synchronisation.style.display =
+            connecte
+                ? ""
+                : "none";
+    }
+
+
+    const notifications =
+        document.getElementById(
+            "btn-notifications-push"
+        );
+
+    if (notifications) {
+        notifications.style.display =
+            connecte
+                ? ""
+                : "none";
+    }
+
+}
+
+
+function initialiserStyleConnexion() {
+
+    if (
+        document.getElementById(
+            "style-auth-utilisateurs"
+        )
+    ) {
+        return;
+    }
+
+
+    const style =
+        document.createElement(
+            "style"
+        );
+
+    style.id =
+        "style-auth-utilisateurs";
+
+    style.textContent = `
+        .connexion-page {
+            min-height: 100vh;
+            min-height: 100dvh;
+            box-sizing: border-box;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding:
+                calc(28px + env(safe-area-inset-top, 0px))
+                20px
+                calc(28px + env(safe-area-inset-bottom, 0px));
+        }
+
+        .connexion-carte {
+            width: min(100%, 430px);
+            background: #ffffff;
+            border-radius: 24px;
+            padding: 28px 22px;
+            box-sizing: border-box;
+            box-shadow:
+                0 12px 36px rgba(0,0,0,0.12);
+        }
+
+        .connexion-logo {
+            text-align: center;
+            font-size: 48px;
+            margin-bottom: 8px;
+        }
+
+        .connexion-carte h1 {
+            text-align: center;
+            margin: 0 0 6px 0;
+        }
+
+        .connexion-sous-titre {
+            text-align: center;
+            margin: 0 0 26px 0;
+            opacity: .72;
+        }
+
+        .connexion-carte label {
+            display: block;
+            font-weight: 700;
+            margin: 14px 0 7px;
+        }
+
+        .connexion-carte input,
+        .gestion-utilisateurs-page input,
+        .gestion-utilisateurs-page select {
+            width: 100%;
+            box-sizing: border-box;
+            min-height: 50px;
+            border: 1px solid #d8dce2;
+            border-radius: 13px;
+            padding: 10px 12px;
+            font: inherit;
+            background: #fff;
+        }
+
+        .connexion-erreur {
+            display: none;
+            margin-top: 14px;
+            padding: 11px 12px;
+            border-radius: 12px;
+            background: #ffe3e3;
+            color: #8a1111;
+            font-weight: 700;
+        }
+
+        .utilisateur-entete {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 18px;
+        }
+
+        .utilisateur-connecte {
+            font-size: 14px;
+            line-height: 1.35;
+        }
+
+        .utilisateur-connecte strong {
+            display: block;
+        }
+
+        .btn-deconnexion {
+            border: 0;
+            border-radius: 12px;
+            padding: 10px 12px;
+            background: #eceff3;
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        .gestion-utilisateurs-page .bloc-admin {
+            background: #fff;
+            border-radius: 18px;
+            padding: 18px;
+            margin: 16px 0;
+            box-shadow:
+                0 5px 18px rgba(0,0,0,.08);
+        }
+
+        .gestion-utilisateurs-page .grille-formulaire {
+            display: grid;
+            gap: 10px;
+        }
+
+        .gestion-utilisateurs-page .carte-utilisateur,
+        .gestion-utilisateurs-page .carte-role {
+            border: 1px solid #e0e3e7;
+            border-radius: 14px;
+            padding: 14px;
+            margin-top: 12px;
+        }
+
+        .gestion-utilisateurs-page .ligne-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        .gestion-utilisateurs-page .petit-bouton {
+            border: 0;
+            border-radius: 10px;
+            padding: 9px 11px;
+            font-weight: 700;
+            cursor: pointer;
+            background: #e9edf2;
+        }
+
+        .gestion-utilisateurs-page .permissions-role {
+            display: grid;
+            gap: 7px;
+            margin-top: 10px;
+        }
+
+        .gestion-utilisateurs-page .permissions-role label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .gestion-utilisateurs-page .permissions-role input {
+            width: auto;
+            min-height: 0;
+        }
+
+        .badge-role {
+            display: inline-block;
+            margin-top: 4px;
+            padding: 4px 8px;
+            border-radius: 999px;
+            background: #e8f3ff;
+            font-size: 12px;
+            font-weight: 800;
+        }
+    `;
+
+    document.head.appendChild(
+        style
+    );
+
+}
+
+
+function afficherConnexion() {
+
+    initialiserStyleConnexion();
+
+    appliquerVisibiliteElementsConnectes(
+        false
+    );
+
+
+    document.getElementById(
+        "app"
+    ).innerHTML = `
+
+        <main class="connexion-page">
+
+            <section class="connexion-carte">
+
+                <div class="connexion-logo">
+                    🚒
+                </div>
+
+                <h1>
+                    Inventaire Caserne
+                </h1>
+
+                <p class="connexion-sous-titre">
+                    Connexion
+                </p>
+
+
+                <label for="connexion-identifiant">
+                    Identifiant
+                </label>
+
+                <input
+                    id="connexion-identifiant"
+                    type="text"
+                    autocomplete="username"
+                    autocapitalize="characters"
+                    placeholder="Ex. LECLEREA"
+                >
+
+
+                <label for="connexion-mot-de-passe">
+                    Mot de passe
+                </label>
+
+                <input
+                    id="connexion-mot-de-passe"
+                    type="password"
+                    autocomplete="current-password"
+                    placeholder="Mot de passe"
+                >
+
+
+                <button
+                    class="add-button"
+                    id="btn-connexion-application"
+                    type="button"
+                    onclick="seConnecterApplication()"
+                    style="margin-top:20px;"
+                >
+                    🔐 Se connecter
+                </button>
+
+
+                <div
+                    class="connexion-erreur"
+                    id="connexion-erreur"
+                ></div>
+
+            </section>
+
+        </main>
+
+    `;
+
+
+    const identifiant =
+        document.getElementById(
+            "connexion-identifiant"
+        );
+
+    const motDePasse =
+        document.getElementById(
+            "connexion-mot-de-passe"
+        );
+
+
+    function gererEntree(
+        event
+    ) {
+
+        if (
+            event.key ===
+            "Enter"
+        ) {
+            void seConnecterApplication();
+        }
+
+    }
+
+
+    identifiant?.addEventListener(
+        "keydown",
+        gererEntree
+    );
+
+    motDePasse?.addEventListener(
+        "keydown",
+        gererEntree
+    );
+
+
+    identifiant?.focus();
+
+}
+
+
+async function seConnecterApplication() {
+
+    if (connexionApplicationEnCours) {
+        return;
+    }
+
+
+    const champIdentifiant =
+        document.getElementById(
+            "connexion-identifiant"
+        );
+
+    const champMotDePasse =
+        document.getElementById(
+            "connexion-mot-de-passe"
+        );
+
+    const bouton =
+        document.getElementById(
+            "btn-connexion-application"
+        );
+
+    const erreurElement =
+        document.getElementById(
+            "connexion-erreur"
+        );
+
+
+    const identifiant =
+        normaliserIdentifiantConnexion(
+            champIdentifiant?.value
+        );
+
+    const motDePasse =
+        String(
+            champMotDePasse?.value ||
+            ""
+        );
+
+
+    if (
+        !identifiant ||
+        !motDePasse
+    ) {
+
+        if (erreurElement) {
+            erreurElement.textContent =
+                "Identifiant et mot de passe obligatoires.";
+            erreurElement.style.display =
+                "block";
+        }
+
+        return;
+
+    }
+
+
+    if (!navigator.onLine) {
+
+        if (erreurElement) {
+            erreurElement.textContent =
+                "Une connexion Internet est nécessaire pour une première connexion.";
+            erreurElement.style.display =
+                "block";
+        }
+
+        return;
+
+    }
+
+
+    connexionApplicationEnCours =
+        true;
+
+
+    if (bouton) {
+        bouton.disabled = true;
+        bouton.textContent =
+            "Connexion…";
+    }
+
+
+    if (erreurElement) {
+        erreurElement.style.display =
+            "none";
+    }
+
+
+    try {
+
+        const supabase =
+            await assurerBibliothequeSupabaseDisponible();
+
+
+        if (!supabase) {
+            throw new Error(
+                "Supabase n'est pas disponible."
+            );
+        }
+
+
+        const {
+            data,
+            error
+        } =
+            await supabase.auth
+                .signInWithPassword({
+                    email:
+                        construireEmailTechnique(
+                            identifiant
+                        ),
+                    password:
+                        motDePasse
+                });
+
+
+        if (
+            error ||
+            !data?.user
+        ) {
+            throw (
+                error ||
+                new Error(
+                    "Connexion impossible."
+                )
+            );
+        }
+
+
+        await chargerProfilUtilisateurDepuisSupabase(
+            data.user
+        );
+
+
+        initialiserBoutonNotifications();
+
+        appliquerVisibiliteElementsConnectes(
+            true
+        );
+
+
+        await initialiserSynchronisationSupabase();
+
+
+        afficherAccueil();
+
+    } catch (erreur) {
+
+        console.error(
+            "Connexion impossible :",
+            erreur
+        );
+
+
+        if (erreurElement) {
+
+            const texte =
+                String(
+                    erreur?.message ||
+                    ""
+                );
+
+
+            if (
+                /invalid login credentials/i
+                    .test(texte)
+            ) {
+
+                erreurElement.textContent =
+                    "Identifiant ou mot de passe incorrect.";
+
+            } else {
+
+                erreurElement.textContent =
+                    texte ||
+                    "Connexion impossible.";
+
+            }
+
+
+            erreurElement.style.display =
+                "block";
+
+        }
+
+    } finally {
+
+        connexionApplicationEnCours =
+            false;
+
+
+        if (bouton) {
+            bouton.disabled = false;
+            bouton.textContent =
+                "🔐 Se connecter";
+        }
+
+    }
+
+}
+
+
+async function deconnecterApplication() {
+
+    if (
+        !confirm(
+            "Voulez-vous vous déconnecter ?"
+        )
+    ) {
+        return;
+    }
+
+
+    try {
+
+        const supabase =
+            obtenirClientSupabase();
+
+        if (supabase) {
+            await supabase.auth
+                .signOut();
+        }
+
+    } catch (erreur) {
+
+        console.warn(
+            "Déconnexion Supabase :",
+            erreur
+        );
+
+    }
+
+
+    utilisateurConnecte =
+        null;
+
+    profilUtilisateurConnecte =
+        null;
+
+    localStorage.removeItem(
+        CLE_PROFIL_UTILISATEUR_CACHE
+    );
+
+
+    afficherConnexion();
+
+}
+
+
+function obtenirNomUtilisateurAffiche() {
+
+    if (!profilUtilisateurConnecte) {
+        return "";
+    }
+
+
+    const prenom =
+        String(
+            profilUtilisateurConnecte
+                .prenom || ""
+        ).trim();
+
+    const nom =
+        String(
+            profilUtilisateurConnecte
+                .nom || ""
+        ).trim();
+
+    const identifiant =
+        String(
+            profilUtilisateurConnecte
+                .identifiant || ""
+        ).trim();
+
+
+    const complet =
+        [prenom, nom]
+            .filter(Boolean)
+            .join(" ");
+
+
+    return complet ||
+        identifiant;
+
+}
 
 
 /* =========================================================
@@ -3548,11 +4542,173 @@ function connecterBoutonsAccueil() {
 
 function afficherAccueil() {
 
+    if (!profilUtilisateurConnecte) {
+        afficherConnexion();
+        return;
+    }
+
+
+    appliquerVisibiliteElementsConnectes(
+        true
+    );
+
+
+    const role =
+        obtenirRoleUtilisateur();
+
+    const boutons = [];
+
+
+    if (
+        utilisateurAPermission(
+            "acces_inventaire"
+        )
+    ) {
+
+        boutons.push(`
+            <button
+                class="menu-button"
+                type="button"
+                onclick="afficherInventaire()"
+            >
+                <span class="menu-icon">
+                    📦
+                </span>
+                <span>
+                    <strong>
+                        Inventaire
+                    </strong>
+                    <small>
+                        Consulter le matériel
+                    </small>
+                </span>
+            </button>
+        `);
+
+    }
+
+
+    if (
+        utilisateurAPermission(
+            "acces_retour_intervention"
+        )
+    ) {
+
+        boutons.push(`
+            <button
+                class="menu-button"
+                type="button"
+                onclick="afficherRetourIntervention()"
+            >
+                <span class="menu-icon">
+                    🚒
+                </span>
+                <span>
+                    <strong>
+                        Retour d'intervention
+                    </strong>
+                    <small>
+                        Enregistrer le matériel utilisé
+                    </small>
+                </span>
+            </button>
+        `);
+
+    }
+
+
+    if (
+        utilisateurAPermission(
+            "acces_historique"
+        )
+    ) {
+
+        boutons.push(`
+            <button
+                class="menu-button"
+                type="button"
+                onclick="afficherHistorique()"
+            >
+                <span class="menu-icon">
+                    📊
+                </span>
+                <span>
+                    <strong>
+                        Historique
+                    </strong>
+                    <small>
+                        Consulter les consommations
+                    </small>
+                </span>
+            </button>
+        `);
+
+    }
+
+
+    if (
+        utilisateurAPermission(
+            "acces_administration"
+        )
+    ) {
+
+        boutons.push(`
+            <button
+                class="menu-button"
+                type="button"
+                onclick="ouvrirAdministration()"
+            >
+                <span class="menu-icon">
+                    ⚙️
+                </span>
+                <span>
+                    <strong>
+                        Administration
+                    </strong>
+                    <small>
+                        Gestion du matériel
+                    </small>
+                </span>
+            </button>
+        `);
+
+    }
+
+
     document.getElementById(
         "app"
     ).innerHTML = `
 
         <main class="page">
+
+            <div class="utilisateur-entete">
+
+                <div class="utilisateur-connecte">
+
+                    <strong>
+                        👨‍🚒 ${echapperHTML(
+                            obtenirNomUtilisateurAffiche()
+                        )}
+                    </strong>
+
+                    <span>
+                        ${echapperHTML(
+                            role?.nom || ""
+                        )}
+                    </span>
+
+                </div>
+
+                <button
+                    class="btn-deconnexion"
+                    type="button"
+                    onclick="deconnecterApplication()"
+                >
+                    Déconnexion
+                </button>
+
+            </div>
+
 
             <header class="accueil-header">
 
@@ -3569,110 +4725,7 @@ function afficherAccueil() {
 
             <section class="menu-principal">
 
-                <button
-                    class="menu-button"
-                    type="button"
-                    onclick="afficherInventaire()"
-                >
-
-                    <span class="menu-icon">
-                        📦
-                    </span>
-
-                    <span>
-
-                        <strong>
-                            Inventaire
-                        </strong>
-
-                        <small>
-                            Consulter le matériel
-                        </small>
-
-                    </span>
-
-                </button>
-
-
-                <button
-                    class="menu-button"
-                    type="button"
-                    onclick="
-                        afficherRetourIntervention()
-                    "
-                >
-
-                    <span class="menu-icon">
-                        🚒
-                    </span>
-
-                    <span>
-
-                        <strong>
-                            Retour d'intervention
-                        </strong>
-
-                        <small>
-                            Enregistrer le matériel utilisé
-                        </small>
-
-                    </span>
-
-                </button>
-
-
-                <button
-                    class="menu-button"
-                    type="button"
-                    onclick="
-                        afficherHistorique()
-                    "
-                >
-
-                    <span class="menu-icon">
-                        📊
-                    </span>
-
-                    <span>
-
-                        <strong>
-                            Historique
-                        </strong>
-
-                        <small>
-                            Consulter les consommations
-                        </small>
-
-                    </span>
-
-                </button>
-
-
-                <button
-                    class="menu-button"
-                    type="button"
-                    onclick="
-                        ouvrirAdministration()
-                    "
-                >
-
-                    <span class="menu-icon">
-                        ⚙️
-                    </span>
-
-                    <span>
-
-                        <strong>
-                            Administration
-                        </strong>
-
-                        <small>
-                            Gestion du matériel
-                        </small>
-
-                    </span>
-
-                </button>
+                ${boutons.join("")}
 
             </section>
 
@@ -3682,12 +4735,18 @@ function afficherAccueil() {
 
 }
 
-
 /* =========================================================
    INVENTAIRE
    ========================================================= */
 
 async function afficherInventaire() {
+
+    if (!verifierPermissionOuRetourAccueil(
+        "acces_inventaire"
+    )) {
+        return;
+    }
+
 
     await synchroniserAvantNavigation();
 
@@ -4189,6 +5248,13 @@ function genererCarteInventaire(
    ========================================================= */
 
 async function afficherRetourIntervention() {
+
+    if (!verifierPermissionOuRetourAccueil(
+        "acces_retour_intervention"
+    )) {
+        return;
+    }
+
 
     await synchroniserAvantNavigation();
 
@@ -5163,6 +6229,13 @@ async function validerRetourIntervention() {
 
 async function afficherHistorique() {
 
+    if (!verifierPermissionOuRetourAccueil(
+        "acces_historique"
+    )) {
+        return;
+    }
+
+
     await synchroniserAvantNavigation();
 
     document.getElementById(
@@ -6114,135 +7187,64 @@ function afficherDetailIntervention(
 
 async function ouvrirAdministration() {
 
+    if (!verifierPermissionOuRetourAccueil(
+        "acces_administration"
+    )) {
+        return;
+    }
+
     await synchroniserAvantNavigation();
 
-    document.getElementById(
-        "app"
-    ).innerHTML = `
-
-        <main class="page">
-
-            <button
-                class="retour-button"
-                onclick="afficherAccueil()"
-            >
-                ← Retour
-            </button>
-
-
-            <h2>
-                🔐 Administration
-            </h2>
-
-
-            <div
-                class="formulaire"
-            >
-
-                <label>
-                    Code administrateur
-                </label>
-
-
-                <input
-                    type="password"
-                    id="code-admin"
-                    placeholder="Entrez le code"
-                    inputmode="numeric"
-                >
-
-
-                <button
-                    class="add-button"
-                    onclick="verifierCodeAdmin()"
-                >
-                    🔓 Accéder
-                </button>
-
-            </div>
-
-        </main>
-
-    `;
-
-
-    const champ =
-        document.getElementById(
-            "code-admin"
-        );
-
-
-    if (champ) {
-
-        champ.focus();
-
-
-        champ.addEventListener(
-            "keydown",
-            function (event) {
-
-                if (
-                    event.key ===
-                    "Enter"
-                ) {
-
-                    verifierCodeAdmin();
-
-                }
-
-            }
-        );
-
-    }
+    afficherMenuAdministration();
 
 }
 
 
 function verifierCodeAdmin() {
 
-    const champ =
-        document.getElementById(
-            "code-admin"
-        );
-
-
-    if (!champ) {
-
-        return;
-
-    }
-
-
-    if (
-        champ.value ===
-        CODE_ADMIN
-    ) {
-
-        afficherMenuAdministration();
-
-    } else {
-
-        alert(
-            "❌ Code administrateur incorrect."
-        );
-
-
-        champ.value =
-            "";
-
-
-        champ.focus();
-
-    }
+    ouvrirAdministration();
 
 }
-
 
 /* =========================================================
    MENU ADMINISTRATION
    ========================================================= */
 
 function afficherMenuAdministration() {
+
+    if (!verifierPermissionOuRetourAccueil(
+        "acces_administration"
+    )) {
+        return;
+    }
+
+
+    const boutonGestionUtilisateurs =
+        utilisateurAPermission(
+            "acces_gestion_utilisateurs"
+        )
+            ? `
+                <button
+                    class="menu-button"
+                    onclick="afficherGestionUtilisateurs()"
+                >
+                    <span class="menu-icon">
+                        👥
+                    </span>
+
+                    <span>
+                        <strong>
+                            Gestion des utilisateurs
+                        </strong>
+
+                        <small>
+                            Comptes, rôles et permissions
+                        </small>
+                    </span>
+                </button>
+            `
+            : "";
+
 
     document.getElementById(
         "app"
@@ -6266,6 +7268,8 @@ function afficherMenuAdministration() {
             <div
                 class="menu-administration"
             >
+
+                ${boutonGestionUtilisateurs}
 
                 <button
                     class="menu-button"
@@ -6395,11 +7399,1102 @@ function afficherMenuAdministration() {
 }
 
 
+
+/* =========================================================
+   GESTION DES UTILISATEURS ET DES RÔLES
+   ========================================================= */
+
+let donneesGestionUtilisateurs = {
+    utilisateurs: [],
+    roles: []
+};
+
+
+async function appelerGestionUtilisateurs(
+    action,
+    donnees = {}
+) {
+
+    if (
+        !utilisateurAPermission(
+            "acces_gestion_utilisateurs"
+        )
+    ) {
+        throw new Error(
+            "Accès refusé."
+        );
+    }
+
+
+    if (!navigator.onLine) {
+        throw new Error(
+            "Une connexion Internet est nécessaire."
+        );
+    }
+
+
+    const supabase =
+        await assurerBibliothequeSupabaseDisponible();
+
+
+    if (!supabase) {
+        throw new Error(
+            "Supabase n'est pas disponible."
+        );
+    }
+
+
+    const {
+        data,
+        error
+    } =
+        await supabase.functions.invoke(
+            "gestion-utilisateurs",
+            {
+                body: {
+                    action,
+                    ...donnees
+                }
+            }
+        );
+
+
+    if (error) {
+        throw error;
+    }
+
+
+    if (
+        !data ||
+        data.ok !== true
+    ) {
+        throw new Error(
+            data?.error ||
+            "Opération impossible."
+        );
+    }
+
+
+    return data;
+
+}
+
+
+async function chargerGestionUtilisateurs() {
+
+    const data =
+        await appelerGestionUtilisateurs(
+            "liste"
+        );
+
+
+    donneesGestionUtilisateurs = {
+        utilisateurs:
+            Array.isArray(
+                data.utilisateurs
+            )
+                ? data.utilisateurs
+                : [],
+        roles:
+            Array.isArray(
+                data.roles
+            )
+                ? data.roles
+                : []
+    };
+
+
+    return donneesGestionUtilisateurs;
+
+}
+
+
+function roleUtilisateurGestion(
+    utilisateur
+) {
+
+    const roles =
+        utilisateur.roles;
+
+    return Array.isArray(roles)
+        ? roles[0] || null
+        : roles || null;
+
+}
+
+
+function permissionRoleHTML(
+    role,
+    permission,
+    libelle,
+    prefixe
+) {
+
+    return `
+        <label>
+            <input
+                type="checkbox"
+                id="${prefixe}-${permission}"
+                ${role?.[permission] === true
+                    ? "checked"
+                    : ""}
+            >
+            ${libelle}
+        </label>
+    `;
+
+}
+
+
+async function afficherGestionUtilisateurs() {
+
+    if (
+        !verifierPermissionOuRetourAccueil(
+            "acces_gestion_utilisateurs"
+        )
+    ) {
+        return;
+    }
+
+
+    initialiserStyleConnexion();
+
+
+    document.getElementById(
+        "app"
+    ).innerHTML = `
+
+        <main class="page gestion-utilisateurs-page">
+
+            <button
+                class="retour-button"
+                onclick="afficherMenuAdministration()"
+            >
+                ← Retour
+            </button>
+
+            <h2>
+                👥 Gestion des utilisateurs
+            </h2>
+
+            <div class="bloc-admin">
+                Chargement…
+            </div>
+
+        </main>
+
+    `;
+
+
+    try {
+
+        await chargerGestionUtilisateurs();
+
+        rendreGestionUtilisateurs();
+
+    } catch (erreur) {
+
+        console.error(
+            "Gestion utilisateurs :",
+            erreur
+        );
+
+        document.getElementById(
+            "app"
+        ).innerHTML += `
+            <div class="page">
+                <div class="bloc-admin">
+                    ⚠️ ${echapperHTML(
+                        erreur?.message ||
+                        "Chargement impossible."
+                    )}
+                </div>
+            </div>
+        `;
+
+    }
+
+}
+
+
+function rendreGestionUtilisateurs() {
+
+    const utilisateurs =
+        donneesGestionUtilisateurs
+            .utilisateurs;
+
+    const roles =
+        donneesGestionUtilisateurs
+            .roles;
+
+
+    const optionsRoles =
+        roles.map(
+            function (role) {
+
+                return `
+                    <option
+                        value="${echapperHTML(role.id)}"
+                    >
+                        ${echapperHTML(role.nom)}
+                    </option>
+                `;
+
+            }
+        ).join("");
+
+
+    const cartesUtilisateurs =
+        utilisateurs.map(
+            function (utilisateur) {
+
+                const role =
+                    roleUtilisateurGestion(
+                        utilisateur
+                    );
+
+                const options =
+                    roles.map(
+                        function (r) {
+
+                            return `
+                                <option
+                                    value="${echapperHTML(r.id)}"
+                                    ${String(r.id) ===
+                                        String(utilisateur.role_id)
+                                        ? "selected"
+                                        : ""}
+                                >
+                                    ${echapperHTML(r.nom)}
+                                </option>
+                            `;
+
+                        }
+                    ).join("");
+
+
+                return `
+                    <div class="carte-utilisateur">
+
+                        <strong>
+                            ${echapperHTML(
+                                utilisateur.prenom || ""
+                            )}
+                            ${echapperHTML(
+                                utilisateur.nom || ""
+                            )}
+                        </strong>
+
+                        <div>
+                            ${echapperHTML(
+                                utilisateur.identifiant
+                            )}
+                        </div>
+
+                        <span class="badge-role">
+                            ${echapperHTML(
+                                role?.nom || "Sans rôle"
+                            )}
+                        </span>
+
+                        <label>
+                            Rôle
+                        </label>
+
+                        <select
+                            id="role-user-${echapperHTML(utilisateur.id)}"
+                        >
+                            ${options}
+                        </select>
+
+                        <div class="ligne-actions">
+
+                            <button
+                                class="petit-bouton"
+                                onclick="modifierRoleUtilisateur('${echapperHTML(utilisateur.id)}')"
+                            >
+                                💾 Enregistrer le rôle
+                            </button>
+
+                            <button
+                                class="petit-bouton"
+                                onclick="changerMotDePasseUtilisateur('${echapperHTML(utilisateur.id)}','${echapperHTML(utilisateur.identifiant)}')"
+                            >
+                                🔑 Mot de passe
+                            </button>
+
+                            <button
+                                class="petit-bouton"
+                                onclick="changerEtatUtilisateur('${echapperHTML(utilisateur.id)}', ${utilisateur.actif === true ? "false" : "true"})"
+                            >
+                                ${utilisateur.actif === true
+                                    ? "⛔ Désactiver"
+                                    : "✅ Réactiver"}
+                            </button>
+
+                        </div>
+
+                        <small>
+                            État :
+                            <strong>
+                                ${utilisateur.actif === true
+                                    ? "ACTIF"
+                                    : "DÉSACTIVÉ"}
+                            </strong>
+                        </small>
+
+                    </div>
+                `;
+
+            }
+        ).join("");
+
+
+    const cartesRoles =
+        roles.map(
+            function (role) {
+
+                const prefixe =
+                    "role-" +
+                    role.id;
+
+                return `
+                    <div class="carte-role">
+
+                        <label>
+                            Nom du rôle
+                        </label>
+
+                        <input
+                            id="${prefixe}-nom"
+                            value="${echapperHTML(role.nom)}"
+                        >
+
+                        <div class="permissions-role">
+
+                            ${permissionRoleHTML(
+                                role,
+                                "acces_inventaire",
+                                "Inventaire",
+                                prefixe
+                            )}
+
+                            ${permissionRoleHTML(
+                                role,
+                                "acces_retour_intervention",
+                                "Retour d'intervention",
+                                prefixe
+                            )}
+
+                            ${permissionRoleHTML(
+                                role,
+                                "acces_historique",
+                                "Historique",
+                                prefixe
+                            )}
+
+                            ${permissionRoleHTML(
+                                role,
+                                "acces_administration",
+                                "Administration",
+                                prefixe
+                            )}
+
+                            ${permissionRoleHTML(
+                                role,
+                                "acces_gestion_utilisateurs",
+                                "Gestion des utilisateurs",
+                                prefixe
+                            )}
+
+                        </div>
+
+                        <div class="ligne-actions">
+
+                            <button
+                                class="petit-bouton"
+                                onclick="enregistrerRole('${echapperHTML(role.id)}')"
+                            >
+                                💾 Enregistrer
+                            </button>
+
+                            <button
+                                class="petit-bouton"
+                                onclick="supprimerRoleGestion('${echapperHTML(role.id)}','${echapperHTML(role.nom)}')"
+                            >
+                                🗑️ Supprimer
+                            </button>
+
+                        </div>
+
+                    </div>
+                `;
+
+            }
+        ).join("");
+
+
+    document.getElementById(
+        "app"
+    ).innerHTML = `
+
+        <main class="page gestion-utilisateurs-page">
+
+            <button
+                class="retour-button"
+                onclick="afficherMenuAdministration()"
+            >
+                ← Retour
+            </button>
+
+            <h2>
+                👥 Gestion des utilisateurs
+            </h2>
+
+
+            <section class="bloc-admin">
+
+                <h3>
+                    ➕ Nouvel utilisateur
+                </h3>
+
+                <div class="grille-formulaire">
+
+                    <input
+                        id="new-user-identifiant"
+                        placeholder="Identifiant (ex. DUPONTJ)"
+                        autocapitalize="characters"
+                    >
+
+                    <input
+                        id="new-user-nom"
+                        placeholder="Nom"
+                    >
+
+                    <input
+                        id="new-user-prenom"
+                        placeholder="Prénom"
+                    >
+
+                    <input
+                        id="new-user-password"
+                        type="password"
+                        placeholder="Mot de passe"
+                    >
+
+                    <select
+                        id="new-user-role"
+                    >
+                        ${optionsRoles}
+                    </select>
+
+                    <button
+                        class="add-button"
+                        onclick="creerUtilisateurAdministration()"
+                    >
+                        👤 Créer l'utilisateur
+                    </button>
+
+                </div>
+
+            </section>
+
+
+            <section class="bloc-admin">
+
+                <h3>
+                    Utilisateurs
+                </h3>
+
+                ${cartesUtilisateurs ||
+                    "<p>Aucun utilisateur.</p>"}
+
+            </section>
+
+
+            <section class="bloc-admin">
+
+                <h3>
+                    ➕ Nouveau rôle
+                </h3>
+
+                <div class="grille-formulaire">
+
+                    <input
+                        id="new-role-nom"
+                        placeholder="Nom du rôle"
+                    >
+
+                    <div class="permissions-role">
+
+                        <label>
+                            <input
+                                type="checkbox"
+                                id="new-role-inventaire"
+                            >
+                            Inventaire
+                        </label>
+
+                        <label>
+                            <input
+                                type="checkbox"
+                                id="new-role-retour"
+                            >
+                            Retour d'intervention
+                        </label>
+
+                        <label>
+                            <input
+                                type="checkbox"
+                                id="new-role-historique"
+                            >
+                            Historique
+                        </label>
+
+                        <label>
+                            <input
+                                type="checkbox"
+                                id="new-role-administration"
+                            >
+                            Administration
+                        </label>
+
+                        <label>
+                            <input
+                                type="checkbox"
+                                id="new-role-utilisateurs"
+                            >
+                            Gestion des utilisateurs
+                        </label>
+
+                    </div>
+
+                    <button
+                        class="add-button"
+                        onclick="creerRoleAdministration()"
+                    >
+                        ➕ Créer le rôle
+                    </button>
+
+                </div>
+
+            </section>
+
+
+            <section class="bloc-admin">
+
+                <h3>
+                    Rôles et permissions
+                </h3>
+
+                ${cartesRoles}
+
+            </section>
+
+        </main>
+
+    `;
+
+}
+
+
+async function creerUtilisateurAdministration() {
+
+    const identifiant =
+        normaliserIdentifiantConnexion(
+            document.getElementById(
+                "new-user-identifiant"
+            )?.value
+        );
+
+    const nom =
+        document.getElementById(
+            "new-user-nom"
+        )?.value.trim() || "";
+
+    const prenom =
+        document.getElementById(
+            "new-user-prenom"
+        )?.value.trim() || "";
+
+    const motDePasse =
+        document.getElementById(
+            "new-user-password"
+        )?.value || "";
+
+    const roleId =
+        document.getElementById(
+            "new-user-role"
+        )?.value || "";
+
+
+    if (
+        !identifiant ||
+        !motDePasse ||
+        !roleId
+    ) {
+        alert(
+            "Identifiant, mot de passe et rôle obligatoires."
+        );
+        return;
+    }
+
+
+    try {
+
+        await appelerGestionUtilisateurs(
+            "creer_utilisateur",
+            {
+                identifiant,
+                nom,
+                prenom,
+                mot_de_passe:
+                    motDePasse,
+                role_id:
+                    roleId
+            }
+        );
+
+
+        alert(
+            "✅ Utilisateur créé."
+        );
+
+
+        await afficherGestionUtilisateurs();
+
+    } catch (erreur) {
+
+        alert(
+            "⚠️ " +
+            (
+                erreur?.message ||
+                "Création impossible."
+            )
+        );
+
+    }
+
+}
+
+
+async function modifierRoleUtilisateur(
+    userId
+) {
+
+    const roleId =
+        document.getElementById(
+            "role-user-" +
+            userId
+        )?.value;
+
+
+    if (!roleId) {
+        return;
+    }
+
+
+    try {
+
+        await appelerGestionUtilisateurs(
+            "modifier_utilisateur",
+            {
+                user_id:
+                    userId,
+                role_id:
+                    roleId
+            }
+        );
+
+
+        alert(
+            "✅ Rôle modifié."
+        );
+
+
+        await afficherGestionUtilisateurs();
+
+    } catch (erreur) {
+
+        alert(
+            "⚠️ " +
+            (
+                erreur?.message ||
+                "Modification impossible."
+            )
+        );
+
+    }
+
+}
+
+
+async function changerMotDePasseUtilisateur(
+    userId,
+    identifiant
+) {
+
+    const motDePasse =
+        prompt(
+            "Nouveau mot de passe pour " +
+            identifiant +
+            " :"
+        );
+
+
+    if (motDePasse === null) {
+        return;
+    }
+
+
+    if (
+        motDePasse.length < 4
+    ) {
+        alert(
+            "Le mot de passe doit contenir au moins 4 caractères."
+        );
+        return;
+    }
+
+
+    try {
+
+        await appelerGestionUtilisateurs(
+            "changer_mot_de_passe",
+            {
+                user_id:
+                    userId,
+                mot_de_passe:
+                    motDePasse
+            }
+        );
+
+
+        alert(
+            "✅ Mot de passe modifié."
+        );
+
+    } catch (erreur) {
+
+        alert(
+            "⚠️ " +
+            (
+                erreur?.message ||
+                "Modification impossible."
+            )
+        );
+
+    }
+
+}
+
+
+async function changerEtatUtilisateur(
+    userId,
+    nouvelEtat
+) {
+
+    if (
+        !confirm(
+            nouvelEtat
+                ? "Réactiver cet utilisateur ?"
+                : "Désactiver cet utilisateur ?"
+        )
+    ) {
+        return;
+    }
+
+
+    try {
+
+        await appelerGestionUtilisateurs(
+            "changer_etat",
+            {
+                user_id:
+                    userId,
+                actif:
+                    nouvelEtat === true
+            }
+        );
+
+
+        alert(
+            nouvelEtat
+                ? "✅ Utilisateur réactivé."
+                : "✅ Utilisateur désactivé."
+        );
+
+
+        await afficherGestionUtilisateurs();
+
+    } catch (erreur) {
+
+        alert(
+            "⚠️ " +
+            (
+                erreur?.message ||
+                "Modification impossible."
+            )
+        );
+
+    }
+
+}
+
+
+function lirePermissionRole(
+    id
+) {
+
+    return document.getElementById(
+        id
+    )?.checked === true;
+
+}
+
+
+async function creerRoleAdministration() {
+
+    const nom =
+        document.getElementById(
+            "new-role-nom"
+        )?.value.trim() || "";
+
+
+    if (!nom) {
+        alert(
+            "Nom du rôle obligatoire."
+        );
+        return;
+    }
+
+
+    try {
+
+        await appelerGestionUtilisateurs(
+            "creer_role",
+            {
+                nom,
+                acces_inventaire:
+                    lirePermissionRole(
+                        "new-role-inventaire"
+                    ),
+                acces_retour_intervention:
+                    lirePermissionRole(
+                        "new-role-retour"
+                    ),
+                acces_historique:
+                    lirePermissionRole(
+                        "new-role-historique"
+                    ),
+                acces_administration:
+                    lirePermissionRole(
+                        "new-role-administration"
+                    ),
+                acces_gestion_utilisateurs:
+                    lirePermissionRole(
+                        "new-role-utilisateurs"
+                    )
+            }
+        );
+
+
+        alert(
+            "✅ Rôle créé."
+        );
+
+
+        await afficherGestionUtilisateurs();
+
+    } catch (erreur) {
+
+        alert(
+            "⚠️ " +
+            (
+                erreur?.message ||
+                "Création impossible."
+            )
+        );
+
+    }
+
+}
+
+
+async function enregistrerRole(
+    roleId
+) {
+
+    const prefixe =
+        "role-" +
+        roleId;
+
+    const nom =
+        document.getElementById(
+            prefixe +
+            "-nom"
+        )?.value.trim() || "";
+
+
+    if (!nom) {
+        alert(
+            "Nom du rôle obligatoire."
+        );
+        return;
+    }
+
+
+    try {
+
+        await appelerGestionUtilisateurs(
+            "modifier_role",
+            {
+                role_id:
+                    roleId,
+                nom,
+                acces_inventaire:
+                    lirePermissionRole(
+                        prefixe +
+                        "-acces_inventaire"
+                    ),
+                acces_retour_intervention:
+                    lirePermissionRole(
+                        prefixe +
+                        "-acces_retour_intervention"
+                    ),
+                acces_historique:
+                    lirePermissionRole(
+                        prefixe +
+                        "-acces_historique"
+                    ),
+                acces_administration:
+                    lirePermissionRole(
+                        prefixe +
+                        "-acces_administration"
+                    ),
+                acces_gestion_utilisateurs:
+                    lirePermissionRole(
+                        prefixe +
+                        "-acces_gestion_utilisateurs"
+                    )
+            }
+        );
+
+
+        alert(
+            "✅ Rôle modifié."
+        );
+
+
+        /*
+         * Si l'admin modifie son propre rôle,
+         * recharger immédiatement ses permissions.
+         */
+        if (
+            utilisateurConnecte?.id &&
+            navigator.onLine
+        ) {
+
+            const supabase =
+                obtenirClientSupabase();
+
+            if (supabase) {
+
+                const {
+                    data
+                } =
+                    await supabase.auth
+                        .getUser();
+
+                if (data?.user) {
+                    await chargerProfilUtilisateurDepuisSupabase(
+                        data.user
+                    );
+                }
+
+            }
+
+        }
+
+
+        await afficherGestionUtilisateurs();
+
+    } catch (erreur) {
+
+        alert(
+            "⚠️ " +
+            (
+                erreur?.message ||
+                "Modification impossible."
+            )
+        );
+
+    }
+
+}
+
+
+async function supprimerRoleGestion(
+    roleId,
+    nom
+) {
+
+    if (
+        !confirm(
+            "Supprimer le rôle « " +
+            nom +
+            " » ?"
+        )
+    ) {
+        return;
+    }
+
+
+    try {
+
+        await appelerGestionUtilisateurs(
+            "supprimer_role",
+            {
+                role_id:
+                    roleId
+            }
+        );
+
+
+        alert(
+            "✅ Rôle supprimé."
+        );
+
+
+        await afficherGestionUtilisateurs();
+
+    } catch (erreur) {
+
+        alert(
+            "⚠️ " +
+            (
+                erreur?.message ||
+                "Suppression impossible."
+            )
+        );
+
+    }
+
+}
+
+
 /* =========================================================
    NOTIFICATIONS MANUELLES - ADMINISTRATION
    ========================================================= */
 
 function afficherNotificationsAdministration() {
+
+    if (!verifierPermissionOuRetourAccueil(
+        "acces_administration"
+    )) {
+        return;
+    }
+
 
     document.getElementById(
         "app"
@@ -6580,6 +8675,13 @@ async function envoyerNotificationAdministration() {
    ========================================================= */
 
 function gestionMateriels() {
+
+    if (!verifierPermissionOuRetourAccueil(
+        "acces_administration"
+    )) {
+        return;
+    }
+
 
     document.getElementById(
         "app"
@@ -6806,6 +8908,13 @@ function afficherListeAdmin() {
    ========================================================= */
 
 function ajouterMateriel() {
+
+    if (!verifierPermissionOuRetourAccueil(
+        "acces_administration"
+    )) {
+        return;
+    }
+
 
     afficherFormulaireMateriel(
         null
@@ -7593,6 +9702,13 @@ function lirePhotoPuis(
 
 function gestionCategories() {
 
+    if (!verifierPermissionOuRetourAccueil(
+        "acces_administration"
+    )) {
+        return;
+    }
+
+
     let html = `
 
         <main class="page">
@@ -7897,6 +10013,13 @@ function supprimerCategorie(
     nom
 ) {
 
+    if (!verifierPermissionOuRetourAccueil(
+        "acces_administration"
+    )) {
+        return;
+    }
+
+
     if (
         !confirm(
             "Voulez-vous supprimer « " +
@@ -7909,25 +10032,6 @@ function supprimerCategorie(
 
     }
 
-
-    const code =
-        prompt(
-            "Code administrateur :"
-        );
-
-
-    if (
-        code !==
-        CODE_ADMIN
-    ) {
-
-        alert(
-            "❌ Code administrateur incorrect."
-        );
-
-        return;
-
-    }
 
 
     categories =
@@ -7999,6 +10103,13 @@ function supprimerCategorie(
 function modifierStock(
     id
 ) {
+
+    if (!verifierPermissionOuRetourAccueil(
+        "acces_administration"
+    )) {
+        return;
+    }
+
 
     const materiel =
         materiels.find(
@@ -8100,6 +10211,13 @@ function supprimerMateriel(
     id
 ) {
 
+    if (!verifierPermissionOuRetourAccueil(
+        "acces_administration"
+    )) {
+        return;
+    }
+
+
     const materiel =
         materiels.find(
             function (m) {
@@ -8132,25 +10250,6 @@ function supprimerMateriel(
 
     }
 
-
-    const code =
-        prompt(
-            "Code administrateur :"
-        );
-
-
-    if (
-        code !==
-        CODE_ADMIN
-    ) {
-
-        alert(
-            "❌ Code administrateur incorrect."
-        );
-
-        return;
-
-    }
 
 
     materiels =
@@ -8187,6 +10286,13 @@ function supprimerMateriel(
    ========================================================= */
 
 function remiseZeroHistorique() {
+
+    if (!verifierPermissionOuRetourAccueil(
+        "acces_administration"
+    )) {
+        return;
+    }
+
 
     if (
         historique.length === 0
@@ -8226,25 +10332,6 @@ function remiseZeroHistorique() {
     }
 
 
-    const code =
-        prompt(
-            "Code administrateur :"
-        );
-
-
-    if (
-        code !==
-        CODE_ADMIN
-    ) {
-
-        alert(
-            "❌ Code administrateur incorrect."
-        );
-
-        return;
-
-    }
-
 
     historique = [];
 
@@ -8267,6 +10354,39 @@ function remiseZeroHistorique() {
 /* =========================================================
    FONCTIONS GLOBALES
    ========================================================= */
+
+window.afficherConnexion =
+    afficherConnexion;
+
+window.seConnecterApplication =
+    seConnecterApplication;
+
+window.deconnecterApplication =
+    deconnecterApplication;
+
+window.afficherGestionUtilisateurs =
+    afficherGestionUtilisateurs;
+
+window.creerUtilisateurAdministration =
+    creerUtilisateurAdministration;
+
+window.modifierRoleUtilisateur =
+    modifierRoleUtilisateur;
+
+window.changerMotDePasseUtilisateur =
+    changerMotDePasseUtilisateur;
+
+window.changerEtatUtilisateur =
+    changerEtatUtilisateur;
+
+window.creerRoleAdministration =
+    creerRoleAdministration;
+
+window.enregistrerRole =
+    enregistrerRole;
+
+window.supprimerRoleGestion =
+    supprimerRoleGestion;
 
 window.afficherAccueil =
     afficherAccueil;
