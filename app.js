@@ -6032,11 +6032,541 @@ function genererCarteInventaire(
 }
 
 
+
+/* =========================================================
+   INTERFACE STOCK ET QUANTITÉS
+   ========================================================= */
+
+function initialiserStylesStockEtRetour() {
+
+    if (
+        document.getElementById(
+            "style-stock-retour-v21"
+        )
+    ) {
+        return;
+    }
+
+
+    const style =
+        document.createElement(
+            "style"
+        );
+
+    style.id =
+        "style-stock-retour-v21";
+
+    style.textContent = `
+        .quantite-retour-zone {
+            display: flex;
+            justify-content: flex-start;
+            align-items: center;
+            margin-top: 12px;
+        }
+
+        .quantite-controle-retour {
+            display: inline-flex;
+            align-items: center;
+            justify-content: flex-start;
+            gap: 8px;
+            touch-action: manipulation;
+        }
+
+        .quantite-controle-retour button {
+            width: 42px;
+            height: 42px;
+            min-width: 42px;
+            border: 1px solid #d8dce2;
+            border-radius: 11px;
+            background: #f4f5f7;
+            color: #111;
+            font-size: 24px;
+            font-weight: 700;
+            line-height: 1;
+            cursor: pointer;
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .quantite-controle-retour button:active {
+            transform: scale(.96);
+            background: #e9ebee;
+        }
+
+        .select-quantite-retour {
+            min-width: 62px;
+            height: 42px;
+            border: 1px solid #d8dce2;
+            border-radius: 11px;
+            background: #fff;
+            padding: 0 25px 0 12px;
+            color: #111;
+            font-size: 17px;
+            font-weight: 800;
+            text-align: center;
+            text-align-last: center;
+            cursor: pointer;
+            touch-action: manipulation;
+        }
+
+        .modal-stock-fond {
+            position: fixed;
+            inset: 0;
+            z-index: 100000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 22px;
+            box-sizing: border-box;
+            background: rgba(0,0,0,.38);
+        }
+
+        .modal-stock-carte {
+            width: min(100%, 430px);
+            max-height: calc(100vh - 44px);
+            overflow-y: auto;
+            box-sizing: border-box;
+            background: #fff;
+            border-radius: 20px;
+            padding: 20px;
+            box-shadow: 0 18px 50px rgba(0,0,0,.22);
+        }
+
+        .modal-stock-carte h3 {
+            margin: 0 0 6px;
+            font-size: 21px;
+        }
+
+        .modal-stock-actuel {
+            margin: 0 0 18px;
+            color: #62666d;
+        }
+
+        .modal-stock-bloc {
+            border: 1px solid #e0e3e7;
+            border-radius: 14px;
+            padding: 14px;
+            margin-top: 12px;
+        }
+
+        .modal-stock-bloc label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 800;
+        }
+
+        .modal-stock-bloc input {
+            width: 100%;
+            min-height: 48px;
+            box-sizing: border-box;
+            border: 1px solid #d5d9df;
+            border-radius: 11px;
+            padding: 9px 12px;
+            font: inherit;
+            font-size: 17px;
+            background: #fff;
+        }
+
+        .modal-stock-bloc small {
+            display: block;
+            margin-top: 7px;
+            color: #73777e;
+            line-height: 1.3;
+        }
+
+        .modal-stock-actions {
+            display: grid;
+            gap: 9px;
+            margin-top: 12px;
+        }
+
+        .modal-stock-actions button,
+        .modal-stock-annuler {
+            width: 100%;
+            min-height: 44px;
+            border: 0;
+            border-radius: 11px;
+            font: inherit;
+            font-weight: 800;
+            cursor: pointer;
+            touch-action: manipulation;
+        }
+
+        .modal-stock-actions button {
+            background: #1687ff;
+            color: #fff;
+        }
+
+        .modal-stock-annuler {
+            margin-top: 14px;
+            background: #eef0f3;
+            color: #222;
+        }
+
+        @media (max-width: 520px) {
+            .carte-retour-horizontal .carte-texte {
+                min-width: 0;
+            }
+
+            .carte-retour-horizontal .carte-photo-droite {
+                align-self: flex-start;
+            }
+        }
+    `;
+
+
+    document.head.appendChild(
+        style
+    );
+
+}
+
+
+function fermerFenetreStock() {
+
+    document.getElementById(
+        "modal-stock-fond"
+    )?.remove();
+
+}
+
+
+function ouvrirFenetreStock(
+    id
+) {
+
+    initialiserStylesStockEtRetour();
+
+
+    const materiel =
+        materiels.find(
+            function (m) {
+                return String(m.id) === String(id);
+            }
+        );
+
+
+    if (!materiel) {
+        return;
+    }
+
+
+    fermerFenetreStock();
+
+
+    const fond =
+        document.createElement(
+            "div"
+        );
+
+    fond.id =
+        "modal-stock-fond";
+
+    fond.className =
+        "modal-stock-fond";
+
+
+    fond.innerHTML = `
+
+        <div
+            class="modal-stock-carte"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="titre-modal-stock"
+        >
+
+            <h3 id="titre-modal-stock">
+                ${echapperHTML(materiel.nom)}
+            </h3>
+
+            <p class="modal-stock-actuel">
+                Stock actuel :
+                <strong>
+                    ${Number(materiel.stock || 0)}
+                </strong>
+            </p>
+
+
+            <div class="modal-stock-bloc">
+
+                <label for="stock-total-modal">
+                    Stock total
+                </label>
+
+                <input
+                    id="stock-total-modal"
+                    type="number"
+                    min="0"
+                    step="1"
+                    inputmode="numeric"
+                    value="${Number(materiel.stock || 0)}"
+                >
+
+                <small>
+                    Permet de remplacer directement le stock actuel par le nombre indiqué.
+                </small>
+
+                <div class="modal-stock-actions">
+
+                    <button
+                        type="button"
+                        onclick="enregistrerStockTotal('${String(materiel.id)}')"
+                    >
+                        Enregistrer le stock total
+                    </button>
+
+                </div>
+
+            </div>
+
+
+            <div class="modal-stock-bloc">
+
+                <label for="stock-ajoute-modal">
+                    Nombre rajouté au stock
+                </label>
+
+                <input
+                    id="stock-ajoute-modal"
+                    type="number"
+                    min="1"
+                    step="1"
+                    inputmode="numeric"
+                    placeholder="Ex : 10"
+                >
+
+                <small>
+                    Le nombre indiqué sera ajouté au stock actuel.
+                </small>
+
+                <div class="modal-stock-actions">
+
+                    <button
+                        type="button"
+                        onclick="ajouterAuStock('${String(materiel.id)}')"
+                    >
+                        Ajouter au stock
+                    </button>
+
+                </div>
+
+            </div>
+
+
+            <button
+                class="modal-stock-annuler"
+                type="button"
+                onclick="fermerFenetreStock()"
+            >
+                Annuler
+            </button>
+
+        </div>
+
+    `;
+
+
+    fond.addEventListener(
+        "click",
+        function (event) {
+
+            if (event.target === fond) {
+                fermerFenetreStock();
+            }
+
+        }
+    );
+
+
+    document.body.appendChild(
+        fond
+    );
+
+}
+
+
+function appliquerNouveauStock(
+    materiel,
+    nouveauStock
+) {
+
+    const stockFinal =
+        Math.floor(
+            Number(nouveauStock)
+        );
+
+
+    if (
+        !Number.isFinite(stockFinal) ||
+        stockFinal < 0
+    ) {
+
+        alert(
+            "Stock invalide."
+        );
+
+        return false;
+    }
+
+
+    const ancienStock =
+        Number(
+            materiel.stock
+        );
+
+
+    materiel.stock =
+        stockFinal;
+
+
+    preparerNotificationStock(
+        materiel,
+        ancienStock
+    );
+
+
+    sauvegarderToutesLesDonnees();
+
+    void synchroniserApresModification();
+
+
+    return true;
+
+}
+
+
+function enregistrerStockTotal(
+    id
+) {
+
+    const materiel =
+        materiels.find(
+            function (m) {
+                return String(m.id) === String(id);
+            }
+        );
+
+
+    if (!materiel) {
+        return;
+    }
+
+
+    const valeur =
+        document.getElementById(
+            "stock-total-modal"
+        )?.value;
+
+
+    if (
+        valeur === "" ||
+        valeur === undefined
+    ) {
+
+        alert(
+            "Indique le stock total."
+        );
+
+        return;
+    }
+
+
+    if (
+        !appliquerNouveauStock(
+            materiel,
+            valeur
+        )
+    ) {
+        return;
+    }
+
+
+    fermerFenetreStock();
+
+    alert(
+        "Stock modifié."
+    );
+
+    gestionMateriels();
+
+}
+
+
+function ajouterAuStock(
+    id
+) {
+
+    const materiel =
+        materiels.find(
+            function (m) {
+                return String(m.id) === String(id);
+            }
+        );
+
+
+    if (!materiel) {
+        return;
+    }
+
+
+    const valeur =
+        Number(
+            document.getElementById(
+                "stock-ajoute-modal"
+            )?.value
+        );
+
+
+    if (
+        !Number.isFinite(valeur) ||
+        valeur <= 0
+    ) {
+
+        alert(
+            "Indique un nombre à ajouter supérieur à 0."
+        );
+
+        return;
+    }
+
+
+    const nouveauStock =
+        Number(
+            materiel.stock || 0
+        ) +
+        Math.floor(
+            valeur
+        );
+
+
+    if (
+        !appliquerNouveauStock(
+            materiel,
+            nouveauStock
+        )
+    ) {
+        return;
+    }
+
+
+    fermerFenetreStock();
+
+    alert(
+        "Stock ajouté."
+    );
+
+    gestionMateriels();
+
+}
+
+
 /* =========================================================
    RETOUR D'INTERVENTION
    ========================================================= */
 
 async function afficherRetourIntervention() {
+
+    initialiserStylesStockEtRetour();
 
     if (!verifierPermissionOuRetourAccueil(
         "acces_retour_intervention"
@@ -6271,80 +6801,158 @@ function genererCarteRetour(
 
 
     const quantite =
-        consommationsEnCours[id]
-        ||
-        0;
+        Number(
+            consommationsEnCours[id] ||
+            0
+        );
+
+
+    const photo =
+        materiel.photo
+        ?
+        `
+        <div class="carte-photo-droite">
+
+            <img
+                src="${materiel.photo}"
+                class="photo-materiel"
+                alt="${echapperHTML(
+                    materiel.nom
+                )}"
+            >
+
+        </div>
+        `
+        :
+        `
+        <div
+            class="
+                carte-photo-droite
+                photo-vide
+            "
+        >
+            📦
+        </div>
+        `;
+
+
+    let optionsQuantite =
+        `<option value="0" ${quantite === 0 ? "selected" : ""}>0</option>`;
+
+
+    for (
+        let nombre = 1;
+        nombre <= 99;
+        nombre += 1
+    ) {
+
+        const indisponible =
+            nombre >
+            Number(
+                materiel.stock
+            );
+
+        optionsQuantite += `
+            <option
+                value="${nombre}"
+                ${nombre === quantite ? "selected" : ""}
+                ${indisponible ? "disabled" : ""}
+            >
+                ${nombre}
+            </option>
+        `;
+
+    }
 
 
     return `
 
-        <div class="materiel">
+        <article
+            class="
+                materiel
+                carte-materiel-horizontal
+                carte-retour-horizontal
+            "
+        >
 
-            <h3>
-                ${echapperHTML(
-                    materiel.nom
-                )}
-            </h3>
+            <div class="carte-texte">
 
-
-            ${
-                materiel.reference
-                ?
-                `
-                <p>
-                    Référence :
+                <h3>
                     ${echapperHTML(
-                        materiel.reference
+                        materiel.nom
                     )}
+                </h3>
+
+
+                ${
+                    materiel.reference
+                    ?
+                    `
+                    <p>
+                        Référence :
+                        ${echapperHTML(
+                            materiel.reference
+                        )}
+                    </p>
+                    `
+                    :
+                    ""
+                }
+
+
+                <p>
+                    Stock :
+                    <strong>
+                        ${materiel.stock}
+                    </strong>
                 </p>
-                `
-                :
-                ""
-            }
 
 
-            <p>
-                Stock :
-                <strong>
-                    ${materiel.stock}
-                </strong>
-            </p>
+                <div class="quantite-retour-zone">
+
+                    <div class="quantite-controle-retour">
+
+                        <button
+                            type="button"
+                            aria-label="Augmenter"
+                            onclick="augmenterConsommation('${id}')"
+                        >
+                            +
+                        </button>
 
 
-            <div class="quantite-controle">
-
-                <button
-                    type="button"
-                    onclick="
-                        diminuerConsommation('${id}')
-                    "
-                >
-                    −
-                </button>
+                        <select
+                            class="select-quantite-retour"
+                            id="quantite-retour-${id}"
+                            aria-label="Quantité utilisée"
+                            onchange="selectionnerQuantiteRetour('${id}', this.value)"
+                        >
+                            ${optionsQuantite}
+                        </select>
 
 
-                <strong id="quantite-retour-${id}">
-                    ${quantite}
-                </strong>
+                        <button
+                            type="button"
+                            aria-label="Diminuer"
+                            onclick="diminuerConsommation('${id}')"
+                        >
+                            −
+                        </button>
 
+                    </div>
 
-                <button
-                    type="button"
-                    onclick="
-                        augmenterConsommation('${id}')
-                    "
-                >
-                    +
-                </button>
+                </div>
 
             </div>
 
-        </div>
+
+            ${photo}
+
+        </article>
 
     `;
 
 }
-
 
 /* =========================================================
    AUGMENTER / DIMINUER
@@ -6471,6 +7079,100 @@ function diminuerConsommation(
 }
 
 
+
+function selectionnerQuantiteRetour(
+    id,
+    valeur
+) {
+
+    const cle =
+        String(id);
+
+
+    const materiel =
+        materiels.find(
+            function (m) {
+                return String(m.id) === cle;
+            }
+        );
+
+
+    if (!materiel) {
+        return;
+    }
+
+
+    let quantite =
+        Math.floor(
+            Number(
+                valeur
+            )
+        );
+
+
+    if (
+        !Number.isFinite(quantite) ||
+        quantite < 0
+    ) {
+        quantite = 0;
+    }
+
+
+    quantite =
+        Math.min(
+            99,
+            quantite
+        );
+
+
+    if (
+        quantite >
+        Number(
+            materiel.stock
+        )
+    ) {
+
+        alert(
+            "Stock disponible insuffisant."
+        );
+
+        quantite =
+            Math.min(
+                99,
+                Number(
+                    materiel.stock
+                )
+            );
+
+    }
+
+
+    if (
+        quantite <= 0
+    ) {
+
+        delete consommationsEnCours[
+            cle
+        ];
+
+    } else {
+
+        consommationsEnCours[cle] =
+            quantite;
+
+    }
+
+
+    mettreAJourQuantiteRetour(
+        cle
+    );
+
+
+    mettreAJourResume();
+
+}
+
+
 /* =========================================================
    MISE A JOUR DU COMPTEUR
    ========================================================= */
@@ -6502,12 +7204,28 @@ function mettreAJourQuantiteRetour(
     }
 
 
-    element.textContent =
+    const valeur =
         String(
             consommationsEnCours[cle]
             ||
             0
         );
+
+
+    if (
+        element.tagName ===
+        "SELECT"
+    ) {
+
+        element.value =
+            valeur;
+
+    } else {
+
+        element.textContent =
+            valeur;
+
+    }
 
 }
 
@@ -10887,97 +11605,11 @@ function modifierStock(
     }
 
 
-    const materiel =
-        materiels.find(
-            function (m) {
-
-                return (
-                    String(m.id) ===
-                    String(id)
-                );
-
-            }
-        );
-
-
-    if (!materiel) {
-
-        return;
-
-    }
-
-
-    const valeur =
-        prompt(
-            "Nouveau stock pour " +
-            materiel.nom +
-            " :",
-            materiel.stock
-        );
-
-
-    if (
-        valeur === null
-    ) {
-
-        return;
-
-    }
-
-
-    const stock =
-        Number(
-            valeur
-        );
-
-
-    if (
-        !Number.isFinite(stock)
-        ||
-        stock < 0
-    ) {
-
-        alert(
-            "Stock invalide."
-        );
-
-        return;
-
-    }
-
-
-    const ancienStock =
-        Number(
-            materiel.stock
-        );
-
-
-    materiel.stock =
-        Math.floor(
-            stock
-        );
-
-
-    preparerNotificationStock(
-        materiel,
-        ancienStock
+    ouvrirFenetreStock(
+        id
     );
-
-
-    sauvegarderToutesLesDonnees();
-
-    void synchroniserApresModification();
-
-
-    alert(
-        "✅ Stock modifié."
-    );
-
-
-    gestionMateriels();
 
 }
-
 
 /* =========================================================
    SUPPRESSION MATERIEL
@@ -11178,6 +11810,18 @@ window.afficherAccueil =
 
 window.afficherInventaire =
     afficherInventaire;
+
+window.fermerFenetreStock =
+    fermerFenetreStock;
+
+window.enregistrerStockTotal =
+    enregistrerStockTotal;
+
+window.ajouterAuStock =
+    ajouterAuStock;
+
+window.selectionnerQuantiteRetour =
+    selectionnerQuantiteRetour;
 
 window.afficherRetourIntervention =
     afficherRetourIntervention;
