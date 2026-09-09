@@ -1967,7 +1967,7 @@ async function envoyerNotificationPush(
                     titre:
                         String(
                             titre ||
-                            "Inventaire Caserne"
+                            "CIS Le Chesne"
                         ),
                     message:
                         String(
@@ -2583,7 +2583,7 @@ async function activerNotificationsPush() {
     ) {
 
         alert(
-            "📱 Sur iPhone/iPad, ouvre Inventaire Caserne depuis l’icône ajoutée à l’écran d’accueil pour activer les notifications."
+            "📱 Sur iPhone/iPad, ouvre CIS Le Chesne depuis l’icône ajoutée à l’écran d’accueil pour activer les notifications."
         );
 
         return;
@@ -5503,7 +5503,7 @@ function afficherAccueil() {
             <header class="accueil-header">
 
                 <h1>
-                    🚒 Inventaire Caserne
+                    CIS Le Chesne
                 </h1>
 
                 <p>
@@ -5555,8 +5555,7 @@ async function afficherInventaire() {
             </button>
 
 
-            <h2>
-                📦 Inventaire
+            <h2>Inventaire
             </h2>
 
 
@@ -6065,8 +6064,7 @@ async function afficherRetourIntervention() {
             </button>
 
 
-            <h2>
-                🚒 Retour d'intervention
+            <h2>Retour d'intervention
             </h2>
 
 
@@ -7042,13 +7040,11 @@ async function afficherHistorique() {
             </button>
 
 
-            <h2>
-                📊 Historique
+            <h2>Historique
             </h2>
 
 
-            <h3>
-                📦 Total consommé par matériel
+            <h3>Total consommé par matériel
             </h3>
 
 
@@ -7059,8 +7055,7 @@ async function afficherHistorique() {
 
             <h3
                 class="titre-interventions"
-            >
-                🚒 Historique des interventions
+            >Historique des interventions
             </h3>
 
 
@@ -7813,8 +7808,7 @@ function afficherDetailIntervention(
             </button>
 
 
-            <h2>
-                🚒 Détail de l'intervention
+            <h2>Détail de l'intervention
             </h2>
 
 
@@ -7840,8 +7834,7 @@ function afficherDetailIntervention(
             </div>
 
 
-            <h3>
-                📦 Matériel utilisé
+            <h3>Matériel utilisé
             </h3>
 
     `;
@@ -8050,8 +8043,7 @@ function afficherMenuAdministration() {
             </button>
 
 
-            <h2>
-                ⚙️ Administration
+            <h2>️ Administration
             </h2>
 
 
@@ -8363,8 +8355,7 @@ async function afficherGestionUtilisateurs() {
                 ← Retour
             </button>
 
-            <h2>
-                👥 Gestion des utilisateurs
+            <h2>Gestion des utilisateurs
             </h2>
 
             <div class="bloc-admin">
@@ -8637,15 +8628,13 @@ function rendreGestionUtilisateurs() {
                 ← Retour
             </button>
 
-            <h2>
-                👥 Gestion des utilisateurs
+            <h2>Gestion des utilisateurs
             </h2>
 
 
             <section class="bloc-admin">
 
-                <h3>
-                    ➕ Nouvel utilisateur
+                <h3>Nouvel utilisateur
                 </h3>
 
                 <div class="grille-formulaire">
@@ -8704,8 +8693,7 @@ function rendreGestionUtilisateurs() {
 
             <section class="bloc-admin">
 
-                <h3>
-                    ➕ Nouveau rôle
+                <h3>Nouveau rôle
                 </h3>
 
                 <div class="grille-formulaire">
@@ -9300,8 +9288,7 @@ function afficherNotificationsAdministration() {
             </button>
 
 
-            <h2>
-                🔔 Envoyer une notification
+            <h2>Envoyer une notification
             </h2>
 
 
@@ -9409,7 +9396,7 @@ async function envoyerNotificationAdministration() {
 
         const resultat =
             await envoyerNotificationPush(
-                "Inventaire Caserne",
+                "CIS Le Chesne",
                 message
             );
 
@@ -9489,8 +9476,7 @@ function gestionMateriels() {
             </button>
 
 
-            <h2>
-                📦 Gestion du matériel
+            <h2>Gestion du matériel
             </h2>
 
 
