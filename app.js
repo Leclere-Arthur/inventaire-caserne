@@ -873,6 +873,11 @@ function initialiserBandeauConnexion() {
                 display: none !important;
             }
 
+            body.mode-hors-connexion {
+                padding-bottom:
+                    calc(84px + env(safe-area-inset-bottom, 0px));
+            }
+
             .intervention-en-attente-sync {
                 background: #fff8d9 !important;
                 border-color: #ead67a !important;
@@ -921,6 +926,11 @@ function initialiserBandeauConnexion() {
 
         bandeau.hidden =
             navigator.onLine;
+
+        document.body.classList.toggle(
+            "mode-hors-connexion",
+            !navigator.onLine
+        );
 
     }
 
