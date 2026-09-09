@@ -34,6 +34,8 @@ let historique = [];
 let consommationsEnCours = {};
 let materielEnModification = null;
 
+let validationRetourInterventionEnCours = false;
+
 
 /* =========================================================
    INITIALISATION
@@ -42,6 +44,7 @@ let materielEnModification = null;
 document.addEventListener("DOMContentLoaded", async function () {
 
     initialiserIndicateurSynchronisation();
+    initialiserBandeauConnexion();
 
     chargerToutesLesDonnees();
 
@@ -821,6 +824,118 @@ function initialiserIndicateurSynchronisation() {
     document.body.appendChild(indicateur);
 
 }
+
+
+function initialiserBandeauConnexion() {
+
+    if (
+        !document.getElementById(
+            "style-bandeau-connexion"
+        )
+    ) {
+
+        const style =
+            document.createElement(
+                "style"
+            );
+
+        style.id =
+            "style-bandeau-connexion";
+
+        style.textContent = `
+            #bandeau-hors-connexion {
+                position: fixed;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                width: 100%;
+                box-sizing: border-box;
+                z-index: 100000;
+                padding:
+                    8px
+                    12px
+                    calc(8px + env(safe-area-inset-bottom, 0px));
+                background: #fff3cd;
+                border-top: 1px solid #e6cf75;
+                color: #5c4b00;
+                text-align: center;
+                font-size: 13px;
+                font-weight: 700;
+                line-height: 1.25;
+                box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.08);
+            }
+
+            #bandeau-hors-connexion[hidden] {
+                display: none !important;
+            }
+
+            .intervention-en-attente-sync {
+                background: #fff8d9 !important;
+                border-color: #ead67a !important;
+            }
+
+            .intervention-en-attente-sync small {
+                color: #806600 !important;
+                font-weight: 700;
+            }
+        `;
+
+        document.head.appendChild(
+            style
+        );
+
+    }
+
+
+    let bandeau =
+        document.getElementById(
+            "bandeau-hors-connexion"
+        );
+
+
+    if (!bandeau) {
+
+        bandeau =
+            document.createElement(
+                "div"
+            );
+
+        bandeau.id =
+            "bandeau-hors-connexion";
+
+        bandeau.textContent =
+            "Vous êtes actuellement hors connexion internet";
+
+        document.body.appendChild(
+            bandeau
+        );
+
+    }
+
+
+    function mettreAJourBandeauConnexion() {
+
+        bandeau.hidden =
+            navigator.onLine;
+
+    }
+
+
+    window.addEventListener(
+        "online",
+        mettreAJourBandeauConnexion
+    );
+
+    window.addEventListener(
+        "offline",
+        mettreAJourBandeauConnexion
+    );
+
+
+    mettreAJourBandeauConnexion();
+
+}
+
 
 function demarrerIndicateurSynchronisation() {
 
@@ -1836,7 +1951,13 @@ async function envoyerDonneesLocalesVersSupabase() {
 
             const resultatConsommations = await supabase
                 .from("consommations")
-                .insert(nouvellesConsommations);
+                .upsert(
+                    nouvellesConsommations,
+                    {
+                        onConflict:
+                            "intervention_id,materiel_id"
+                    }
+                );
 
             if (resultatConsommations.error) {
                 throw resultatConsommations.error;
@@ -3710,7 +3831,15 @@ function mettreAJourResume() {
    VALIDATION RETOUR
    ========================================================= */
 
-function validerRetourIntervention() {
+async function validerRetourIntervention() {
+
+    if (
+        validationRetourInterventionEnCours
+    ) {
+
+        return;
+
+    }
 
     const date =
         document.getElementById(
@@ -3831,6 +3960,10 @@ function validerRetourIntervention() {
     }
 
 
+    validationRetourInterventionEnCours =
+        true;
+
+
     const consommations = [];
 
 
@@ -3902,25 +4035,38 @@ function validerRetourIntervention() {
             numero,
 
         consommations:
-            consommations
+            consommations,
+
+        synchronisationEnAttente:
+            !navigator.onLine
 
     });
 
 
     sauvegarderToutesLesDonnees();
 
-    void synchroniserApresModification();
-
 
     consommationsEnCours = {};
 
 
-    alert(
-        "✅ Retour d'intervention enregistré !"
-    );
+    try {
 
+        await synchroniserApresModification();
 
-    afficherHistorique();
+        alert(
+            navigator.onLine
+                ? "✅ Retour d'intervention enregistré !"
+                : "✅ Retour enregistré hors connexion. Il sera synchronisé plus tard."
+        );
+
+        await afficherHistorique();
+
+    } finally {
+
+        validationRetourInterventionEnCours =
+            false;
+
+    }
 
 }
 
@@ -4596,6 +4742,11 @@ function afficherHistoriqueInterventions() {
                             class="
                                 detail-historique
                                 intervention-cliquable
+                                ${
+                                    intervention.synchronisationEnAttente
+                                        ? "intervention-en-attente-sync"
+                                        : ""
+                                }
                             "
                             onclick="
                                 afficherDetailIntervention(
@@ -4622,7 +4773,11 @@ function afficherHistoriqueInterventions() {
 
 
                                 <small>
-                                    👆 Cliquer pour voir le détail
+                                    ${
+                                        intervention.synchronisationEnAttente
+                                            ? "⏳ En attente de synchronisation"
+                                            : "👆 Cliquer pour voir le détail"
+                                    }
                                 </small>
 
                             </div>
