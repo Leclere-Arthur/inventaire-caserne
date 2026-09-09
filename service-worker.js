@@ -14,7 +14,7 @@
  * à récupérer le nouvel app.js.
  */
 
-const CACHE_NAME = "inventaire-caserne-v16";
+const CACHE_NAME = "inventaire-caserne-v17";
 
 
 /*
@@ -40,7 +40,9 @@ const FICHIERS_APPLICATION = [
 
     "./icon-512.png",
 
-    "./apple-touch-icon.png"
+    "./apple-touch-icon.png",
+
+    "./fond-connexion.png"
 
 ];
 

@@ -11,6 +11,9 @@
 const DOMAINE_EMAIL_INTERNE =
     "inventaire-caserne.local";
 
+const VERSION_APPLICATION =
+    "2.8.16";
+
 const CLE_PROFIL_UTILISATEUR_CACHE =
     "profil_utilisateur_connecte_v1";
 
@@ -515,55 +518,93 @@ function initialiserStyleConnexion() {
             align-items: center;
             justify-content: center;
             padding:
-                calc(28px + env(safe-area-inset-top, 0px))
-                20px
-                calc(28px + env(safe-area-inset-bottom, 0px));
+                calc(24px + env(safe-area-inset-top, 0px))
+                22px
+                calc(24px + env(safe-area-inset-bottom, 0px));
+            background:
+                url("./fond-connexion.png")
+                center center / cover
+                no-repeat fixed;
         }
 
         .connexion-carte {
-            width: min(100%, 430px);
-            background: #ffffff;
-            border-radius: 24px;
-            padding: 28px 22px;
+            width: min(100%, 390px);
             box-sizing: border-box;
+            padding: 30px 22px 24px;
+            border-radius: 24px;
+            background: rgba(255,255,255,.74);
+            -webkit-backdrop-filter: blur(12px);
+            backdrop-filter: blur(12px);
             box-shadow:
-                0 12px 36px rgba(0,0,0,0.12);
+                0 18px 45px rgba(0,0,0,.13);
+            border:
+                1px solid rgba(255,255,255,.78);
         }
 
-        .connexion-logo {
+        .connexion-titre {
             text-align: center;
-            font-size: 48px;
-            margin-bottom: 8px;
+            margin-bottom: 24px;
         }
 
-        .connexion-carte h1 {
-            text-align: center;
-            margin: 0 0 6px 0;
+        .connexion-titre h1 {
+            margin: 0;
+            font-size: 28px;
+            line-height: 1.1;
         }
 
-        .connexion-sous-titre {
-            text-align: center;
-            margin: 0 0 26px 0;
-            opacity: .72;
+        .connexion-titre p {
+            margin: 7px 0 0;
+            opacity: .65;
+            font-weight: 600;
         }
 
         .connexion-carte label {
             display: block;
-            font-weight: 700;
-            margin: 14px 0 7px;
+            margin: 13px 0 7px;
+            font-weight: 750;
+            font-size: 14px;
         }
 
         .connexion-carte input,
+        .profil-page input,
         .gestion-utilisateurs-page input,
         .gestion-utilisateurs-page select {
             width: 100%;
             box-sizing: border-box;
             min-height: 50px;
-            border: 1px solid #d8dce2;
+            border: 1px solid #d9dde3;
             border-radius: 13px;
-            padding: 10px 12px;
+            padding: 11px 13px;
             font: inherit;
-            background: #fff;
+            background: rgba(255,255,255,.94);
+            outline: none;
+        }
+
+        .connexion-carte input:focus,
+        .profil-page input:focus {
+            border-color: #d92121;
+            box-shadow:
+                0 0 0 3px rgba(217,33,33,.10);
+        }
+
+        .connexion-bouton {
+            width: 100%;
+            min-height: 50px;
+            margin-top: 20px;
+            border: 0;
+            border-radius: 13px;
+            background: #d91f1f;
+            color: #fff;
+            font: inherit;
+            font-weight: 800;
+            cursor: pointer;
+            box-shadow:
+                0 7px 18px rgba(217,31,31,.22);
+        }
+
+        .connexion-bouton:disabled {
+            opacity: .65;
+            cursor: default;
         }
 
         .connexion-erreur {
@@ -571,35 +612,202 @@ function initialiserStyleConnexion() {
             margin-top: 14px;
             padding: 11px 12px;
             border-radius: 12px;
-            background: #ffe3e3;
+            background: rgba(255,227,227,.95);
             color: #8a1111;
             font-weight: 700;
+            font-size: 14px;
         }
 
         .utilisateur-entete {
             display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 12px;
+            align-items: flex-start;
+            justify-content: flex-start;
             margin-bottom: 18px;
         }
 
-        .utilisateur-connecte {
-            font-size: 14px;
-            line-height: 1.35;
+        .bouton-profil-accueil {
+            appearance: none;
+            -webkit-appearance: none;
+            border: 0;
+            background: transparent;
+            margin: 0;
+            padding: 3px 2px;
+            text-align: left;
+            cursor: pointer;
+            color: inherit;
+            font: inherit;
+            -webkit-tap-highlight-color: transparent;
         }
 
-        .utilisateur-connecte strong {
+        .bouton-profil-accueil strong {
+            display: block;
+            font-size: 16px;
+            line-height: 1.2;
+        }
+
+        .bouton-profil-accueil span {
+            display: block;
+            margin-top: 3px;
+            font-size: 12px;
+            opacity: .65;
+            font-weight: 700;
+            letter-spacing: .02em;
+        }
+
+        .profil-page {
+            min-height: 100vh;
+            min-height: 100dvh;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .profil-entete {
+            margin: 12px 0 22px;
+        }
+
+        .profil-entete h2 {
+            margin: 0;
+        }
+
+        .profil-entete .profil-role {
+            margin-top: 5px;
+            opacity: .65;
+            font-weight: 700;
+        }
+
+        .profil-carte {
+            background: #fff;
+            border-radius: 18px;
+            padding: 18px;
+            margin-bottom: 16px;
+            box-shadow:
+                0 5px 18px rgba(0,0,0,.07);
+        }
+
+        .profil-identite {
+            display: grid;
+            gap: 12px;
+        }
+
+        .profil-identite-ligne small {
+            display: block;
+            margin-bottom: 3px;
+            opacity: .58;
+            font-weight: 700;
+        }
+
+        .profil-identite-ligne strong {
+            font-size: 18px;
+        }
+
+        .profil-carte h3 {
+            margin: 0 0 14px;
+        }
+
+        .profil-carte label {
+            display: block;
+            margin: 11px 0 6px;
+            font-weight: 700;
+            font-size: 14px;
+        }
+
+        .profil-notification-ligne {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 18px;
+        }
+
+        .profil-notification-texte strong {
             display: block;
         }
 
-        .btn-deconnexion {
-            border: 0;
-            border-radius: 12px;
-            padding: 10px 12px;
-            background: #eceff3;
-            font-weight: 700;
+        .profil-notification-texte small {
+            display: block;
+            margin-top: 4px;
+            opacity: .62;
+            line-height: 1.3;
+        }
+
+        .switch-notifications {
+            position: relative;
+            display: inline-block;
+            width: 54px;
+            height: 31px;
+            flex: 0 0 auto;
+        }
+
+        .switch-notifications input {
+            width: 1px;
+            height: 1px;
+            opacity: 0;
+            position: absolute;
+        }
+
+        .switch-notifications span {
+            position: absolute;
+            inset: 0;
+            background: #c7cbd1;
+            border-radius: 999px;
+            transition: .2s ease;
             cursor: pointer;
+        }
+
+        .switch-notifications span::before {
+            content: "";
+            position: absolute;
+            width: 25px;
+            height: 25px;
+            left: 3px;
+            top: 3px;
+            border-radius: 50%;
+            background: #fff;
+            box-shadow:
+                0 2px 5px rgba(0,0,0,.2);
+            transition: .2s ease;
+        }
+
+        .switch-notifications input:checked + span {
+            background: #25a244;
+        }
+
+        .switch-notifications input:checked + span::before {
+            transform: translateX(23px);
+        }
+
+        .profil-bouton-principal,
+        .profil-bouton-deconnexion {
+            width: 100%;
+            min-height: 48px;
+            border: 0;
+            border-radius: 13px;
+            font: inherit;
+            font-weight: 800;
+            cursor: pointer;
+        }
+
+        .profil-bouton-principal {
+            margin-top: 16px;
+            background: #17191c;
+            color: #fff;
+        }
+
+        .profil-bouton-deconnexion {
+            margin-top: 2px;
+            background: #f1f2f4;
+            color: #b31212;
+        }
+
+        .profil-version {
+            margin-top: auto;
+            padding:
+                22px 0
+                calc(10px + env(safe-area-inset-bottom, 0px));
+            text-align: center;
+            opacity: .42;
+            font-size: 12px;
+            font-weight: 700;
         }
 
         .gestion-utilisateurs-page .bloc-admin {
@@ -674,7 +882,6 @@ function initialiserStyleConnexion() {
 
 }
 
-
 function afficherConnexion() {
 
     initialiserStyleConnexion();
@@ -692,17 +899,17 @@ function afficherConnexion() {
 
             <section class="connexion-carte">
 
-                <div class="connexion-logo">
-                    🚒
+                <div class="connexion-titre">
+
+                    <h1>
+                        Inventaire Caserne
+                    </h1>
+
+                    <p>
+                        Connexion
+                    </p>
+
                 </div>
-
-                <h1>
-                    Inventaire Caserne
-                </h1>
-
-                <p class="connexion-sous-titre">
-                    Connexion
-                </p>
 
 
                 <label for="connexion-identifiant">
@@ -714,7 +921,7 @@ function afficherConnexion() {
                     type="text"
                     autocomplete="username"
                     autocapitalize="characters"
-                    placeholder="Ex. LECLEREA"
+                    placeholder="Identifiant"
                 >
 
 
@@ -731,13 +938,12 @@ function afficherConnexion() {
 
 
                 <button
-                    class="add-button"
+                    class="connexion-bouton"
                     id="btn-connexion-application"
                     type="button"
                     onclick="seConnecterApplication()"
-                    style="margin-top:20px;"
                 >
-                    🔐 Se connecter
+                    Se connecter
                 </button>
 
 
@@ -792,7 +998,6 @@ function afficherConnexion() {
     identifiant?.focus();
 
 }
-
 
 async function seConnecterApplication() {
 
@@ -988,7 +1193,7 @@ async function seConnecterApplication() {
         if (bouton) {
             bouton.disabled = false;
             bouton.textContent =
-                "🔐 Se connecter";
+                "Se connecter";
         }
 
     }
@@ -1077,6 +1282,577 @@ function obtenirNomUtilisateurAffiche() {
 
     return complet ||
         identifiant;
+
+}
+
+
+
+async function desactiverNotificationsPushProfil() {
+
+    if (!navigator.onLine) {
+        throw new Error(
+            "Une connexion Internet est nécessaire."
+        );
+    }
+
+
+    if (!notificationsWebPushDisponibles()) {
+        return;
+    }
+
+
+    const abonnement =
+        await obtenirAbonnementPushActuel();
+
+
+    if (!abonnement) {
+        return;
+    }
+
+
+    const endpoint =
+        abonnement.endpoint;
+
+
+    const supabase =
+        await assurerBibliothequeSupabaseDisponible();
+
+
+    if (supabase && endpoint) {
+
+        const {
+            error
+        } =
+            await supabase
+                .from(
+                    "push_subscriptions"
+                )
+                .update({
+                    actif: false,
+                    updated_at:
+                        new Date()
+                            .toISOString()
+                })
+                .eq(
+                    "endpoint",
+                    endpoint
+                );
+
+
+        if (error) {
+            throw error;
+        }
+
+    }
+
+
+    await abonnement.unsubscribe();
+
+}
+
+
+async function obtenirEtatNotificationsProfil() {
+
+    if (!notificationsWebPushDisponibles()) {
+        return false;
+    }
+
+
+    if (
+        Notification.permission !==
+        "granted"
+    ) {
+        return false;
+    }
+
+
+    try {
+
+        const abonnement =
+            await obtenirAbonnementPushActuel();
+
+        return Boolean(
+            abonnement
+        );
+
+    } catch (erreur) {
+
+        console.warn(
+            "État notifications profil indisponible :",
+            erreur
+        );
+
+        return false;
+
+    }
+
+}
+
+
+async function afficherProfilUtilisateur() {
+
+    if (!profilUtilisateurConnecte) {
+        afficherConnexion();
+        return;
+    }
+
+
+    initialiserStyleConnexion();
+
+
+    const role =
+        obtenirRoleUtilisateur();
+
+    const nom =
+        String(
+            profilUtilisateurConnecte.nom || ""
+        ).trim();
+
+    const prenom =
+        String(
+            profilUtilisateurConnecte.prenom || ""
+        ).trim();
+
+
+    document.getElementById(
+        "app"
+    ).innerHTML = `
+
+        <main class="page profil-page">
+
+            <button
+                class="retour-button"
+                type="button"
+                onclick="afficherAccueil()"
+            >
+                ← Retour
+            </button>
+
+
+            <div class="profil-entete">
+
+                <h2>
+                    Mon profil
+                </h2>
+
+                <div class="profil-role">
+                    ${echapperHTML(
+                        role?.nom || ""
+                    )}
+                </div>
+
+            </div>
+
+
+            <section class="profil-carte profil-identite">
+
+                <div class="profil-identite-ligne">
+                    <small>Nom</small>
+                    <strong>
+                        ${echapperHTML(nom)}
+                    </strong>
+                </div>
+
+                <div class="profil-identite-ligne">
+                    <small>Prénom</small>
+                    <strong>
+                        ${echapperHTML(prenom)}
+                    </strong>
+                </div>
+
+            </section>
+
+
+            <section class="profil-carte">
+
+                <h3>
+                    Changer mon mot de passe
+                </h3>
+
+
+                <label for="profil-ancien-mdp">
+                    Ancien mot de passe
+                </label>
+
+                <input
+                    id="profil-ancien-mdp"
+                    type="password"
+                    autocomplete="current-password"
+                >
+
+
+                <label for="profil-nouveau-mdp">
+                    Nouveau mot de passe
+                </label>
+
+                <input
+                    id="profil-nouveau-mdp"
+                    type="password"
+                    autocomplete="new-password"
+                >
+
+
+                <label for="profil-confirmation-mdp">
+                    Confirmer le nouveau mot de passe
+                </label>
+
+                <input
+                    id="profil-confirmation-mdp"
+                    type="password"
+                    autocomplete="new-password"
+                >
+
+
+                <button
+                    class="profil-bouton-principal"
+                    type="button"
+                    onclick="changerMonMotDePasse()"
+                >
+                    Modifier le mot de passe
+                </button>
+
+            </section>
+
+
+            <section class="profil-carte">
+
+                <div class="profil-notification-ligne">
+
+                    <div class="profil-notification-texte">
+
+                        <strong>
+                            Recevoir les notifications
+                        </strong>
+
+                        <small id="texte-etat-notifications-profil">
+                            Vérification…
+                        </small>
+
+                    </div>
+
+
+                    <label class="switch-notifications">
+
+                        <input
+                            id="switch-notifications-profil"
+                            type="checkbox"
+                            onchange="changerNotificationsProfil(this)"
+                        >
+
+                        <span></span>
+
+                    </label>
+
+                </div>
+
+            </section>
+
+
+            <button
+                class="profil-bouton-deconnexion"
+                type="button"
+                onclick="deconnecterApplication()"
+            >
+                Déconnexion
+            </button>
+
+
+            <div class="profil-version">
+                Version ${echapperHTML(
+                    VERSION_APPLICATION
+                )}
+            </div>
+
+        </main>
+
+    `;
+
+
+    await rafraichirNotificationsProfil();
+
+}
+
+
+async function rafraichirNotificationsProfil() {
+
+    const interrupteur =
+        document.getElementById(
+            "switch-notifications-profil"
+        );
+
+    const texte =
+        document.getElementById(
+            "texte-etat-notifications-profil"
+        );
+
+
+    if (!interrupteur) {
+        return;
+    }
+
+
+    if (!notificationsWebPushDisponibles()) {
+
+        interrupteur.checked =
+            false;
+
+        interrupteur.disabled =
+            true;
+
+        if (texte) {
+            texte.textContent =
+                "Non disponible sur cet appareil";
+        }
+
+        return;
+
+    }
+
+
+    const actif =
+        await obtenirEtatNotificationsProfil();
+
+
+    interrupteur.checked =
+        actif;
+
+    interrupteur.disabled =
+        false;
+
+
+    if (texte) {
+        texte.textContent =
+            actif
+                ? "Activées sur cet appareil"
+                : "Désactivées sur cet appareil";
+    }
+
+}
+
+
+async function changerNotificationsProfil(
+    interrupteur
+) {
+
+    if (!interrupteur) {
+        return;
+    }
+
+
+    interrupteur.disabled =
+        true;
+
+
+    try {
+
+        if (interrupteur.checked) {
+
+            await activerNotificationsPush();
+
+        } else {
+
+            await desactiverNotificationsPushProfil();
+
+        }
+
+    } catch (erreur) {
+
+        console.error(
+            "Modification notifications profil :",
+            erreur
+        );
+
+        alert(
+            "⚠️ Impossible de modifier les notifications pour le moment."
+        );
+
+    } finally {
+
+        await rafraichirNotificationsProfil();
+
+    }
+
+}
+
+
+async function changerMonMotDePasse() {
+
+    if (!navigator.onLine) {
+
+        alert(
+            "⚠️ Une connexion Internet est nécessaire pour changer le mot de passe."
+        );
+
+        return;
+
+    }
+
+
+    const ancien =
+        String(
+            document.getElementById(
+                "profil-ancien-mdp"
+            )?.value || ""
+        );
+
+    const nouveau =
+        String(
+            document.getElementById(
+                "profil-nouveau-mdp"
+            )?.value || ""
+        );
+
+    const confirmation =
+        String(
+            document.getElementById(
+                "profil-confirmation-mdp"
+            )?.value || ""
+        );
+
+
+    if (
+        !ancien ||
+        !nouveau ||
+        !confirmation
+    ) {
+
+        alert(
+            "⚠️ Remplis les trois champs."
+        );
+
+        return;
+
+    }
+
+
+    if (
+        nouveau !==
+        confirmation
+    ) {
+
+        alert(
+            "⚠️ Les deux nouveaux mots de passe ne correspondent pas."
+        );
+
+        return;
+
+    }
+
+
+    if (
+        nouveau.length < 4
+    ) {
+
+        alert(
+            "⚠️ Le nouveau mot de passe doit contenir au moins 4 caractères."
+        );
+
+        return;
+
+    }
+
+
+    if (
+        ancien ===
+        nouveau
+    ) {
+
+        alert(
+            "⚠️ Le nouveau mot de passe doit être différent de l'ancien."
+        );
+
+        return;
+
+    }
+
+
+    try {
+
+        const supabase =
+            await assurerBibliothequeSupabaseDisponible();
+
+
+        if (!supabase) {
+            throw new Error(
+                "Supabase n'est pas disponible."
+            );
+        }
+
+
+        const identifiant =
+            profilUtilisateurConnecte
+                .identifiant;
+
+
+        const {
+            error: erreurVerification
+        } =
+            await supabase.auth
+                .signInWithPassword({
+                    email:
+                        construireEmailTechnique(
+                            identifiant
+                        ),
+                    password:
+                        ancien
+                });
+
+
+        if (erreurVerification) {
+
+            alert(
+                "❌ L'ancien mot de passe est incorrect."
+            );
+
+            return;
+
+        }
+
+
+        const {
+            error: erreurModification
+        } =
+            await supabase.auth
+                .updateUser({
+                    password:
+                        nouveau
+                });
+
+
+        if (erreurModification) {
+            throw erreurModification;
+        }
+
+
+        document.getElementById(
+            "profil-ancien-mdp"
+        ).value = "";
+
+        document.getElementById(
+            "profil-nouveau-mdp"
+        ).value = "";
+
+        document.getElementById(
+            "profil-confirmation-mdp"
+        ).value = "";
+
+
+        alert(
+            "✅ Mot de passe modifié."
+        );
+
+    } catch (erreur) {
+
+        console.error(
+            "Changement mot de passe :",
+            erreur
+        );
+
+        alert(
+            "⚠️ Impossible de changer le mot de passe pour le moment."
+        );
+
+    }
 
 }
 
@@ -1836,103 +2612,43 @@ async function activerNotificationsPush() {
 
 function initialiserBoutonNotifications() {
 
-    if (
+    /*
+     * La cloche globale a été retirée.
+     * Les notifications se règlent maintenant
+     * depuis la page Profil.
+     */
+
+    const ancienBouton =
         document.getElementById(
             "btn-notifications-push"
-        )
-    ) {
-        return;
+        );
+
+    if (ancienBouton) {
+        ancienBouton.remove();
     }
 
 
-    const style =
-        document.createElement("style");
+    if (
+        window.__ecouteNotificationsStockInitialisee
+        !== true
+    ) {
 
-    style.textContent = `
-        #btn-notifications-push {
-            position: fixed;
-            top: calc(
-                12px + env(safe-area-inset-top, 0px)
-            );
-            right: 72px;
-            z-index: 10020;
-            width: 46px;
-            height: 46px;
-            border: 0;
-            border-radius: 999px;
-            background: #ffffff;
-            box-shadow:
-                0 4px 14px
-                rgba(0, 0, 0, 0.14);
-            font-size: 23px;
-            line-height: 1;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            -webkit-tap-highlight-color:
-                transparent;
-        }
+        window.__ecouteNotificationsStockInitialisee =
+            true;
 
-        #btn-notifications-push:disabled {
-            opacity: 0.65;
-            cursor: default;
-        }
+        window.addEventListener(
+            "online",
+            function () {
+                void envoyerNotificationsStockEnAttente();
+            }
+        );
 
-        #btn-notifications-push[hidden] {
-            display: none !important;
-        }
-    `;
-
-    document.head.appendChild(style);
-
-
-    const bouton =
-        document.createElement("button");
-
-    bouton.id =
-        "btn-notifications-push";
-
-    bouton.type =
-        "button";
-
-    bouton.textContent =
-        "🔔";
-
-    bouton.title =
-        "Activer les notifications";
-
-    bouton.setAttribute(
-        "aria-label",
-        "Activer les notifications"
-    );
-
-
-    bouton.addEventListener(
-        "click",
-        activerNotificationsPush
-    );
-
-
-    document.body.appendChild(
-        bouton
-    );
-
-
-    window.addEventListener(
-        "online",
-        function () {
-            void envoyerNotificationsStockEnAttente();
-        }
-    );
+    }
 
 
     if (navigator.onLine) {
         void envoyerNotificationsStockEnAttente();
     }
-
-
-    rafraichirEtatBoutonNotifications();
 
 }
 
@@ -4683,10 +5399,14 @@ function afficherAccueil() {
 
             <div class="utilisateur-entete">
 
-                <div class="utilisateur-connecte">
+                <button
+                    class="bouton-profil-accueil"
+                    type="button"
+                    onclick="afficherProfilUtilisateur()"
+                >
 
                     <strong>
-                        👨‍🚒 ${echapperHTML(
+                        ${echapperHTML(
                             obtenirNomUtilisateurAffiche()
                         )}
                     </strong>
@@ -4697,14 +5417,6 @@ function afficherAccueil() {
                         )}
                     </span>
 
-                </div>
-
-                <button
-                    class="btn-deconnexion"
-                    type="button"
-                    onclick="deconnecterApplication()"
-                >
-                    Déconnexion
                 </button>
 
             </div>
@@ -10363,6 +11075,15 @@ window.seConnecterApplication =
 
 window.deconnecterApplication =
     deconnecterApplication;
+
+window.afficherProfilUtilisateur =
+    afficherProfilUtilisateur;
+
+window.changerMonMotDePasse =
+    changerMonMotDePasse;
+
+window.changerNotificationsProfil =
+    changerNotificationsProfil;
 
 window.afficherGestionUtilisateurs =
     afficherGestionUtilisateurs;
