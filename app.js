@@ -12,7 +12,7 @@ const DOMAINE_EMAIL_INTERNE =
     "inventaire-caserne.local";
 
 const VERSION_APPLICATION =
-    "2.8.16";
+    "2.8.17";
 
 const CLE_PROFIL_UTILISATEUR_CACHE =
     "profil_utilisateur_connecte_v1";
@@ -75,6 +75,8 @@ document.addEventListener("DOMContentLoaded", async function () {
     initialiserIndicateurSynchronisation();
     initialiserBandeauConnexion();
 
+    void initialiserSystemeMiseAJourApplication();
+
     chargerToutesLesDonnees();
 
     const authentifie =
@@ -107,6 +109,730 @@ function chargerToutesLesDonnees() {
 }
 
 
+
+
+
+/* =========================================================
+   MISE À JOUR DE L'APPLICATION
+   ========================================================= */
+
+let inscriptionServiceWorkerApplication =
+    null;
+
+let miseAJourApplicationDisponible =
+    false;
+
+let activationMiseAJourEnCours =
+    false;
+
+let rechargementApresMiseAJourEnCours =
+    false;
+
+
+function initialiserStyleMiseAJourApplication() {
+
+    if (
+        document.getElementById(
+            "style-mise-a-jour-application"
+        )
+    ) {
+        return;
+    }
+
+
+    const style =
+        document.createElement(
+            "style"
+        );
+
+    style.id =
+        "style-mise-a-jour-application";
+
+    style.textContent = `
+        .bandeau-mise-a-jour {
+            position: fixed;
+            left: 14px;
+            right: 14px;
+            bottom:
+                calc(
+                    14px +
+                    env(safe-area-inset-bottom, 0px)
+                );
+            z-index: 200000;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            max-width: 620px;
+            margin: 0 auto;
+            padding: 13px 14px;
+            box-sizing: border-box;
+            border: 1px solid rgba(0,0,0,.09);
+            border-radius: 14px;
+            background: rgba(255,255,255,.97);
+            box-shadow:
+                0 10px 30px rgba(0,0,0,.16);
+            color: #202124;
+        }
+
+        .bandeau-mise-a-jour strong {
+            display: block;
+            font-size: 14px;
+            line-height: 1.3;
+        }
+
+        .bandeau-mise-a-jour small {
+            display: block;
+            margin-top: 3px;
+            opacity: .65;
+            line-height: 1.3;
+        }
+
+        .bandeau-mise-a-jour button {
+            flex: 0 0 auto;
+            min-height: 40px;
+            border: 0;
+            border-radius: 10px;
+            padding: 8px 12px;
+            background: #1687ff;
+            color: #fff;
+            font: inherit;
+            font-weight: 800;
+            cursor: pointer;
+            touch-action: manipulation;
+        }
+
+        .bandeau-mise-a-jour button:disabled {
+            opacity: .65;
+        }
+
+        .profil-mise-a-jour-texte {
+            display: block;
+            margin-top: 8px;
+            color: #6b7077;
+            font-size: 13px;
+            line-height: 1.35;
+        }
+    `;
+
+
+    document.head.appendChild(
+        style
+    );
+
+}
+
+
+function afficherBandeauMiseAJourApplication() {
+
+    initialiserStyleMiseAJourApplication();
+
+
+    if (
+        document.getElementById(
+            "bandeau-mise-a-jour-application"
+        )
+    ) {
+        return;
+    }
+
+
+    const bandeau =
+        document.createElement(
+            "div"
+        );
+
+    bandeau.id =
+        "bandeau-mise-a-jour-application";
+
+    bandeau.className =
+        "bandeau-mise-a-jour";
+
+    bandeau.innerHTML = `
+
+        <div>
+            <strong>
+                Une nouvelle version est disponible
+            </strong>
+
+            <small>
+                La mise à jour ne supprime pas vos données.
+            </small>
+        </div>
+
+        <button
+            id="btn-bandeau-mise-a-jour"
+            type="button"
+        >
+            Mettre à jour
+        </button>
+
+    `;
+
+
+    bandeau
+        .querySelector(
+            "#btn-bandeau-mise-a-jour"
+        )
+        ?.addEventListener(
+            "click",
+            function () {
+                void appliquerMiseAJourApplication();
+            }
+        );
+
+
+    document.body.appendChild(
+        bandeau
+    );
+
+}
+
+
+function signalerMiseAJourApplicationDisponible() {
+
+    miseAJourApplicationDisponible =
+        true;
+
+    afficherBandeauMiseAJourApplication();
+
+    mettreAJourEtatBoutonMiseAJourProfil(
+        "Nouvelle version disponible."
+    );
+
+}
+
+
+function surveillerInscriptionServiceWorker(
+    inscription
+) {
+
+    if (!inscription) {
+        return;
+    }
+
+
+    if (inscription.waiting) {
+        signalerMiseAJourApplicationDisponible();
+    }
+
+
+    inscription.addEventListener(
+        "updatefound",
+        function () {
+
+            const nouveauWorker =
+                inscription.installing;
+
+
+            if (!nouveauWorker) {
+                return;
+            }
+
+
+            nouveauWorker.addEventListener(
+                "statechange",
+                function () {
+
+                    if (
+                        nouveauWorker.state ===
+                        "installed" &&
+                        navigator.serviceWorker.controller
+                    ) {
+
+                        signalerMiseAJourApplicationDisponible();
+
+                    }
+
+                }
+            );
+
+        }
+    );
+
+}
+
+
+async function obtenirInscriptionServiceWorkerApplication() {
+
+    if (
+        !(
+            "serviceWorker" in navigator
+        )
+    ) {
+        return null;
+    }
+
+
+    if (
+        inscriptionServiceWorkerApplication
+    ) {
+        return inscriptionServiceWorkerApplication;
+    }
+
+
+    try {
+
+        inscriptionServiceWorkerApplication =
+            await navigator.serviceWorker.register(
+                "./service-worker.js",
+                {
+                    updateViaCache:
+                        "none"
+                }
+            );
+
+
+        surveillerInscriptionServiceWorker(
+            inscriptionServiceWorkerApplication
+        );
+
+
+        return inscriptionServiceWorkerApplication;
+
+    } catch (erreur) {
+
+        console.warn(
+            "Service Worker indisponible :",
+            erreur
+        );
+
+        return null;
+
+    }
+
+}
+
+
+async function verifierMiseAJourApplication(
+    silencieux = true
+) {
+
+    if (
+        !navigator.onLine
+    ) {
+
+        if (!silencieux) {
+            alert(
+                "Une connexion Internet est nécessaire pour rechercher une mise à jour."
+            );
+        }
+
+        return false;
+    }
+
+
+    const inscription =
+        await obtenirInscriptionServiceWorkerApplication();
+
+
+    if (!inscription) {
+
+        if (!silencieux) {
+            alert(
+                "La recherche de mise à jour n'est pas disponible sur cet appareil."
+            );
+        }
+
+        return false;
+    }
+
+
+    if (inscription.waiting) {
+
+        signalerMiseAJourApplicationDisponible();
+
+        return true;
+
+    }
+
+
+    try {
+
+        await inscription.update();
+
+    } catch (erreur) {
+
+        console.warn(
+            "Recherche de mise à jour impossible :",
+            erreur
+        );
+
+
+        if (!silencieux) {
+            alert(
+                "Impossible de rechercher une mise à jour pour le moment."
+            );
+        }
+
+
+        return false;
+
+    }
+
+
+    /*
+     * L'installation peut prendre un court instant
+     * après registration.update().
+     */
+    const debut =
+        Date.now();
+
+
+    while (
+        Date.now() - debut <
+        6000
+    ) {
+
+        if (inscription.waiting) {
+
+            signalerMiseAJourApplicationDisponible();
+
+            return true;
+
+        }
+
+
+        if (
+            inscription.installing &&
+            inscription.installing.state ===
+            "installed"
+        ) {
+
+            signalerMiseAJourApplicationDisponible();
+
+            return true;
+
+        }
+
+
+        await new Promise(
+            function (resolve) {
+                setTimeout(
+                    resolve,
+                    250
+                );
+            }
+        );
+
+    }
+
+
+    if (!silencieux) {
+
+        mettreAJourEtatBoutonMiseAJourProfil(
+            "L'application est déjà à jour."
+        );
+
+        alert(
+            "L'application est déjà à jour."
+        );
+
+    }
+
+
+    return false;
+
+}
+
+
+async function appliquerMiseAJourApplication() {
+
+    if (activationMiseAJourEnCours) {
+        return;
+    }
+
+
+    activationMiseAJourEnCours =
+        true;
+
+
+    const boutonBandeau =
+        document.getElementById(
+            "btn-bandeau-mise-a-jour"
+        );
+
+    const boutonProfil =
+        document.getElementById(
+            "btn-mise-a-jour-profil"
+        );
+
+
+    if (boutonBandeau) {
+        boutonBandeau.disabled = true;
+        boutonBandeau.textContent =
+            "Mise à jour…";
+    }
+
+
+    if (boutonProfil) {
+        boutonProfil.disabled = true;
+        boutonProfil.textContent =
+            "Mise à jour…";
+    }
+
+
+    try {
+
+        const inscription =
+            await obtenirInscriptionServiceWorkerApplication();
+
+
+        if (!inscription) {
+            throw new Error(
+                "Service Worker indisponible."
+            );
+        }
+
+
+        if (!inscription.waiting) {
+
+            const trouvee =
+                await verifierMiseAJourApplication(
+                    false
+                );
+
+
+            if (!trouvee) {
+                return;
+            }
+
+        }
+
+
+        const worker =
+            inscription.waiting;
+
+
+        if (!worker) {
+            throw new Error(
+                "La nouvelle version n'est pas encore prête."
+            );
+        }
+
+
+        rechargementApresMiseAJourEnCours =
+            true;
+
+
+        worker.postMessage({
+            type:
+                "SKIP_WAITING"
+        });
+
+
+        /*
+         * Le rechargement se fera automatiquement
+         * dès que le nouveau Service Worker prendra le contrôle.
+         */
+        setTimeout(
+            function () {
+
+                if (
+                    rechargementApresMiseAJourEnCours
+                ) {
+                    window.location.reload();
+                }
+
+            },
+            4000
+        );
+
+    } catch (erreur) {
+
+        console.error(
+            "Mise à jour application :",
+            erreur
+        );
+
+        alert(
+            "Impossible d'installer la mise à jour pour le moment."
+        );
+
+    } finally {
+
+        activationMiseAJourEnCours =
+            false;
+
+
+        if (boutonBandeau) {
+            boutonBandeau.disabled = false;
+            boutonBandeau.textContent =
+                "Mettre à jour";
+        }
+
+
+        if (boutonProfil) {
+            boutonProfil.disabled = false;
+            boutonProfil.textContent =
+                "Mettre à jour l'application";
+        }
+
+    }
+
+}
+
+
+async function rechercherMiseAJourDepuisProfil() {
+
+    const bouton =
+        document.getElementById(
+            "btn-mise-a-jour-profil"
+        );
+
+
+    if (bouton) {
+        bouton.disabled = true;
+        bouton.textContent =
+            "Recherche…";
+    }
+
+
+    mettreAJourEtatBoutonMiseAJourProfil(
+        "Recherche d'une nouvelle version…"
+    );
+
+
+    try {
+
+        const disponible =
+            await verifierMiseAJourApplication(
+                true
+            );
+
+
+        if (disponible) {
+
+            mettreAJourEtatBoutonMiseAJourProfil(
+                "Nouvelle version disponible."
+            );
+
+
+            await appliquerMiseAJourApplication();
+
+        } else {
+
+            mettreAJourEtatBoutonMiseAJourProfil(
+                "L'application est déjà à jour."
+            );
+
+
+            alert(
+                "L'application est déjà à jour."
+            );
+
+        }
+
+    } catch (erreur) {
+
+        console.error(
+            "Recherche mise à jour depuis le profil :",
+            erreur
+        );
+
+
+        mettreAJourEtatBoutonMiseAJourProfil(
+            "Recherche impossible pour le moment."
+        );
+
+
+        alert(
+            "Impossible de rechercher une mise à jour pour le moment."
+        );
+
+    } finally {
+
+        if (
+            bouton &&
+            !activationMiseAJourEnCours
+        ) {
+            bouton.disabled = false;
+            bouton.textContent =
+                "Mettre à jour l'application";
+        }
+
+    }
+
+}
+
+
+function mettreAJourEtatBoutonMiseAJourProfil(
+    texte
+) {
+
+    const element =
+        document.getElementById(
+            "etat-mise-a-jour-profil"
+        );
+
+
+    if (element) {
+        element.textContent =
+            texte;
+    }
+
+}
+
+
+async function initialiserSystemeMiseAJourApplication() {
+
+    if (
+        !(
+            "serviceWorker" in navigator
+        )
+    ) {
+        return;
+    }
+
+
+    initialiserStyleMiseAJourApplication();
+
+
+    navigator.serviceWorker.addEventListener(
+        "controllerchange",
+        function () {
+
+            if (
+                rechargementApresMiseAJourEnCours
+            ) {
+
+                rechargementApresMiseAJourEnCours =
+                    false;
+
+                window.location.reload();
+
+            }
+
+        }
+    );
+
+
+    const inscription =
+        await obtenirInscriptionServiceWorkerApplication();
+
+
+    if (!inscription) {
+        return;
+    }
+
+
+    /*
+     * Vérification automatique à chaque ouverture.
+     */
+    if (navigator.onLine) {
+
+        setTimeout(
+            function () {
+                void verifierMiseAJourApplication(
+                    true
+                );
+            },
+            1200
+        );
+
+    }
+
+}
 
 
 /* =========================================================
@@ -1616,6 +2342,31 @@ async function afficherProfilUtilisateur() {
                     </label>
 
                 </div>
+
+            </section>
+
+
+            <section class="profil-carte">
+
+                <h3>
+                    Mise à jour de l'application
+                </h3>
+
+                <button
+                    class="profil-bouton-principal"
+                    id="btn-mise-a-jour-profil"
+                    type="button"
+                    onclick="rechercherMiseAJourDepuisProfil()"
+                >
+                    Mettre à jour l'application
+                </button>
+
+                <small
+                    class="profil-mise-a-jour-texte"
+                    id="etat-mise-a-jour-profil"
+                >
+                    Appuie ici pour rechercher une nouvelle version.
+                </small>
 
             </section>
 
@@ -11781,6 +12532,9 @@ window.seConnecterApplication =
 
 window.deconnecterApplication =
     deconnecterApplication;
+
+window.rechercherMiseAJourDepuisProfil =
+    rechercherMiseAJourDepuisProfil;
 
 window.afficherProfilUtilisateur =
     afficherProfilUtilisateur;

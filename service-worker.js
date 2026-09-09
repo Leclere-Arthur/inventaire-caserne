@@ -14,7 +14,7 @@
  * à récupérer le nouvel app.js.
  */
 
-const CACHE_NAME = "inventaire-caserne-v23";
+const CACHE_NAME = "inventaire-caserne-v24";
 
 
 /*
@@ -56,7 +56,7 @@ self.addEventListener(
     function (event) {
 
         console.log(
-            "Installation du Service Worker V12..."
+            "Installation du Service Worker V24..."
         );
 
 
@@ -80,20 +80,30 @@ self.addEventListener(
 
                     }
                 )
-                .then(
-                    function () {
-
-                        /*
-                         * Active immédiatement
-                         * cette nouvelle version.
-                         */
-
-                        return self.skipWaiting();
-
-                    }
-                )
-
         );
+
+    }
+);
+
+
+
+/* =========================================================
+   ACTIVATION MANUELLE D'UNE MISE À JOUR
+   ========================================================= */
+
+self.addEventListener(
+    "message",
+    function (event) {
+
+        if (
+            event.data &&
+            event.data.type ===
+            "SKIP_WAITING"
+        ) {
+
+            self.skipWaiting();
+
+        }
 
     }
 );
@@ -108,7 +118,7 @@ self.addEventListener(
     function (event) {
 
         console.log(
-            "Activation du Service Worker V12..."
+            "Activation du Service Worker V24..."
         );
 
 
