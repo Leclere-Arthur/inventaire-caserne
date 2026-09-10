@@ -12,7 +12,7 @@ const DOMAINE_EMAIL_INTERNE =
     "inventaire-caserne.local";
 
 const VERSION_APPLICATION =
-    "2.8.23";
+    "2.8.24";
 
 const CLE_PROFIL_UTILISATEUR_CACHE =
     "profil_utilisateur_connecte_v1";
@@ -13583,77 +13583,166 @@ function supprimerMateriel(
 
 async function remiseZeroHistorique() {
 
-    if (!verifierPermissionOuRetourAccueil("acces_administration")) {
+    if (
+        !verifierPermissionOuRetourAccueil(
+            "acces_administration"
+        )
+    ) {
         return;
     }
 
-    if (historique.length === 0) {
-        alert("L'historique est déjà vide.");
+
+    if (
+        historique.length === 0
+    ) {
+
+        alert(
+            "L'historique est déjà vide."
+        );
+
         return;
     }
 
-    if (!navigator.onLine) {
-        alert("Une connexion Internet est nécessaire pour faire le diagnostic.");
+
+    if (
+        !navigator.onLine
+    ) {
+
+        alert(
+            "Une connexion Internet est nécessaire pour archiver l'historique en toute sécurité."
+        );
+
         return;
     }
 
-    if (!confirm(
-        "Tester l'appel d'archivage Supabase ? Ce test est sans danger : aucune archive réelle et aucun historique ne seront supprimés."
-    )) {
+
+    if (
+        !confirm(
+            "Archiver l'historique actuel et commencer une nouvelle période ?"
+        )
+    ) {
+
         return;
     }
+
+
+    const archive = {
+        id:
+            genererUUID(),
+        date:
+            obtenirDateLocaleISO(),
+        interventions:
+            JSON.parse(
+                JSON.stringify(
+                    historique
+                )
+            )
+    };
+
+
+    const supabase =
+        await assurerBibliothequeSupabaseDisponible();
+
+
+    if (!supabase) {
+
+        alert(
+            "Impossible de joindre Supabase. Réessaie dans quelques instants."
+        );
+
+        return;
+    }
+
+
+    demarrerIndicateurSynchronisation();
+
+    synchronisationSupabaseEnCours =
+        true;
+
 
     try {
-        const supabase =
-            await assurerBibliothequeSupabaseDisponible();
-
-        if (!supabase) {
-            alert("DIAGNOSTIC : Supabase n'est pas disponible.");
-            return;
-        }
-
-        const testId = genererUUID();
 
         /*
-         * Appel de la fonction V30 spécialement créée pour le diagnostic.
-         * Elle vérifie exactement les mêmes paramètres et autorisations
-         * que l'archivage réel, mais ne fait aucun INSERT/DELETE.
+         * Cette fonction Supabase effectue les 3 opérations ensemble :
+         * 1. création de l'archive,
+         * 2. suppression des consommations courantes,
+         * 3. suppression des interventions courantes.
+         *
+         * L'historique local n'est vidé qu'après réussite.
          */
-        const resultat = await supabase.rpc(
-            "tester_archivage_historique",
-            {
-                p_archive_id: testId,
-                p_date_commande: aujourdHui(),
-                p_interventions: JSON.parse(JSON.stringify(historique))
-            }
-        );
+        const resultat =
+            await supabase.rpc(
+                "archiver_historique_courant",
+                {
+                    p_archive_id:
+                        archive.id,
+                    p_date_commande:
+                        archive.date,
+                    p_interventions:
+                        archive.interventions
+                }
+            );
+
 
         if (resultat.error) {
-            alert(
-                "ERREUR APPEL SUPABASE\n\n" +
-                "Message : " + (resultat.error.message || "inconnu") + "\n" +
-                "Code : " + (resultat.error.code || "aucun") + "\n" +
-                "Détails : " + (resultat.error.details || "aucun") + "\n" +
-                "Indice : " + (resultat.error.hint || "aucun") +
-                "\n\nAucun historique n'a été supprimé."
-            );
-            return;
+            throw resultat.error;
         }
 
-        alert(
-            "TEST RPC RÉUSSI\n\n" +
-            "Réponse Supabase : " + String(resultat.data) +
-            "\n\nAucune archive réelle n'a été créée et aucun historique n'a été supprimé."
+
+        archivesHistorique.push(
+            archive
         );
 
-    } catch (erreur) {
-        console.error("Diagnostic RPC archivage :", erreur);
-        alert(
-            "ERREUR DIAGNOSTIC\n\n" +
-            (erreur?.message || String(erreur)) +
-            "\n\nAucun historique n'a été supprimé."
+        historique = [];
+
+
+        sauvegarderToutesLesDonnees();
+
+        effacerModificationsEnAttente();
+
+        enregistrerSnapshotSynchronisation();
+
+
+        /*
+         * Relire la base centrale pour confirmer immédiatement
+         * que tous les appareils verront le même état.
+         */
+        const donnees =
+            await recupererDonneesSupabase();
+
+        await appliquerDonneesSupabaseLocalement(
+            donnees
         );
+
+
+        alert(
+            "Historique archivé. Une nouvelle période a commencé."
+        );
+
+
+        afficherMenuAdministration();
+
+    } catch (erreur) {
+
+        console.error(
+            "Archivage de l'historique impossible :",
+            erreur
+        );
+
+
+        alert(
+            "L'archivage n'a pas pu être effectué. Rien n'a été supprimé. Vérifie que le correctif SQL V28 a bien été exécuté dans Supabase."
+        );
+
+    } finally {
+
+        synchronisationSupabaseEnCours =
+            false;
+
+        arreterIndicateurSynchronisation();
+
     }
+
 }
 
 
