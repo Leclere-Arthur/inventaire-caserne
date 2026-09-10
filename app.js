@@ -12,7 +12,7 @@ const DOMAINE_EMAIL_INTERNE =
     "inventaire-caserne.local";
 
 const VERSION_APPLICATION =
-    "2.8.24";
+    "2.8.25";
 
 const CLE_PROFIL_UTILISATEUR_CACHE =
     "profil_utilisateur_connecte_v1";
@@ -5636,7 +5636,7 @@ async function envoyerDonneesLocalesVersSupabase() {
                     date_commande:
                         String(
                             archive.date ||
-                            aujourdHui()
+                            dateAujourdhui()
                         ),
                     interventions:
                         Array.isArray(
@@ -5673,7 +5673,7 @@ async function envoyerDonneesLocalesVersSupabase() {
 
         return {
             id: String(intervention.id),
-            date: String(intervention.date || aujourdHui()),
+            date: String(intervention.date || dateAujourdhui()),
             numero: String(intervention.numeroIntervention || "")
         };
 
@@ -13630,7 +13630,7 @@ async function remiseZeroHistorique() {
         id:
             genererUUID(),
         date:
-            obtenirDateLocaleISO(),
+            dateAujourdhui(),
         interventions:
             JSON.parse(
                 JSON.stringify(
@@ -13731,7 +13731,12 @@ async function remiseZeroHistorique() {
 
 
         alert(
-            "L'archivage n'a pas pu être effectué. Rien n'a été supprimé. Vérifie que le correctif SQL V28 a bien été exécuté dans Supabase."
+            "L'archivage n'a pas pu être effectué. Rien n'a été supprimé.\n\n" +
+            "Erreur : " +
+            (
+                erreur?.message ||
+                String(erreur)
+            )
         );
 
     } finally {
