@@ -12,7 +12,7 @@ const DOMAINE_EMAIL_INTERNE =
     "inventaire-caserne.local";
 
 const VERSION_APPLICATION =
-    "2.8.19";
+    "2.8.20";
 
 const CLE_PROFIL_UTILISATEUR_CACHE =
     "profil_utilisateur_connecte_v1";
@@ -40,10 +40,12 @@ const STORAGE = {
     materiels: "materiels",
     categories: "categories",
     historique: "historiqueConsommations",
+    archivesHistorique: "archives_historique",
 
     materielsV3: "materiels_v3",
     categoriesV3: "categories_v3",
-    historiqueV3: "historique_v3"
+    historiqueV3: "historique_v3",
+    archivesHistoriqueV3: "archives_historique_v3"
 };
 
 const CATEGORIES_PAR_DEFAUT = [
@@ -59,6 +61,7 @@ const CATEGORIES_PAR_DEFAUT = [
 let materiels = [];
 let categories = [];
 let historique = [];
+let archivesHistorique = [];
 
 let consommationsEnCours = {};
 let materielEnModification = null;
@@ -101,6 +104,7 @@ function chargerToutesLesDonnees() {
     chargerMateriels();
     chargerCategories();
     chargerHistorique();
+    chargerArchivesHistorique();
 
     normaliserToutesLesDonnees();
 
@@ -4045,6 +4049,61 @@ function chargerHistorique() {
 }
 
 
+
+/* =========================================================
+   CHARGEMENT DES ARCHIVES DE L'HISTORIQUE
+   ========================================================= */
+
+function chargerArchivesHistorique() {
+
+    let donnees = null;
+
+    const principal =
+        localStorage.getItem(
+            STORAGE.archivesHistorique
+        );
+
+    const v3 =
+        localStorage.getItem(
+            STORAGE.archivesHistoriqueV3
+        );
+
+    for (const source of [principal, v3]) {
+
+        if (!source) {
+            continue;
+        }
+
+        try {
+
+            const valeur =
+                JSON.parse(source);
+
+            if (Array.isArray(valeur)) {
+                donnees = valeur;
+                break;
+            }
+
+        } catch (erreur) {
+
+            console.error(
+                "Erreur lecture archives historique :",
+                erreur
+            );
+
+        }
+
+    }
+
+
+    archivesHistorique =
+        Array.isArray(donnees)
+            ? donnees
+            : [];
+
+}
+
+
 /* =========================================================
    SAUVEGARDE
    ========================================================= */
@@ -4088,6 +4147,14 @@ function sauvegarderToutesLesDonnees() {
 
 
     localStorage.setItem(
+        STORAGE.archivesHistorique,
+        JSON.stringify(
+            archivesHistorique
+        )
+    );
+
+
+    localStorage.setItem(
         STORAGE.materielsV3,
         JSON.stringify(
             materiels
@@ -4107,6 +4174,14 @@ function sauvegarderToutesLesDonnees() {
         STORAGE.historiqueV3,
         JSON.stringify(
             historique
+        )
+    );
+
+
+    localStorage.setItem(
+        STORAGE.archivesHistoriqueV3,
+        JSON.stringify(
+            archivesHistorique
         )
     );
 
@@ -4931,7 +5006,8 @@ function lireSnapshotSynchronisation() {
             return {
                 materiels: [],
                 categories: [],
-                interventions: []
+                interventions: [],
+                archives: []
             };
         }
 
@@ -4940,7 +5016,8 @@ function lireSnapshotSynchronisation() {
         return {
             materiels: Array.isArray(valeur.materiels) ? valeur.materiels : [],
             categories: Array.isArray(valeur.categories) ? valeur.categories : [],
-            interventions: Array.isArray(valeur.interventions) ? valeur.interventions : []
+            interventions: Array.isArray(valeur.interventions) ? valeur.interventions : [],
+            archives: Array.isArray(valeur.archives) ? valeur.archives : []
         };
 
     } catch (erreur) {
@@ -4968,6 +5045,9 @@ function enregistrerSnapshotSynchronisation() {
         }),
         interventions: historique.map(function (intervention) {
             return String(intervention.id);
+        }),
+        archives: archivesHistorique.map(function (archive) {
+            return String(archive.id);
         })
     };
 
@@ -5008,12 +5088,55 @@ async function recupererDonneesSupabase() {
         }
     });
 
+
+    /*
+     * Les archives sont volontairement lues séparément.
+     * Ainsi, si la table n'a pas encore été créée dans Supabase,
+     * le reste de l'application continue de fonctionner normalement.
+     */
+    let archivesDistantes = [];
+
+    try {
+
+        const resultatArchives =
+            await supabase
+                .from("archives_historique")
+                .select("id,date_commande,interventions,created_at")
+                .order("date_commande", {
+                    ascending: false
+                });
+
+        if (resultatArchives.error) {
+
+            console.warn(
+                "Archives Supabase indisponibles :",
+                resultatArchives.error
+            );
+
+        } else {
+
+            archivesDistantes =
+                resultatArchives.data || [];
+
+        }
+
+    } catch (erreurArchives) {
+
+        console.warn(
+            "Lecture archives Supabase impossible :",
+            erreurArchives
+        );
+
+    }
+
+
     return {
         categories: resultats[0].data || [],
         materiels: resultats[1].data || [],
         materielCategories: resultats[2].data || [],
         interventions: resultats[3].data || [],
-        consommations: resultats[4].data || []
+        consommations: resultats[4].data || [],
+        archivesHistorique: archivesDistantes
     };
 
 }
@@ -5115,6 +5238,34 @@ function convertirDonneesSupabaseEnDonneesApplication(donnees) {
 
     });
 
+    const archivesApplication =
+        (
+            Array.isArray(
+                donnees.archivesHistorique
+            )
+                ? donnees.archivesHistorique
+                : []
+        )
+        .map(function (archive) {
+
+            return {
+                id: String(
+                    archive.id || genererUUID()
+                ),
+                date: String(
+                    archive.date_commande || ""
+                ),
+                interventions:
+                    Array.isArray(
+                        archive.interventions
+                    )
+                        ? archive.interventions
+                        : []
+            };
+
+        });
+
+
     return {
         categories: donnees.categories
             .map(function (categorie) {
@@ -5122,7 +5273,8 @@ function convertirDonneesSupabaseEnDonneesApplication(donnees) {
             })
             .filter(Boolean),
         materiels: materielsApplication,
-        historique: historiqueApplication
+        historique: historiqueApplication,
+        archivesHistorique: archivesApplication
     };
 
 }
@@ -5140,6 +5292,10 @@ async function appliquerDonneesSupabaseLocalement(donnees) {
 
     materiels = application.materiels;
     historique = application.historique;
+    archivesHistorique =
+        Array.isArray(application.archivesHistorique)
+            ? application.archivesHistorique
+            : [];
 
     normaliserToutesLesDonnees();
 
@@ -5176,6 +5332,14 @@ async function appliquerDonneesSupabaseLocalement(donnees) {
         localStorage.setItem(
             STORAGE.historiqueV3,
             JSON.stringify(historique)
+        );
+        localStorage.setItem(
+            STORAGE.archivesHistorique,
+            JSON.stringify(archivesHistorique)
+        );
+        localStorage.setItem(
+            STORAGE.archivesHistoriqueV3,
+            JSON.stringify(archivesHistorique)
         );
     } finally {
         synchronisationSupabaseEnCours = false;
@@ -5273,7 +5437,25 @@ function migrerIdentifiantsVersUUID() {
 
     });
 
-    if (correspondanceMateriels.size || correspondanceInterventions.size) {
+    let archivesModifiees = false;
+
+    archivesHistorique.forEach(
+        function (archive) {
+
+            if (!estUUID(archive.id)) {
+                archive.id = genererUUID();
+                archivesModifiees = true;
+            }
+
+        }
+    );
+
+
+    if (
+        correspondanceMateriels.size ||
+        correspondanceInterventions.size ||
+        archivesModifiees
+    ) {
         synchronisationSupabaseEnCours = true;
         try {
             localStorage.setItem(
@@ -5291,6 +5473,14 @@ function migrerIdentifiantsVersUUID() {
             localStorage.setItem(
                 STORAGE.historiqueV3,
                 JSON.stringify(historique)
+            );
+            localStorage.setItem(
+                STORAGE.archivesHistorique,
+                JSON.stringify(archivesHistorique)
+            );
+            localStorage.setItem(
+                STORAGE.archivesHistoriqueV3,
+                JSON.stringify(archivesHistorique)
             );
         } finally {
             synchronisationSupabaseEnCours = false;
@@ -5431,6 +5621,53 @@ async function envoyerDonneesLocalesVersSupabase() {
         }
 
     }
+
+    /*
+     * Sauvegarde des anciennes périodes.
+     * Elle est faite AVANT la suppression des interventions courantes,
+     * afin qu'une remise à zéro ne puisse jamais perdre l'historique.
+     */
+    const lignesArchives =
+        archivesHistorique.map(
+            function (archive) {
+
+                return {
+                    id: String(archive.id),
+                    date_commande:
+                        String(
+                            archive.date ||
+                            aujourdHui()
+                        ),
+                    interventions:
+                        Array.isArray(
+                            archive.interventions
+                        )
+                            ? archive.interventions
+                            : []
+                };
+
+            }
+        );
+
+
+    if (lignesArchives.length > 0) {
+
+        const resultatArchives =
+            await supabase
+                .from("archives_historique")
+                .upsert(
+                    lignesArchives,
+                    {
+                        onConflict: "id"
+                    }
+                );
+
+        if (resultatArchives.error) {
+            throw resultatArchives.error;
+        }
+
+    }
+
 
     const lignesInterventions = historique.map(function (intervention) {
 
@@ -8569,6 +8806,8 @@ async function afficherHistorique() {
 
     await synchroniserAvantNavigation();
 
+    initialiserStylesArchivesHistorique();
+
     document.getElementById(
         "app"
     ).innerHTML = `
@@ -8606,6 +8845,19 @@ async function afficherHistorique() {
                 id="historique-interventions"
             ></div>
 
+
+            <div
+                class="archives-historique-lien-zone"
+            >
+                <button
+                    type="button"
+                    class="archives-historique-lien"
+                    onclick="afficherArchivesHistorique()"
+                >
+                    Consulter les archives
+                </button>
+            </div>
+
         </main>
 
     `;
@@ -8614,6 +8866,766 @@ async function afficherHistorique() {
     afficherHistoriqueTotal();
 
     afficherHistoriqueInterventions();
+
+}
+
+
+
+/* =========================================================
+   ARCHIVES DE L'HISTORIQUE
+   ========================================================= */
+
+function initialiserStylesArchivesHistorique() {
+
+    if (
+        document.getElementById(
+            "style-archives-historique"
+        )
+    ) {
+        return;
+    }
+
+
+    const style =
+        document.createElement("style");
+
+    style.id =
+        "style-archives-historique";
+
+    style.textContent = `
+        .archives-historique-lien-zone {
+            margin: 28px 0 14px;
+            text-align: center;
+        }
+
+        .archives-historique-lien {
+            border: 0;
+            padding: 8px 10px;
+            background: transparent;
+            color: #1687ff;
+            font: inherit;
+            font-weight: 700;
+            cursor: pointer;
+            text-decoration: none;
+            touch-action: manipulation;
+        }
+
+        .archive-periode {
+            margin-bottom: 28px;
+        }
+
+        .archive-commande {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 14px;
+            box-sizing: border-box;
+            margin: 0 0 10px;
+            padding: 16px 18px;
+            border: 0;
+            border-radius: 14px;
+            background: #218c4b;
+            color: #fff;
+            text-align: left;
+            font: inherit;
+            cursor: pointer;
+            box-shadow: 0 5px 16px rgba(0,0,0,.12);
+            touch-action: manipulation;
+        }
+
+        .archive-commande strong {
+            display: block;
+            font-size: 17px;
+            line-height: 1.25;
+        }
+
+        .archive-commande small {
+            display: block;
+            margin-top: 4px;
+            color: rgba(255,255,255,.86);
+            font-size: 13px;
+        }
+
+        .archive-commande .fleche-detail {
+            color: #fff;
+            font-size: 28px;
+        }
+
+        .archive-interventions-titre {
+            margin: 11px 4px 8px;
+            color: #70757a;
+            font-size: 13px;
+            font-weight: 700;
+        }
+
+        .archive-vide {
+            margin-top: 18px;
+        }
+    `;
+
+
+    document.head.appendChild(style);
+
+}
+
+
+function trouverArchiveHistorique(
+    archiveId
+) {
+
+    return archivesHistorique.find(
+        function (archive) {
+
+            return (
+                String(archive.id) ===
+                String(archiveId)
+            );
+
+        }
+    );
+
+}
+
+
+function calculerTotauxArchive(
+    archive
+) {
+
+    const totaux =
+        new Map();
+
+
+    (
+        Array.isArray(archive?.interventions)
+            ? archive.interventions
+            : []
+    ).forEach(
+        function (intervention) {
+
+            (
+                Array.isArray(
+                    intervention.consommations
+                )
+                    ? intervention.consommations
+                    : []
+            ).forEach(
+                function (consommation) {
+
+                    const id =
+                        String(
+                            consommation.materielId ||
+                            consommation.materiel ||
+                            ""
+                        );
+
+                    if (!id) {
+                        return;
+                    }
+
+                    const ancienne =
+                        totaux.get(id) || {
+                            materielId:
+                                String(
+                                    consommation.materielId ||
+                                    ""
+                                ),
+                            materiel:
+                                String(
+                                    consommation.materiel ||
+                                    "Matériel"
+                                ),
+                            quantite: 0
+                        };
+
+                    ancienne.quantite +=
+                        Math.max(
+                            0,
+                            Number(
+                                consommation.quantite ||
+                                0
+                            )
+                        );
+
+                    totaux.set(
+                        id,
+                        ancienne
+                    );
+
+                }
+            );
+
+        }
+    );
+
+
+    return Array.from(
+        totaux.values()
+    ).sort(
+        function (a, b) {
+
+            return (
+                b.quantite -
+                a.quantite
+            );
+
+        }
+    );
+
+}
+
+
+async function afficherArchivesHistorique() {
+
+    if (
+        !verifierPermissionOuRetourAccueil(
+            "acces_historique"
+        )
+    ) {
+        return;
+    }
+
+
+    await synchroniserAvantNavigation();
+
+    initialiserStylesArchivesHistorique();
+
+
+    const archivesTriees =
+        [...archivesHistorique]
+            .sort(
+                function (a, b) {
+
+                    return String(
+                        b.date || ""
+                    ).localeCompare(
+                        String(a.date || "")
+                    );
+
+                }
+            );
+
+
+    let contenu = "";
+
+
+    if (
+        archivesTriees.length === 0
+    ) {
+
+        contenu = `
+
+            <div
+                class="materiel archive-vide"
+            >
+                Aucune archive pour le moment.
+            </div>
+
+        `;
+
+    } else {
+
+        contenu =
+            archivesTriees.map(
+                function (archive) {
+
+                    const interventions =
+                        Array.isArray(
+                            archive.interventions
+                        )
+                            ? archive.interventions
+                            : [];
+
+
+                    const cartesInterventions =
+                        [...interventions]
+                            .reverse()
+                            .map(
+                                function (intervention) {
+
+                                    const total =
+                                        (
+                                            Array.isArray(
+                                                intervention.consommations
+                                            )
+                                                ? intervention.consommations
+                                                : []
+                                        ).reduce(
+                                            function (
+                                                somme,
+                                                consommation
+                                            ) {
+
+                                                return (
+                                                    somme +
+                                                    Number(
+                                                        consommation.quantite ||
+                                                        0
+                                                    )
+                                                );
+
+                                            },
+                                            0
+                                        );
+
+
+                                    return `
+
+                                        <button
+                                            type="button"
+                                            class="
+                                                detail-historique
+                                                intervention-cliquable
+                                            "
+                                            onclick="
+                                                afficherDetailInterventionArchive(
+                                                    '${archive.id}',
+                                                    '${intervention.id}'
+                                                )
+                                            "
+                                        >
+
+                                            <div>
+
+                                                <strong>
+                                                    Intervention
+                                                    ${echapperHTML(
+                                                        intervention.numeroIntervention ||
+                                                        ""
+                                                    )}
+                                                </strong>
+
+                                                <span>
+                                                    ${formaterDate(
+                                                        intervention.date
+                                                    )}
+                                                </span>
+
+                                                <small>
+                                                    Cliquer pour voir le détail
+                                                </small>
+
+                                            </div>
+
+
+                                            <div
+                                                class="intervention-total"
+                                            >
+
+                                                <strong>
+                                                    ${total}
+                                                </strong>
+
+                                                <span>
+                                                    utilisés
+                                                </span>
+
+                                            </div>
+
+
+                                            <span
+                                                class="fleche-detail"
+                                            >
+                                                ›
+                                            </span>
+
+                                        </button>
+
+                                    `;
+
+                                }
+                            )
+                            .join("");
+
+
+                    return `
+
+                        <section
+                            class="archive-periode"
+                        >
+
+                            <button
+                                type="button"
+                                class="archive-commande"
+                                onclick="
+                                    afficherDetailCommandeArchive(
+                                        '${archive.id}'
+                                    )
+                                "
+                            >
+
+                                <div>
+
+                                    <strong>
+                                        Commande effectuée
+                                    </strong>
+
+                                    <small>
+                                        ${formaterDate(
+                                            archive.date
+                                        )}
+                                    </small>
+
+                                </div>
+
+
+                                <span
+                                    class="fleche-detail"
+                                >
+                                    ›
+                                </span>
+
+                            </button>
+
+
+                            <div
+                                class="archive-interventions-titre"
+                            >
+                                Interventions archivées
+                            </div>
+
+
+                            ${
+                                cartesInterventions ||
+                                `
+                                    <div class="materiel">
+                                        Aucune intervention.
+                                    </div>
+                                `
+                            }
+
+                        </section>
+
+                    `;
+
+                }
+            ).join("");
+
+    }
+
+
+    document.getElementById(
+        "app"
+    ).innerHTML = `
+
+        <main class="page">
+
+            <button
+                class="retour-button"
+                onclick="afficherHistorique()"
+            >
+                ← Retour
+            </button>
+
+
+            <h2>
+                Archives de l'historique
+            </h2>
+
+
+            ${contenu}
+
+        </main>
+
+    `;
+
+}
+
+
+function afficherDetailCommandeArchive(
+    archiveId
+) {
+
+    if (
+        !verifierPermissionOuRetourAccueil(
+            "acces_historique"
+        )
+    ) {
+        return;
+    }
+
+
+    const archive =
+        trouverArchiveHistorique(
+            archiveId
+        );
+
+
+    if (!archive) {
+
+        alert(
+            "Archive introuvable."
+        );
+
+        return;
+
+    }
+
+
+    const totaux =
+        calculerTotauxArchive(
+            archive
+        );
+
+
+    const lignes =
+        totaux.length > 0
+            ? totaux.map(
+                function (ligne) {
+
+                    return `
+
+                        <div
+                            class="detail-historique"
+                        >
+
+                            <div>
+
+                                <strong>
+                                    ${echapperHTML(
+                                        ligne.materiel
+                                    )}
+                                </strong>
+
+                            </div>
+
+
+                            <strong
+                                class="detail-quantite"
+                            >
+                                ${ligne.quantite}
+                            </strong>
+
+                        </div>
+
+                    `;
+
+                }
+            ).join("")
+            : `
+                <div class="materiel">
+                    Aucun matériel consommé.
+                </div>
+            `;
+
+
+    document.getElementById(
+        "app"
+    ).innerHTML = `
+
+        <main class="page">
+
+            <button
+                class="retour-button"
+                onclick="afficherArchivesHistorique()"
+            >
+                ← Retour
+            </button>
+
+
+            <h2>
+                Commande effectuée
+            </h2>
+
+
+            <div
+                class="detail-header"
+            >
+
+                <strong>
+                    Consommations depuis la remise à zéro précédente
+                </strong>
+
+                <span>
+                    Date :
+                    ${formaterDate(
+                        archive.date
+                    )}
+                </span>
+
+                <span>
+                    ${
+                        Array.isArray(
+                            archive.interventions
+                        )
+                            ? archive.interventions.length
+                            : 0
+                    }
+                    intervention(s)
+                </span>
+
+            </div>
+
+
+            <h3>
+                Matériel consommé
+            </h3>
+
+
+            ${lignes}
+
+        </main>
+
+    `;
+
+}
+
+
+function afficherDetailInterventionArchive(
+    archiveId,
+    interventionId
+) {
+
+    if (
+        !verifierPermissionOuRetourAccueil(
+            "acces_historique"
+        )
+    ) {
+        return;
+    }
+
+
+    const archive =
+        trouverArchiveHistorique(
+            archiveId
+        );
+
+
+    const intervention =
+        archive &&
+        Array.isArray(
+            archive.interventions
+        )
+            ? archive.interventions.find(
+                function (item) {
+
+                    return (
+                        String(item.id) ===
+                        String(interventionId)
+                    );
+
+                }
+            )
+            : null;
+
+
+    if (!intervention) {
+
+        alert(
+            "Intervention archivée introuvable."
+        );
+
+        return;
+
+    }
+
+
+    const consommations =
+        Array.isArray(
+            intervention.consommations
+        )
+            ? intervention.consommations
+            : [];
+
+
+    const lignes =
+        consommations.length > 0
+            ? consommations.map(
+                function (consommation) {
+
+                    return `
+
+                        <div
+                            class="detail-historique"
+                        >
+
+                            <div>
+
+                                <strong>
+                                    ${echapperHTML(
+                                        consommation.materiel ||
+                                        "Matériel"
+                                    )}
+                                </strong>
+
+                            </div>
+
+
+                            <strong
+                                class="detail-quantite"
+                            >
+                                ${
+                                    Number(
+                                        consommation.quantite ||
+                                        0
+                                    )
+                                }
+                            </strong>
+
+                        </div>
+
+                    `;
+
+                }
+            ).join("")
+            : `
+                <div class="materiel">
+                    Aucun matériel enregistré pour cette intervention.
+                </div>
+            `;
+
+
+    document.getElementById(
+        "app"
+    ).innerHTML = `
+
+        <main class="page">
+
+            <button
+                class="retour-button"
+                onclick="afficherArchivesHistorique()"
+            >
+                ← Retour
+            </button>
+
+
+            <h2>
+                Détail de l'intervention
+            </h2>
+
+
+            <div
+                class="detail-header"
+            >
+
+                <strong>
+                    Intervention
+                    ${echapperHTML(
+                        intervention.numeroIntervention ||
+                        ""
+                    )}
+                </strong>
+
+                <span>
+                    Date :
+                    ${formaterDate(
+                        intervention.date
+                    )}
+                </span>
+
+            </div>
+
+
+            <h3>
+                Matériel utilisé
+            </h3>
+
+
+            ${lignes}
+
+        </main>
+
+    `;
 
 }
 
@@ -12564,9 +13576,11 @@ function supprimerMateriel(
 
 function remiseZeroHistorique() {
 
-    if (!verifierPermissionOuRetourAccueil(
-        "acces_administration"
-    )) {
+    if (
+        !verifierPermissionOuRetourAccueil(
+            "acces_administration"
+        )
+    ) {
         return;
     }
 
@@ -12586,7 +13600,7 @@ function remiseZeroHistorique() {
 
     if (
         !confirm(
-            "Voulez-vous supprimer tout l'historique des consommations ?"
+            "Archiver l'historique actuel et commencer une nouvelle période ?"
         )
     ) {
 
@@ -12595,21 +13609,29 @@ function remiseZeroHistorique() {
     }
 
 
-    if (
-        !confirm(
-            "⚠️ ATTENTION\n\n" +
-            "Toutes les consommations seront supprimées définitivement.\n\n" +
-            "Le matériel et les stocks ne seront pas supprimés.\n\n" +
-            "Continuer ?"
-        )
-    ) {
+    const archive = {
+        id:
+            genererUUID(),
+        date:
+            aujourdHui(),
+        interventions:
+            JSON.parse(
+                JSON.stringify(
+                    historique
+                )
+            )
+    };
 
-        return;
 
-    }
+    archivesHistorique.push(
+        archive
+    );
 
 
-
+    /*
+     * L'historique courant repart à zéro,
+     * mais toutes les anciennes interventions restent dans les archives.
+     */
     historique = [];
 
 
@@ -12619,7 +13641,7 @@ function remiseZeroHistorique() {
 
 
     alert(
-        "✅ Historique supprimé."
+        "Historique archivé. Une nouvelle période a commencé."
     );
 
 
@@ -12712,6 +13734,15 @@ window.diminuerConsommation =
 
 window.rechercherMaterielRetour =
     rechercherMaterielRetour;
+
+window.afficherArchivesHistorique =
+    afficherArchivesHistorique;
+
+window.afficherDetailCommandeArchive =
+    afficherDetailCommandeArchive;
+
+window.afficherDetailInterventionArchive =
+    afficherDetailInterventionArchive;
 
 window.afficherHistorique =
     afficherHistorique;
