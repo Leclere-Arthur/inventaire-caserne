@@ -12,7 +12,7 @@ const DOMAINE_EMAIL_INTERNE =
     "inventaire-caserne.local";
 
 const VERSION_APPLICATION =
-    "2.8.28";
+    "2.8.29";
 
 const CLE_PROFIL_UTILISATEUR_CACHE =
     "profil_utilisateur_connecte_v1";
@@ -9616,6 +9616,23 @@ function afficherDetailCommandeArchive(
 
             ${lignes}
 
+
+            ${
+                utilisateurAPermission(
+                    "acces_administration"
+                )
+                    ? `
+                        <button
+                            type="button"
+                            class="archive-reappro-bouton"
+                            onclick="afficherReapprovisionnementArchive('${String(archive.id)}')"
+                        >
+                            Réapprovisionnement rapide
+                        </button>
+                    `
+                    : ""
+            }
+
         </main>
 
     `;
@@ -9778,6 +9795,957 @@ function afficherDetailInterventionArchive(
         </main>
 
     `;
+
+}
+
+
+
+/* =========================================================
+   REAPPROVISIONNEMENT RAPIDE DEPUIS UNE ARCHIVE
+   ========================================================= */
+
+function initialiserStylesReapprovisionnementArchive() {
+
+    if (
+        document.getElementById(
+            "style-reapprovisionnement-archive"
+        )
+    ) {
+        return;
+    }
+
+    const style =
+        document.createElement(
+            "style"
+        );
+
+    style.id =
+        "style-reapprovisionnement-archive";
+
+    style.textContent = `
+        .archive-reappro-bouton {
+            display: block;
+            width: 100%;
+            max-width: 460px;
+            min-height: 54px;
+            margin: 28px auto 8px;
+            padding: 13px 18px;
+            border: 0;
+            border-radius: 15px;
+            background: #14532d;
+            color: #fff;
+            font: inherit;
+            font-size: 16px;
+            font-weight: 850;
+            letter-spacing: .01em;
+            cursor: pointer;
+            box-shadow: 0 8px 20px rgba(20,83,45,.23);
+        }
+
+        .reappro-page {
+            min-height: 100vh;
+            min-height: 100dvh;
+            box-sizing: border-box;
+            margin: 0;
+            padding:
+                calc(18px + env(safe-area-inset-top, 0px))
+                14px
+                calc(30px + env(safe-area-inset-bottom, 0px));
+            background:
+                linear-gradient(180deg, #10261d 0, #16372a 190px, #edf1ec 190px);
+            color: #172019;
+        }
+
+        .reappro-retour {
+            display: inline-flex;
+            align-items: center;
+            min-height: 42px;
+            padding: 8px 12px;
+            border: 1px solid rgba(255,255,255,.28);
+            border-radius: 999px;
+            background: rgba(255,255,255,.10);
+            color: #fff;
+            font: inherit;
+            font-weight: 800;
+            cursor: pointer;
+        }
+
+        .reappro-entete {
+            padding: 24px 4px 28px;
+            color: #fff;
+        }
+
+        .reappro-entete .reappro-sur-titre {
+            margin: 0 0 6px;
+            font-size: 12px;
+            font-weight: 850;
+            letter-spacing: .16em;
+            text-transform: uppercase;
+            opacity: .72;
+        }
+
+        .reappro-entete h2 {
+            margin: 0;
+            font-size: clamp(27px, 8vw, 38px);
+            line-height: 1;
+            font-weight: 900;
+            letter-spacing: -.035em;
+        }
+
+        .reappro-entete p {
+            margin: 12px 0 0;
+            max-width: 520px;
+            color: rgba(255,255,255,.78);
+            line-height: 1.45;
+            font-size: 14px;
+        }
+
+        .reappro-feuille {
+            width: min(100%, 680px);
+            margin: 0 auto;
+            box-sizing: border-box;
+            padding: 18px;
+            border-radius: 6px;
+            background: #fffefa;
+            box-shadow:
+                0 18px 42px rgba(17,41,30,.18),
+                inset 0 0 0 1px rgba(30,45,35,.05);
+        }
+
+        .reappro-meta {
+            display: flex;
+            justify-content: space-between;
+            gap: 14px;
+            align-items: baseline;
+            padding-bottom: 14px;
+            margin-bottom: 6px;
+            border-bottom: 2px solid #1b3829;
+            font-size: 13px;
+        }
+
+        .reappro-meta strong {
+            font-size: 15px;
+        }
+
+        .reappro-section-titre {
+            margin: 20px 0 10px;
+            font-size: 12px;
+            line-height: 1.2;
+            text-transform: uppercase;
+            letter-spacing: .11em;
+            font-weight: 900;
+            color: #5d6d63;
+        }
+
+        .reappro-ligne {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) 92px;
+            gap: 12px;
+            align-items: center;
+            padding: 13px 0;
+            border-bottom: 1px dashed #c9cec9;
+        }
+
+        .reappro-nom {
+            min-width: 0;
+            font-weight: 850;
+            line-height: 1.25;
+            overflow-wrap: anywhere;
+        }
+
+        .reappro-stock {
+            display: block;
+            margin-top: 4px;
+            color: #748078;
+            font-size: 12px;
+            font-weight: 650;
+        }
+
+        .reappro-quantite {
+            width: 100%;
+            min-width: 0;
+            height: 46px;
+            box-sizing: border-box;
+            border: 2px solid #bac2bc;
+            border-radius: 5px;
+            padding: 7px 8px;
+            background: #fff;
+            color: #172019;
+            font: inherit;
+            font-size: 18px;
+            font-weight: 850;
+            text-align: center;
+            outline: none;
+        }
+
+        .reappro-quantite:focus {
+            border-color: #1c5a36;
+            box-shadow: 0 0 0 3px rgba(28,90,54,.10);
+        }
+
+        .reappro-ajout-zone {
+            margin-top: 22px;
+            padding-top: 16px;
+            border-top: 3px double #c5cbc6;
+        }
+
+        .reappro-ajouter {
+            width: 100%;
+            min-height: 48px;
+            border: 2px solid #1c5a36;
+            border-radius: 5px;
+            background: transparent;
+            color: #17472c;
+            font: inherit;
+            font-weight: 900;
+            cursor: pointer;
+        }
+
+        .reappro-ligne-supplementaire {
+            grid-template-columns: minmax(0, 1fr) 86px 36px;
+        }
+
+        .reappro-select {
+            width: 100%;
+            min-width: 0;
+            min-height: 46px;
+            box-sizing: border-box;
+            border: 2px solid #bac2bc;
+            border-radius: 5px;
+            padding: 7px 8px;
+            background: #fff;
+            color: #172019;
+            font: inherit;
+            font-weight: 750;
+        }
+
+        .reappro-supprimer-ligne {
+            width: 36px;
+            height: 36px;
+            padding: 0;
+            border: 0;
+            border-radius: 50%;
+            background: #ecefec;
+            color: #5b665f;
+            font: inherit;
+            font-size: 22px;
+            line-height: 1;
+            cursor: pointer;
+        }
+
+        .reappro-validation {
+            width: 100%;
+            min-height: 56px;
+            margin-top: 24px;
+            border: 0;
+            border-radius: 5px;
+            background: #10261d;
+            color: #fff;
+            font: inherit;
+            font-size: 16px;
+            font-weight: 900;
+            cursor: pointer;
+            box-shadow: 0 8px 18px rgba(16,38,29,.18);
+        }
+
+        .reappro-note {
+            margin: 10px 0 0;
+            color: #69756d;
+            font-size: 12px;
+            line-height: 1.4;
+            text-align: center;
+        }
+
+        @media (max-width: 430px) {
+            .reappro-feuille {
+                padding: 15px 14px 17px;
+            }
+
+            .reappro-ligne {
+                grid-template-columns: minmax(0, 1fr) 78px;
+                gap: 9px;
+            }
+
+            .reappro-ligne-supplementaire {
+                grid-template-columns: minmax(0, 1fr) 72px 34px;
+                gap: 7px;
+            }
+        }
+    `;
+
+    document.head.appendChild(
+        style
+    );
+
+}
+
+
+function trouverMaterielDepuisLigneArchive(
+    ligne
+) {
+
+    const id =
+        String(
+            ligne?.materielId ||
+            ""
+        );
+
+    if (id) {
+
+        const parId =
+            materiels.find(
+                function (materiel) {
+
+                    return (
+                        String(materiel.id) ===
+                        id
+                    );
+
+                }
+            );
+
+        if (parId) {
+            return parId;
+        }
+
+    }
+
+
+    const nom =
+        String(
+            ligne?.materiel ||
+            ""
+        )
+            .trim()
+            .toLocaleLowerCase();
+
+
+    if (!nom) {
+        return null;
+    }
+
+
+    return (
+        materiels.find(
+            function (materiel) {
+
+                return (
+                    String(
+                        materiel.nom ||
+                        ""
+                    )
+                        .trim()
+                        .toLocaleLowerCase() ===
+                    nom
+                );
+
+            }
+        ) ||
+        null
+    );
+
+}
+
+
+async function afficherReapprovisionnementArchive(
+    archiveId
+) {
+
+    if (
+        !verifierPermissionOuRetourAccueil(
+            "acces_administration",
+            "Vous n'avez pas accès au réapprovisionnement."
+        )
+    ) {
+        return;
+    }
+
+
+    await synchroniserAvantNavigation();
+
+    initialiserStylesReapprovisionnementArchive();
+
+
+    const archive =
+        trouverArchiveHistorique(
+            archiveId
+        );
+
+
+    if (!archive) {
+
+        alert(
+            "Archive introuvable."
+        );
+
+        afficherArchivesHistorique();
+
+        return;
+    }
+
+
+    const materielsDejaAjoutes =
+        new Set();
+
+
+    const lignesConsommees =
+        calculerTotauxArchive(
+            archive
+        )
+            .map(
+                trouverMaterielDepuisLigneArchive
+            )
+            .filter(
+                function (materiel) {
+
+                    if (
+                        !materiel ||
+                        materielsDejaAjoutes.has(
+                            String(materiel.id)
+                        )
+                    ) {
+                        return false;
+                    }
+
+                    materielsDejaAjoutes.add(
+                        String(materiel.id)
+                    );
+
+                    return true;
+
+                }
+            );
+
+
+    const lignesHTML =
+        lignesConsommees.length > 0
+            ? lignesConsommees.map(
+                function (materiel) {
+
+                    return `
+                        <div
+                            class="reappro-ligne reappro-ligne-consommee"
+                            data-materiel-id="${echapperHTML(String(materiel.id))}"
+                        >
+                            <div>
+                                <div class="reappro-nom">
+                                    ${echapperHTML(materiel.nom)}
+                                </div>
+                                <span class="reappro-stock">
+                                    Stock actuel :
+                                    ${Number(materiel.stock || 0)}
+                                </span>
+                            </div>
+
+                            <input
+                                class="reappro-quantite"
+                                type="number"
+                                min="0"
+                                step="1"
+                                inputmode="numeric"
+                                placeholder="0"
+                                aria-label="Quantité à ajouter pour ${echapperHTML(materiel.nom)}"
+                            >
+                        </div>
+                    `;
+
+                }
+            ).join("")
+            : `
+                <div class="reappro-note">
+                    Aucun matériel consommé de cette archive n'existe encore dans l'inventaire.
+                </div>
+            `;
+
+
+    document.getElementById(
+        "app"
+    ).innerHTML = `
+
+        <main class="reappro-page">
+
+            <button
+                type="button"
+                class="reappro-retour"
+                onclick="afficherDetailCommandeArchive('${String(archive.id)}')"
+            >
+                ← Retour à la commande
+            </button>
+
+
+            <header class="reappro-entete">
+
+                <p class="reappro-sur-titre">
+                    Pharmacie · Stock
+                </p>
+
+                <h2>
+                    Réapprovisionnement
+                </h2>
+
+                <p>
+                    Les articles consommés pendant cette période sont déjà préparés.
+                    Renseigne uniquement ce qui est réellement rentré en stock.
+                </p>
+
+            </header>
+
+
+            <section class="reappro-feuille">
+
+                <div class="reappro-meta">
+                    <strong>
+                        Commande du
+                        ${formaterDate(archive.date)}
+                    </strong>
+
+                    <span>
+                        ${lignesConsommees.length}
+                        article(s)
+                    </span>
+                </div>
+
+
+                <div class="reappro-section-titre">
+                    Articles issus de la commande
+                </div>
+
+
+                <div id="reappro-lignes-consommees">
+                    ${lignesHTML}
+                </div>
+
+
+                <div class="reappro-ajout-zone">
+
+                    <div class="reappro-section-titre">
+                        Compléter la livraison
+                    </div>
+
+                    <div id="reappro-lignes-supplementaires"></div>
+
+                    <button
+                        type="button"
+                        class="reappro-ajouter"
+                        onclick="ajouterLigneReapprovisionnementArchive()"
+                    >
+                        Ajouter un autre matériel
+                    </button>
+
+                </div>
+
+
+                <button
+                    type="button"
+                    class="reappro-validation"
+                    onclick="validerReapprovisionnementArchive('${String(archive.id)}')"
+                >
+                    Ajouter au stock
+                </button>
+
+
+                <p class="reappro-note">
+                    Les quantités laissées vides ne modifieront pas le stock.
+                </p>
+
+            </section>
+
+        </main>
+
+    `;
+
+}
+
+
+function ajouterLigneReapprovisionnementArchive() {
+
+    const conteneur =
+        document.getElementById(
+            "reappro-lignes-supplementaires"
+        );
+
+
+    if (!conteneur) {
+        return;
+    }
+
+
+    const options =
+        [...materiels]
+            .sort(
+                function (a, b) {
+
+                    return String(
+                        a.nom ||
+                        ""
+                    ).localeCompare(
+                        String(
+                            b.nom ||
+                            ""
+                        ),
+                        "fr",
+                        {
+                            sensitivity:
+                                "base"
+                        }
+                    );
+
+                }
+            )
+            .map(
+                function (materiel) {
+
+                    return `
+                        <option
+                            value="${echapperHTML(String(materiel.id))}"
+                        >
+                            ${echapperHTML(materiel.nom)}
+                        </option>
+                    `;
+
+                }
+            )
+            .join("");
+
+
+    if (!options) {
+
+        alert(
+            "Aucun matériel disponible."
+        );
+
+        return;
+    }
+
+
+    const ligne =
+        document.createElement(
+            "div"
+        );
+
+    ligne.className =
+        "reappro-ligne reappro-ligne-supplementaire";
+
+
+    ligne.innerHTML = `
+
+        <select
+            class="reappro-select"
+            aria-label="Matériel supplémentaire"
+        >
+            <option value="">
+                Choisir un matériel
+            </option>
+
+            ${options}
+        </select>
+
+        <input
+            class="reappro-quantite"
+            type="number"
+            min="0"
+            step="1"
+            inputmode="numeric"
+            placeholder="0"
+            aria-label="Quantité à ajouter"
+        >
+
+        <button
+            type="button"
+            class="reappro-supprimer-ligne"
+            aria-label="Retirer cette ligne"
+            title="Retirer"
+        >
+            ×
+        </button>
+
+    `;
+
+
+    ligne.querySelector(
+        ".reappro-supprimer-ligne"
+    )?.addEventListener(
+        "click",
+        function () {
+
+            ligne.remove();
+
+        }
+    );
+
+
+    conteneur.appendChild(
+        ligne
+    );
+
+
+    ligne.querySelector(
+        ".reappro-select"
+    )?.focus();
+
+}
+
+
+async function validerReapprovisionnementArchive(
+    archiveId
+) {
+
+    if (
+        !verifierPermissionOuRetourAccueil(
+            "acces_administration",
+            "Vous n'avez pas accès au réapprovisionnement."
+        )
+    ) {
+        return;
+    }
+
+
+    const ajouts =
+        new Map();
+
+
+    document.querySelectorAll(
+        ".reappro-ligne-consommee"
+    ).forEach(
+        function (ligne) {
+
+            const materielId =
+                String(
+                    ligne.dataset.materielId ||
+                    ""
+                );
+
+            const quantite =
+                Math.floor(
+                    Number(
+                        ligne.querySelector(
+                            ".reappro-quantite"
+                        )?.value ||
+                        0
+                    )
+                );
+
+
+            if (
+                materielId &&
+                Number.isFinite(quantite) &&
+                quantite > 0
+            ) {
+
+                ajouts.set(
+                    materielId,
+                    (
+                        ajouts.get(
+                            materielId
+                        ) ||
+                        0
+                    ) +
+                    quantite
+                );
+
+            }
+
+        }
+    );
+
+
+    document.querySelectorAll(
+        ".reappro-ligne-supplementaire"
+    ).forEach(
+        function (ligne) {
+
+            const materielId =
+                String(
+                    ligne.querySelector(
+                        ".reappro-select"
+                    )?.value ||
+                    ""
+                );
+
+            const quantite =
+                Math.floor(
+                    Number(
+                        ligne.querySelector(
+                            ".reappro-quantite"
+                        )?.value ||
+                        0
+                    )
+                );
+
+
+            if (
+                materielId &&
+                Number.isFinite(quantite) &&
+                quantite > 0
+            ) {
+
+                ajouts.set(
+                    materielId,
+                    (
+                        ajouts.get(
+                            materielId
+                        ) ||
+                        0
+                    ) +
+                    quantite
+                );
+
+            }
+
+        }
+    );
+
+
+    if (ajouts.size === 0) {
+
+        alert(
+            "Indique au moins une quantité à ajouter au stock."
+        );
+
+        return;
+    }
+
+
+    const lignesConfirmation =
+        Array.from(
+            ajouts.entries()
+        )
+            .map(
+                function (
+                    [materielId, quantite]
+                ) {
+
+                    const materiel =
+                        materiels.find(
+                            function (item) {
+
+                                return (
+                                    String(item.id) ===
+                                    String(materielId)
+                                );
+
+                            }
+                        );
+
+                    return (
+                        materiel
+                            ? `${materiel.nom} : +${quantite}`
+                            : ""
+                    );
+
+                }
+            )
+            .filter(Boolean);
+
+
+    if (
+        !confirm(
+            "Ajouter au stock :\n\n" +
+            lignesConfirmation.join(
+                "\n"
+            ) +
+            "\n\nConfirmer ?"
+        )
+    ) {
+        return;
+    }
+
+
+    let nombreModifie =
+        0;
+
+
+    ajouts.forEach(
+        function (
+            quantite,
+            materielId
+        ) {
+
+            const materiel =
+                materiels.find(
+                    function (item) {
+
+                        return (
+                            String(item.id) ===
+                            String(materielId)
+                        );
+
+                    }
+                );
+
+
+            if (!materiel) {
+                return;
+            }
+
+
+            const ancienStock =
+                Number(
+                    materiel.stock ||
+                    0
+                );
+
+
+            const nouveauStock =
+                ancienStock +
+                Number(
+                    quantite
+                );
+
+
+            materiel.stock =
+                nouveauStock;
+
+
+            preparerNotificationStock(
+                materiel,
+                ancienStock
+            );
+
+
+            nombreModifie +=
+                1;
+
+        }
+    );
+
+
+    if (nombreModifie === 0) {
+
+        alert(
+            "Aucun stock n'a été modifié."
+        );
+
+        return;
+    }
+
+
+    sauvegarderToutesLesDonnees();
+
+
+    try {
+
+        await synchroniserApresModification();
+
+    } catch (erreur) {
+
+        console.warn(
+            "Synchronisation du réapprovisionnement différée :",
+            erreur
+        );
+
+    }
+
+
+    alert(
+        nombreModifie +
+        " matériel(s) ajouté(s) au stock."
+    );
+
+
+    afficherDetailCommandeArchive(
+        archiveId
+    );
 
 }
 
@@ -13988,6 +14956,15 @@ window.afficherArchivesHistorique =
 
 window.afficherDetailCommandeArchive =
     afficherDetailCommandeArchive;
+
+window.afficherReapprovisionnementArchive =
+    afficherReapprovisionnementArchive;
+
+window.ajouterLigneReapprovisionnementArchive =
+    ajouterLigneReapprovisionnementArchive;
+
+window.validerReapprovisionnementArchive =
+    validerReapprovisionnementArchive;
 
 window.afficherDetailInterventionArchive =
     afficherDetailInterventionArchive;
