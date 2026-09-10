@@ -12,7 +12,7 @@ const DOMAINE_EMAIL_INTERNE =
     "inventaire-caserne.local";
 
 const VERSION_APPLICATION =
-    "2.8.22";
+    "2.8.23";
 
 const CLE_PROFIL_UTILISATEUR_CACHE =
     "profil_utilisateur_connecte_v1";
@@ -13583,144 +13583,75 @@ function supprimerMateriel(
 
 async function remiseZeroHistorique() {
 
-    if (
-        !verifierPermissionOuRetourAccueil(
-            "acces_administration"
-        )
-    ) {
+    if (!verifierPermissionOuRetourAccueil("acces_administration")) {
         return;
     }
 
-    if (
-        historique.length === 0
-    ) {
-        alert(
-            "L'historique est déjà vide."
-        );
+    if (historique.length === 0) {
+        alert("L'historique est déjà vide.");
         return;
     }
 
-    if (
-        !navigator.onLine
-    ) {
-        alert(
-            "Une connexion Internet est nécessaire pour faire le diagnostic."
-        );
+    if (!navigator.onLine) {
+        alert("Une connexion Internet est nécessaire pour faire le diagnostic.");
         return;
     }
 
-    if (
-        !confirm(
-            "Lancer le diagnostic de l'archivage ? Aucun historique ne sera supprimé pendant ce test."
-        )
-    ) {
+    if (!confirm(
+        "Tester l'appel d'archivage Supabase ? Ce test est sans danger : aucune archive réelle et aucun historique ne seront supprimés."
+    )) {
         return;
     }
 
     try {
-
-        alert(
-            "Diagnostic 1/4 : connexion à Supabase..."
-        );
-
         const supabase =
             await assurerBibliothequeSupabaseDisponible();
 
         if (!supabase) {
-            alert(
-                "DIAGNOSTIC BLOQUÉ : le client Supabase n'est pas disponible."
-            );
+            alert("DIAGNOSTIC : Supabase n'est pas disponible.");
             return;
         }
 
-        alert(
-            "Diagnostic 2/4 : vérification de la session..."
+        const testId = genererUUID();
+
+        /*
+         * Appel de la fonction V30 spécialement créée pour le diagnostic.
+         * Elle vérifie exactement les mêmes paramètres et autorisations
+         * que l'archivage réel, mais ne fait aucun INSERT/DELETE.
+         */
+        const resultat = await supabase.rpc(
+            "tester_archivage_historique",
+            {
+                p_archive_id: testId,
+                p_date_commande: aujourdHui(),
+                p_interventions: JSON.parse(JSON.stringify(historique))
+            }
         );
 
-        const sessionResult =
-            await supabase.auth.getSession();
-
-        if (sessionResult.error) {
+        if (resultat.error) {
             alert(
-                "ERREUR SESSION : " +
-                (sessionResult.error.message || "erreur inconnue")
+                "ERREUR APPEL SUPABASE\n\n" +
+                "Message : " + (resultat.error.message || "inconnu") + "\n" +
+                "Code : " + (resultat.error.code || "aucun") + "\n" +
+                "Détails : " + (resultat.error.details || "aucun") + "\n" +
+                "Indice : " + (resultat.error.hint || "aucun") +
+                "\n\nAucun historique n'a été supprimé."
             );
             return;
         }
-
-        const session =
-            sessionResult.data?.session;
-
-        if (!session?.user?.id) {
-            alert(
-                "DIAGNOSTIC : aucune session Supabase active n'a été trouvée."
-            );
-            return;
-        }
-
-        const authId =
-            session.user.id;
-
-        const profilId =
-            profilUtilisateurConnecte?.id || "aucun";
 
         alert(
-            "Diagnostic 3/4 : session active.\n\n" +
-            "ID Auth : " + authId + "\n" +
-            "ID Profil : " + profilId + "\n\n" +
-            "Vérification de l'autorisation..."
-        );
-
-        const permissionResult =
-            await supabase.rpc(
-                "utilisateur_peut_administrer"
-            );
-
-        if (permissionResult.error) {
-            alert(
-                "ERREUR AUTORISATION : " +
-                (permissionResult.error.message || "erreur inconnue") +
-                "\n\nCode : " +
-                (permissionResult.error.code || "aucun")
-            );
-            return;
-        }
-
-        const permission =
-            permissionResult.data === true;
-
-        alert(
-            "Diagnostic 4/4 : résultat.\n\n" +
-            "Session : OK\n" +
-            "Profil : " +
-            (
-                authId === profilId
-                    ? "OK"
-                    : "ID différent"
-            ) +
-            "\n" +
-            "Autorisation Administration : " +
-            (
-                permission
-                    ? "OUI"
-                    : "NON"
-            ) +
-            "\n\nAucun historique n'a été supprimé."
+            "TEST RPC RÉUSSI\n\n" +
+            "Réponse Supabase : " + String(resultat.data) +
+            "\n\nAucune archive réelle n'a été créée et aucun historique n'a été supprimé."
         );
 
     } catch (erreur) {
-
-        console.error(
-            "Diagnostic archivage :",
-            erreur
-        );
-
+        console.error("Diagnostic RPC archivage :", erreur);
         alert(
-            "ERREUR DIAGNOSTIC : " +
-            (
-                erreur?.message ||
-                String(erreur)
-            )
+            "ERREUR DIAGNOSTIC\n\n" +
+            (erreur?.message || String(erreur)) +
+            "\n\nAucun historique n'a été supprimé."
         );
     }
 }
