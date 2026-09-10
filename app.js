@@ -12,7 +12,7 @@ const DOMAINE_EMAIL_INTERNE =
     "inventaire-caserne.local";
 
 const VERSION_APPLICATION =
-    "2.8.29";
+    "2.8.30";
 
 const CLE_PROFIL_UTILISATEUR_CACHE =
     "profil_utilisateur_connecte_v1";
@@ -10003,20 +10003,86 @@ function initialiserStylesReapprovisionnementArchive() {
 
         .reappro-ligne-supplementaire {
             grid-template-columns: minmax(0, 1fr) 86px 36px;
+            align-items: start;
         }
 
-        .reappro-select {
+        .reappro-recherche-wrap {
+            position: relative;
+            min-width: 0;
+        }
+
+        .reappro-recherche {
             width: 100%;
             min-width: 0;
             min-height: 46px;
             box-sizing: border-box;
             border: 2px solid #bac2bc;
             border-radius: 5px;
-            padding: 7px 8px;
+            padding: 7px 10px;
             background: #fff;
             color: #172019;
             font: inherit;
             font-weight: 750;
+            outline: none;
+        }
+
+        .reappro-recherche:focus {
+            border-color: #1c5a36;
+            box-shadow: 0 0 0 3px rgba(28,90,54,.10);
+        }
+
+        .reappro-resultats {
+            display: none;
+            position: absolute;
+            z-index: 20;
+            left: 0;
+            right: 0;
+            top: calc(100% + 4px);
+            max-height: 240px;
+            overflow-y: auto;
+            border: 1px solid #b9c1bb;
+            border-radius: 6px;
+            background: #fff;
+            box-shadow: 0 10px 24px rgba(16,38,29,.18);
+        }
+
+        .reappro-resultats.ouvert {
+            display: block;
+        }
+
+        .reappro-resultat {
+            display: block;
+            width: 100%;
+            border: 0;
+            border-bottom: 1px solid #edf0ed;
+            padding: 11px 12px;
+            background: #fff;
+            color: #172019;
+            text-align: left;
+            font: inherit;
+            cursor: pointer;
+        }
+
+        .reappro-resultat:last-child {
+            border-bottom: 0;
+        }
+
+        .reappro-resultat strong {
+            display: block;
+            font-size: 14px;
+        }
+
+        .reappro-resultat small {
+            display: block;
+            margin-top: 3px;
+            color: #6d776f;
+            font-size: 11px;
+        }
+
+        .reappro-recherche-vide {
+            padding: 11px 12px;
+            color: #6d776f;
+            font-size: 13px;
         }
 
         .reappro-supprimer-ligne {
@@ -10283,10 +10349,6 @@ async function afficherReapprovisionnementArchive(
                     Réapprovisionnement
                 </h2>
 
-                <p>
-                    Les articles consommés pendant cette période sont déjà préparés.
-                    Renseigne uniquement ce qui est réellement rentré en stock.
-                </p>
 
             </header>
 
@@ -10301,7 +10363,7 @@ async function afficherReapprovisionnementArchive(
 
                     <span>
                         ${lignesConsommees.length}
-                        article(s)
+                        matériel(s)
                     </span>
                 </div>
 
@@ -10370,45 +10432,7 @@ function ajouterLigneReapprovisionnementArchive() {
     }
 
 
-    const options =
-        [...materiels]
-            .sort(
-                function (a, b) {
-
-                    return String(
-                        a.nom ||
-                        ""
-                    ).localeCompare(
-                        String(
-                            b.nom ||
-                            ""
-                        ),
-                        "fr",
-                        {
-                            sensitivity:
-                                "base"
-                        }
-                    );
-
-                }
-            )
-            .map(
-                function (materiel) {
-
-                    return `
-                        <option
-                            value="${echapperHTML(String(materiel.id))}"
-                        >
-                            ${echapperHTML(materiel.nom)}
-                        </option>
-                    `;
-
-                }
-            )
-            .join("");
-
-
-    if (!options) {
+    if (materiels.length === 0) {
 
         alert(
             "Aucun matériel disponible."
@@ -10429,16 +10453,27 @@ function ajouterLigneReapprovisionnementArchive() {
 
     ligne.innerHTML = `
 
-        <select
-            class="reappro-select"
-            aria-label="Matériel supplémentaire"
-        >
-            <option value="">
-                Choisir un matériel
-            </option>
+        <div class="reappro-recherche-wrap">
 
-            ${options}
-        </select>
+            <input
+                class="reappro-recherche"
+                type="search"
+                autocomplete="off"
+                placeholder="Rechercher un matériel"
+                aria-label="Rechercher un matériel"
+            >
+
+            <input
+                class="reappro-materiel-id"
+                type="hidden"
+                value=""
+            >
+
+            <div
+                class="reappro-resultats"
+            ></div>
+
+        </div>
 
         <input
             class="reappro-quantite"
@@ -10474,14 +10509,317 @@ function ajouterLigneReapprovisionnementArchive() {
     );
 
 
+    const recherche =
+        ligne.querySelector(
+            ".reappro-recherche"
+        );
+
+    const champId =
+        ligne.querySelector(
+            ".reappro-materiel-id"
+        );
+
+    const resultats =
+        ligne.querySelector(
+            ".reappro-resultats"
+        );
+
+
+    function fermerResultats() {
+
+        resultats?.classList.remove(
+            "ouvert"
+        );
+
+    }
+
+
+    function afficherResultats(
+        texte
+    ) {
+
+        if (
+            !recherche ||
+            !champId ||
+            !resultats
+        ) {
+            return;
+        }
+
+
+        champId.value =
+            "";
+
+
+        const terme =
+            String(
+                texte ||
+                ""
+            )
+                .trim()
+                .toLocaleLowerCase();
+
+
+        if (!terme) {
+
+            resultats.innerHTML =
+                "";
+
+            fermerResultats();
+
+            return;
+        }
+
+
+        const correspondances =
+            [...materiels]
+                .filter(
+                    function (materiel) {
+
+                        const nom =
+                            String(
+                                materiel.nom ||
+                                ""
+                            )
+                                .toLocaleLowerCase();
+
+                        const reference =
+                            String(
+                                materiel.reference ||
+                                ""
+                            )
+                                .toLocaleLowerCase();
+
+                        return (
+                            nom.includes(
+                                terme
+                            ) ||
+                            reference.includes(
+                                terme
+                            )
+                        );
+
+                    }
+                )
+                .sort(
+                    function (a, b) {
+
+                        return String(
+                            a.nom ||
+                            ""
+                        ).localeCompare(
+                            String(
+                                b.nom ||
+                                ""
+                            ),
+                            "fr",
+                            {
+                                sensitivity:
+                                    "base"
+                            }
+                        );
+
+                    }
+                )
+                .slice(
+                    0,
+                    12
+                );
+
+
+        if (
+            correspondances.length === 0
+        ) {
+
+            resultats.innerHTML = `
+                <div class="reappro-recherche-vide">
+                    Aucun matériel trouvé
+                </div>
+            `;
+
+            resultats.classList.add(
+                "ouvert"
+            );
+
+            return;
+        }
+
+
+        resultats.innerHTML =
+            correspondances
+                .map(
+                    function (materiel) {
+
+                        const reference =
+                            String(
+                                materiel.reference ||
+                                ""
+                            ).trim();
+
+                        return `
+                            <button
+                                type="button"
+                                class="reappro-resultat"
+                                data-materiel-id="${echapperHTML(String(materiel.id))}"
+                            >
+                                <strong>
+                                    ${echapperHTML(materiel.nom)}
+                                </strong>
+
+                                ${
+                                    reference
+                                        ? `
+                                            <small>
+                                                Réf. ${echapperHTML(reference)}
+                                            </small>
+                                        `
+                                        : ""
+                                }
+                            </button>
+                        `;
+
+                    }
+                )
+                .join("");
+
+
+        resultats.classList.add(
+            "ouvert"
+        );
+
+
+        resultats.querySelectorAll(
+            ".reappro-resultat"
+        ).forEach(
+            function (bouton) {
+
+                bouton.addEventListener(
+                    "click",
+                    function () {
+
+                        const materielId =
+                            String(
+                                bouton.dataset.materielId ||
+                                ""
+                            );
+
+                        const materiel =
+                            materiels.find(
+                                function (item) {
+
+                                    return (
+                                        String(item.id) ===
+                                        materielId
+                                    );
+
+                                }
+                            );
+
+
+                        if (!materiel) {
+                            return;
+                        }
+
+
+                        champId.value =
+                            String(
+                                materiel.id
+                            );
+
+                        recherche.value =
+                            String(
+                                materiel.nom ||
+                                ""
+                            );
+
+                        fermerResultats();
+
+
+                        ligne.querySelector(
+                            ".reappro-quantite"
+                        )?.focus();
+
+                    }
+                );
+
+            }
+        );
+
+    }
+
+
+    recherche?.addEventListener(
+        "input",
+        function () {
+
+            afficherResultats(
+                recherche.value
+            );
+
+        }
+    );
+
+
+    recherche?.addEventListener(
+        "focus",
+        function () {
+
+            if (
+                String(
+                    recherche.value ||
+                    ""
+                ).trim()
+            ) {
+
+                afficherResultats(
+                    recherche.value
+                );
+
+            }
+
+        }
+    );
+
+
+    document.addEventListener(
+        "click",
+        function fermerSiClicExterieur(
+            event
+        ) {
+
+            if (
+                !ligne.isConnected
+            ) {
+
+                document.removeEventListener(
+                    "click",
+                    fermerSiClicExterieur
+                );
+
+                return;
+            }
+
+
+            if (
+                !ligne.contains(
+                    event.target
+                )
+            ) {
+
+                fermerResultats();
+
+            }
+
+        }
+    );
+
+
     conteneur.appendChild(
         ligne
     );
 
 
-    ligne.querySelector(
-        ".reappro-select"
-    )?.focus();
+    recherche?.focus();
 
 }
 
@@ -10557,7 +10895,7 @@ async function validerReapprovisionnementArchive(
             const materielId =
                 String(
                     ligne.querySelector(
-                        ".reappro-select"
+                        ".reappro-materiel-id"
                     )?.value ||
                     ""
                 );
