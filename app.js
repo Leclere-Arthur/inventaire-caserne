@@ -12,7 +12,7 @@ const DOMAINE_EMAIL_INTERNE =
     "inventaire-caserne.local";
 
 const VERSION_APPLICATION =
-    "2.8.21";
+    "2.8.22";
 
 const CLE_PROFIL_UTILISATEUR_CACHE =
     "profil_utilisateur_connecte_v1";
@@ -13591,158 +13591,138 @@ async function remiseZeroHistorique() {
         return;
     }
 
-
     if (
         historique.length === 0
     ) {
-
         alert(
             "L'historique est déjà vide."
         );
-
         return;
     }
-
 
     if (
         !navigator.onLine
     ) {
-
         alert(
-            "Une connexion Internet est nécessaire pour archiver l'historique en toute sécurité."
+            "Une connexion Internet est nécessaire pour faire le diagnostic."
         );
-
         return;
     }
-
 
     if (
         !confirm(
-            "Archiver l'historique actuel et commencer une nouvelle période ?"
+            "Lancer le diagnostic de l'archivage ? Aucun historique ne sera supprimé pendant ce test."
         )
     ) {
-
         return;
     }
-
-
-    const archive = {
-        id:
-            genererUUID(),
-        date:
-            aujourdHui(),
-        interventions:
-            JSON.parse(
-                JSON.stringify(
-                    historique
-                )
-            )
-    };
-
-
-    const supabase =
-        await assurerBibliothequeSupabaseDisponible();
-
-
-    if (!supabase) {
-
-        alert(
-            "Impossible de joindre Supabase. Réessaie dans quelques instants."
-        );
-
-        return;
-    }
-
-
-    demarrerIndicateurSynchronisation();
-
-    synchronisationSupabaseEnCours =
-        true;
-
 
     try {
 
-        /*
-         * Cette fonction Supabase effectue les 3 opérations ensemble :
-         * 1. création de l'archive,
-         * 2. suppression des consommations courantes,
-         * 3. suppression des interventions courantes.
-         *
-         * L'historique local n'est vidé qu'après réussite.
-         */
-        const resultat =
-            await supabase.rpc(
-                "archiver_historique_courant",
-                {
-                    p_archive_id:
-                        archive.id,
-                    p_date_commande:
-                        archive.date,
-                    p_interventions:
-                        archive.interventions
-                }
+        alert(
+            "Diagnostic 1/4 : connexion à Supabase..."
+        );
+
+        const supabase =
+            await assurerBibliothequeSupabaseDisponible();
+
+        if (!supabase) {
+            alert(
+                "DIAGNOSTIC BLOQUÉ : le client Supabase n'est pas disponible."
             );
-
-
-        if (resultat.error) {
-            throw resultat.error;
+            return;
         }
 
-
-        archivesHistorique.push(
-            archive
+        alert(
+            "Diagnostic 2/4 : vérification de la session..."
         );
 
-        historique = [];
+        const sessionResult =
+            await supabase.auth.getSession();
 
+        if (sessionResult.error) {
+            alert(
+                "ERREUR SESSION : " +
+                (sessionResult.error.message || "erreur inconnue")
+            );
+            return;
+        }
 
-        sauvegarderToutesLesDonnees();
+        const session =
+            sessionResult.data?.session;
 
-        effacerModificationsEnAttente();
+        if (!session?.user?.id) {
+            alert(
+                "DIAGNOSTIC : aucune session Supabase active n'a été trouvée."
+            );
+            return;
+        }
 
-        enregistrerSnapshotSynchronisation();
+        const authId =
+            session.user.id;
 
-
-        /*
-         * Relire la base centrale pour confirmer immédiatement
-         * que tous les appareils verront le même état.
-         */
-        const donnees =
-            await recupererDonneesSupabase();
-
-        await appliquerDonneesSupabaseLocalement(
-            donnees
-        );
-
+        const profilId =
+            profilUtilisateurConnecte?.id || "aucun";
 
         alert(
-            "Historique archivé. Une nouvelle période a commencé."
+            "Diagnostic 3/4 : session active.\n\n" +
+            "ID Auth : " + authId + "\n" +
+            "ID Profil : " + profilId + "\n\n" +
+            "Vérification de l'autorisation..."
         );
 
+        const permissionResult =
+            await supabase.rpc(
+                "utilisateur_peut_administrer"
+            );
 
-        afficherMenuAdministration();
+        if (permissionResult.error) {
+            alert(
+                "ERREUR AUTORISATION : " +
+                (permissionResult.error.message || "erreur inconnue") +
+                "\n\nCode : " +
+                (permissionResult.error.code || "aucun")
+            );
+            return;
+        }
+
+        const permission =
+            permissionResult.data === true;
+
+        alert(
+            "Diagnostic 4/4 : résultat.\n\n" +
+            "Session : OK\n" +
+            "Profil : " +
+            (
+                authId === profilId
+                    ? "OK"
+                    : "ID différent"
+            ) +
+            "\n" +
+            "Autorisation Administration : " +
+            (
+                permission
+                    ? "OUI"
+                    : "NON"
+            ) +
+            "\n\nAucun historique n'a été supprimé."
+        );
 
     } catch (erreur) {
 
         console.error(
-            "Archivage de l'historique impossible :",
+            "Diagnostic archivage :",
             erreur
         );
 
-
         alert(
-            "L'archivage n'a pas pu être effectué. Rien n'a été supprimé. Vérifie que le correctif SQL V28 a bien été exécuté dans Supabase."
+            "ERREUR DIAGNOSTIC : " +
+            (
+                erreur?.message ||
+                String(erreur)
+            )
         );
-
-    } finally {
-
-        synchronisationSupabaseEnCours =
-            false;
-
-        arreterIndicateurSynchronisation();
-
     }
-
 }
 
 
