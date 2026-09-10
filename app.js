@@ -12,7 +12,7 @@ const DOMAINE_EMAIL_INTERNE =
     "inventaire-caserne.local";
 
 const VERSION_APPLICATION =
-    "2.8.26";
+    "2.8.27";
 
 const CLE_PROFIL_UTILISATEUR_CACHE =
     "profil_utilisateur_connecte_v1";
@@ -5104,6 +5104,9 @@ async function recupererDonneesSupabase() {
                 .select("id,date_commande,interventions,created_at")
                 .order("date_commande", {
                     ascending: false
+                })
+                .order("created_at", {
+                    ascending: false
                 });
 
         if (resultatArchives.error) {
@@ -5254,6 +5257,9 @@ function convertirDonneesSupabaseEnDonneesApplication(donnees) {
                 ),
                 date: String(
                     archive.date_commande || ""
+                ),
+                createdAt: String(
+                    archive.created_at || ""
                 ),
                 interventions:
                     Array.isArray(
@@ -5439,27 +5445,7 @@ function migrerIdentifiantsVersUUID() {
 
     let archivesModifiees = false;
 
-    [...archivesHistorique]
-        .sort(function (a, b) {
-            const dateA =
-                new Date(
-                    a.created_at ||
-                    a.createdAt ||
-                    a.date ||
-                    0
-                ).getTime();
-
-            const dateB =
-                new Date(
-                    b.created_at ||
-                    b.createdAt ||
-                    b.date ||
-                    0
-                ).getTime();
-
-            return dateB - dateA;
-        })
-        .forEach(
+    archivesHistorique.forEach(
         function (archive) {
 
             if (!estUUID(archive.id)) {
@@ -9122,6 +9108,28 @@ async function afficherArchivesHistorique() {
         [...archivesHistorique]
             .sort(
                 function (a, b) {
+
+                    const dateCreationA =
+                        Date.parse(
+                            a.createdAt ||
+                            a.created_at ||
+                            ""
+                        );
+
+                    const dateCreationB =
+                        Date.parse(
+                            b.createdAt ||
+                            b.created_at ||
+                            ""
+                        );
+
+                    if (
+                        Number.isFinite(dateCreationA) &&
+                        Number.isFinite(dateCreationB) &&
+                        dateCreationA !== dateCreationB
+                    ) {
+                        return dateCreationB - dateCreationA;
+                    }
 
                     return String(
                         b.date || ""
@@ -13651,6 +13659,8 @@ async function remiseZeroHistorique() {
             genererUUID(),
         date:
             dateAujourdhui(),
+        createdAt:
+            new Date().toISOString(),
         interventions:
             JSON.parse(
                 JSON.stringify(
