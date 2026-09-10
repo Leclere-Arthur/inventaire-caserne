@@ -12,7 +12,7 @@ const DOMAINE_EMAIL_INTERNE =
     "inventaire-caserne.local";
 
 const VERSION_APPLICATION =
-    "2.8.31";
+    "2.8.32";
 
 const CLE_PROFIL_UTILISATEUR_CACHE =
     "profil_utilisateur_connecte_v1";
@@ -7106,7 +7106,7 @@ function genererCarteInventaire(
 
     return `
 
-        <article
+        <matériel
             class="
                 materiel
                 carte-materiel-horizontal
@@ -7207,7 +7207,7 @@ function genererCarteInventaire(
 
             ${photo}
 
-        </article>
+        </matériel>
 
     `;
 
@@ -8059,7 +8059,7 @@ function genererCarteRetour(
 
     return `
 
-        <article
+        <matériel
             class="
                 materiel
                 carte-materiel-horizontal
@@ -8140,7 +8140,7 @@ function genererCarteRetour(
 
             ${photo}
 
-        </article>
+        </matériel>
 
     `;
 
@@ -10371,7 +10371,7 @@ async function afficherReapprovisionnementArchive(
 
 
                 <div class="reappro-section-titre">
-                    Articles issus de la commande
+                    Matériels issus de la commande
                 </div>
 
 
@@ -12055,7 +12055,7 @@ function afficherMenuAdministration() {
                         </strong>
 
                         <small>
-                            Créer un nouvel article
+                            Créer un nouvel matériel
                         </small>
 
                     </span>
