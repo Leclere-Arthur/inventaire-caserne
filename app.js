@@ -12,7 +12,7 @@ const DOMAINE_EMAIL_INTERNE =
     "inventaire-caserne.local";
 
 const VERSION_APPLICATION =
-    "2.8.25";
+    "2.8.26";
 
 const CLE_PROFIL_UTILISATEUR_CACHE =
     "profil_utilisateur_connecte_v1";
@@ -5439,7 +5439,27 @@ function migrerIdentifiantsVersUUID() {
 
     let archivesModifiees = false;
 
-    archivesHistorique.forEach(
+    [...archivesHistorique]
+        .sort(function (a, b) {
+            const dateA =
+                new Date(
+                    a.created_at ||
+                    a.createdAt ||
+                    a.date ||
+                    0
+                ).getTime();
+
+            const dateB =
+                new Date(
+                    b.created_at ||
+                    b.createdAt ||
+                    b.date ||
+                    0
+                ).getTime();
+
+            return dateB - dateA;
+        })
+        .forEach(
         function (archive) {
 
             if (!estUUID(archive.id)) {
