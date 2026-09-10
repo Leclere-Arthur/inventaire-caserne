@@ -12,7 +12,7 @@ const DOMAINE_EMAIL_INTERNE =
     "inventaire-caserne.local";
 
 const VERSION_APPLICATION =
-    "2.8.20";
+    "2.8.21";
 
 const CLE_PROFIL_UTILISATEUR_CACHE =
     "profil_utilisateur_connecte_v1";
@@ -5998,6 +5998,13 @@ function installerAbonnementTempsReelSupabase() {
                     programmerRechargementDepuisSupabase();
                 }
             )
+            .on(
+                "postgres_changes",
+                { event: "*", schema: "public", table: "archives_historique" },
+                function () {
+                    programmerRechargementDepuisSupabase();
+                }
+            )
             .subscribe(function (statut) {
                 console.log("Supabase Realtime :", statut);
             });
@@ -10667,7 +10674,7 @@ function afficherMenuAdministration() {
                         </strong>
 
                         <small>
-                            Supprimer les consommations
+                            Archiver la période actuelle
                         </small>
 
                     </span>
@@ -13574,7 +13581,7 @@ function supprimerMateriel(
    REMISE A ZERO HISTORIQUE
    ========================================================= */
 
-function remiseZeroHistorique() {
+async function remiseZeroHistorique() {
 
     if (
         !verifierPermissionOuRetourAccueil(
@@ -13594,7 +13601,18 @@ function remiseZeroHistorique() {
         );
 
         return;
+    }
 
+
+    if (
+        !navigator.onLine
+    ) {
+
+        alert(
+            "Une connexion Internet est nécessaire pour archiver l'historique en toute sécurité."
+        );
+
+        return;
     }
 
 
@@ -13605,7 +13623,6 @@ function remiseZeroHistorique() {
     ) {
 
         return;
-
     }
 
 
@@ -13623,29 +13640,108 @@ function remiseZeroHistorique() {
     };
 
 
-    archivesHistorique.push(
-        archive
-    );
+    const supabase =
+        await assurerBibliothequeSupabaseDisponible();
 
 
-    /*
-     * L'historique courant repart à zéro,
-     * mais toutes les anciennes interventions restent dans les archives.
-     */
-    historique = [];
+    if (!supabase) {
+
+        alert(
+            "Impossible de joindre Supabase. Réessaie dans quelques instants."
+        );
+
+        return;
+    }
 
 
-    sauvegarderToutesLesDonnees();
+    demarrerIndicateurSynchronisation();
 
-    void synchroniserApresModification();
-
-
-    alert(
-        "Historique archivé. Une nouvelle période a commencé."
-    );
+    synchronisationSupabaseEnCours =
+        true;
 
 
-    afficherMenuAdministration();
+    try {
+
+        /*
+         * Cette fonction Supabase effectue les 3 opérations ensemble :
+         * 1. création de l'archive,
+         * 2. suppression des consommations courantes,
+         * 3. suppression des interventions courantes.
+         *
+         * L'historique local n'est vidé qu'après réussite.
+         */
+        const resultat =
+            await supabase.rpc(
+                "archiver_historique_courant",
+                {
+                    p_archive_id:
+                        archive.id,
+                    p_date_commande:
+                        archive.date,
+                    p_interventions:
+                        archive.interventions
+                }
+            );
+
+
+        if (resultat.error) {
+            throw resultat.error;
+        }
+
+
+        archivesHistorique.push(
+            archive
+        );
+
+        historique = [];
+
+
+        sauvegarderToutesLesDonnees();
+
+        effacerModificationsEnAttente();
+
+        enregistrerSnapshotSynchronisation();
+
+
+        /*
+         * Relire la base centrale pour confirmer immédiatement
+         * que tous les appareils verront le même état.
+         */
+        const donnees =
+            await recupererDonneesSupabase();
+
+        await appliquerDonneesSupabaseLocalement(
+            donnees
+        );
+
+
+        alert(
+            "Historique archivé. Une nouvelle période a commencé."
+        );
+
+
+        afficherMenuAdministration();
+
+    } catch (erreur) {
+
+        console.error(
+            "Archivage de l'historique impossible :",
+            erreur
+        );
+
+
+        alert(
+            "L'archivage n'a pas pu être effectué. Rien n'a été supprimé. Vérifie que le correctif SQL V28 a bien été exécuté dans Supabase."
+        );
+
+    } finally {
+
+        synchronisationSupabaseEnCours =
+            false;
+
+        arreterIndicateurSynchronisation();
+
+    }
 
 }
 
