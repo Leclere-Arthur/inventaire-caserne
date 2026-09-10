@@ -12,7 +12,7 @@ const DOMAINE_EMAIL_INTERNE =
     "inventaire-caserne.local";
 
 const VERSION_APPLICATION =
-    "2.8.27";
+    "2.8.28";
 
 const CLE_PROFIL_UTILISATEUR_CACHE =
     "profil_utilisateur_connecte_v1";
@@ -131,6 +131,15 @@ let activationMiseAJourEnCours =
 
 let rechargementApresMiseAJourEnCours =
     false;
+
+let verificationMiseAJourEnCours =
+    false;
+
+let derniereVerificationMiseAJour =
+    0;
+
+let minuteurVerificationMiseAJour =
+    null;
 
 
 function initialiserStyleMiseAJourApplication() {
@@ -409,133 +418,185 @@ async function obtenirInscriptionServiceWorkerApplication() {
 
 
 async function verifierMiseAJourApplication(
-    silencieux = true
+    silencieux = true,
+    forcer = false
 ) {
 
-    if (
-        !navigator.onLine
-    ) {
-
+    if (!navigator.onLine) {
         if (!silencieux) {
             alert(
                 "Une connexion Internet est nécessaire pour rechercher une mise à jour."
             );
         }
-
         return false;
     }
 
-
-    const inscription =
-        await obtenirInscriptionServiceWorkerApplication();
-
-
-    if (!inscription) {
-
-        if (!silencieux) {
-            alert(
-                "La recherche de mise à jour n'est pas disponible sur cet appareil."
-            );
-        }
-
-        return false;
+    if (
+        verificationMiseAJourEnCours &&
+        !forcer
+    ) {
+        return miseAJourApplicationDisponible;
     }
 
+    const maintenant = Date.now();
 
-    if (inscription.waiting) {
-
-        signalerMiseAJourApplicationDisponible();
-
-        return true;
-
+    /*
+     * Pour les vérifications automatiques, on évite de relancer
+     * plusieurs contrôles à quelques secondes d'intervalle.
+     * Le bouton du profil utilise forcer=true et ignore ce délai.
+     */
+    if (
+        !forcer &&
+        maintenant - derniereVerificationMiseAJour < 15000
+    ) {
+        return miseAJourApplicationDisponible;
     }
 
+    verificationMiseAJourEnCours = true;
+    derniereVerificationMiseAJour = maintenant;
 
     try {
 
-        await inscription.update();
+        const inscription =
+            await obtenirInscriptionServiceWorkerApplication();
 
-    } catch (erreur) {
-
-        console.warn(
-            "Recherche de mise à jour impossible :",
-            erreur
-        );
-
-
-        if (!silencieux) {
-            alert(
-                "Impossible de rechercher une mise à jour pour le moment."
-            );
+        if (!inscription) {
+            if (!silencieux) {
+                alert(
+                    "La recherche de mise à jour n'est pas disponible sur cet appareil."
+                );
+            }
+            return false;
         }
-
-
-        return false;
-
-    }
-
-
-    /*
-     * L'installation peut prendre un court instant
-     * après registration.update().
-     */
-    const debut =
-        Date.now();
-
-
-    while (
-        Date.now() - debut <
-        6000
-    ) {
 
         if (inscription.waiting) {
-
             signalerMiseAJourApplicationDisponible();
-
             return true;
-
         }
 
+        /*
+         * registration.update() demande explicitement au navigateur
+         * de recontrôler service-worker.js sur le réseau.
+         */
+        try {
+            await inscription.update();
+        } catch (erreur) {
+            console.warn(
+                "Recherche de mise à jour impossible :",
+                erreur
+            );
 
-        if (
-            inscription.installing &&
-            inscription.installing.state ===
-            "installed"
-        ) {
-
-            signalerMiseAJourApplicationDisponible();
-
-            return true;
-
-        }
-
-
-        await new Promise(
-            function (resolve) {
-                setTimeout(
-                    resolve,
-                    250
+            if (!silencieux) {
+                alert(
+                    "Impossible de rechercher une mise à jour pour le moment."
                 );
+            }
+            return false;
+        }
+
+        /*
+         * Sur iPhone, l'installation peut prendre plusieurs secondes.
+         * On attend jusqu'à 20 secondes et on surveille directement
+         * l'état du nouveau Service Worker.
+         */
+        const trouvee = await new Promise(
+            function (resolve) {
+
+                let termine = false;
+
+                function finir(valeur) {
+                    if (termine) {
+                        return;
+                    }
+                    termine = true;
+                    clearInterval(intervalle);
+                    clearTimeout(timeout);
+                    resolve(valeur);
+                }
+
+                function verifierEtat() {
+
+                    if (inscription.waiting) {
+                        signalerMiseAJourApplicationDisponible();
+                        finir(true);
+                        return;
+                    }
+
+                    if (
+                        inscription.installing &&
+                        inscription.installing.state === "installed"
+                    ) {
+                        signalerMiseAJourApplicationDisponible();
+                        finir(true);
+                    }
+
+                }
+
+                const intervalle =
+                    setInterval(
+                        verifierEtat,
+                        250
+                    );
+
+                const timeout =
+                    setTimeout(
+                        function () {
+                            finir(false);
+                        },
+                        20000
+                    );
+
+                verifierEtat();
             }
         );
 
+        if (trouvee) {
+            return true;
+        }
+
+        /*
+         * Deuxième contrôle forcé pour les PWA iPhone qui peuvent
+         * retarder le premier contrôle après une reprise en avant-plan.
+         */
+        if (forcer) {
+            try {
+                await inscription.update();
+
+                await new Promise(
+                    function (resolve) {
+                        setTimeout(resolve, 1500);
+                    }
+                );
+
+                if (inscription.waiting) {
+                    signalerMiseAJourApplicationDisponible();
+                    return true;
+                }
+            } catch (erreur) {
+                console.warn(
+                    "Deuxième contrôle de mise à jour impossible :",
+                    erreur
+                );
+            }
+        }
+
+        if (!silencieux) {
+            mettreAJourEtatBoutonMiseAJourProfil(
+                "L'application est déjà à jour."
+            );
+
+            alert(
+                "L'application est déjà à jour."
+            );
+        }
+
+        return false;
+
+    } finally {
+
+        verificationMiseAJourEnCours = false;
+
     }
-
-
-    if (!silencieux) {
-
-        mettreAJourEtatBoutonMiseAJourProfil(
-            "L'application est déjà à jour."
-        );
-
-        alert(
-            "L'application est déjà à jour."
-        );
-
-    }
-
-
-    return false;
 
 }
 
@@ -701,6 +762,7 @@ async function rechercherMiseAJourDepuisProfil() {
 
         const disponible =
             await verifierMiseAJourApplication(
+                true,
                 true
             );
 
@@ -780,61 +842,116 @@ function mettreAJourEtatBoutonMiseAJourProfil(
 
 async function initialiserSystemeMiseAJourApplication() {
 
-    if (
-        !(
-            "serviceWorker" in navigator
-        )
-    ) {
+    if (!("serviceWorker" in navigator)) {
         return;
     }
 
-
     initialiserStyleMiseAJourApplication();
-
 
     navigator.serviceWorker.addEventListener(
         "controllerchange",
         function () {
 
-            if (
-                rechargementApresMiseAJourEnCours
-            ) {
+            if (rechargementApresMiseAJourEnCours) {
 
-                rechargementApresMiseAJourEnCours =
-                    false;
+                rechargementApresMiseAJourEnCours = false;
 
-                window.location.reload();
-
+                /*
+                 * replace() évite de laisser l'ancienne page dans
+                 * l'historique de navigation.
+                 */
+                window.location.replace(
+                    window.location.href
+                );
             }
 
         }
     );
 
-
     const inscription =
         await obtenirInscriptionServiceWorkerApplication();
-
 
     if (!inscription) {
         return;
     }
 
+    async function verifierMaintenant() {
+
+        if (
+            document.visibilityState !== "visible" ||
+            !navigator.onLine
+        ) {
+            return;
+        }
+
+        await verifierMiseAJourApplication(
+            true,
+            false
+        );
+    }
 
     /*
-     * Vérification automatique à chaque ouverture.
+     * Vérification peu après le lancement.
      */
-    if (navigator.onLine) {
+    setTimeout(
+        function () {
+            void verifierMaintenant();
+        },
+        800
+    );
 
-        setTimeout(
-            function () {
-                void verifierMiseAJourApplication(
-                    true
-                );
-            },
-            1200
+    /*
+     * IMPORTANT POUR LES PWA :
+     * une application laissée en arrière-plan est suspendue par iOS.
+     * Dès qu'elle revient à l'écran, on relance immédiatement le contrôle.
+     */
+    document.addEventListener(
+        "visibilitychange",
+        function () {
+            if (document.visibilityState === "visible") {
+                void verifierMaintenant();
+            }
+        }
+    );
+
+    window.addEventListener(
+        "pageshow",
+        function () {
+            void verifierMaintenant();
+        }
+    );
+
+    window.addEventListener(
+        "focus",
+        function () {
+            void verifierMaintenant();
+        }
+    );
+
+    window.addEventListener(
+        "online",
+        function () {
+            void verifierMaintenant();
+        }
+    );
+
+    /*
+     * Tant que l'application reste ouverte au premier plan,
+     * on vérifie aussi régulièrement sans avoir besoin de la quitter.
+     */
+    if (minuteurVerificationMiseAJour) {
+        clearInterval(
+            minuteurVerificationMiseAJour
         );
-
     }
+
+    minuteurVerificationMiseAJour =
+        setInterval(
+            function () {
+                void verifierMaintenant();
+            },
+            60000
+        );
 
 }
 
