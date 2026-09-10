@@ -12,7 +12,7 @@ const DOMAINE_EMAIL_INTERNE =
     "inventaire-caserne.local";
 
 const VERSION_APPLICATION =
-    "2.8.32";
+    "2.8.33";
 
 const CLE_PROFIL_UTILISATEUR_CACHE =
     "profil_utilisateur_connecte_v1";
@@ -1399,20 +1399,26 @@ function initialiserStyleConnexion() {
             min-height: 100%;
         }
 
+        html {
+            min-height: 100%;
+            background: #ffffff;
+        }
+
         body.mode-connexion {
             min-height: 100vh;
             min-height: 100dvh;
             margin: 0;
+            background-color: #ffffff;
             background-image:
                 url("./fond-connexion.png");
             background-position:
                 center center;
             background-size:
-                100% 100%;
+                cover;
             background-repeat:
                 no-repeat;
             background-attachment:
-                fixed;
+                scroll;
         }
 
         body.mode-connexion #app {
