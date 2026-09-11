@@ -349,7 +349,8 @@ function afficherConfirmationCIS(message) {
 
 function afficherSaisieCIS(
     message,
-    valeurInitiale = ""
+    valeurInitiale = "",
+    typeChamp = "text"
 ) {
 
     initialiserFenetreCIS();
@@ -404,7 +405,7 @@ function afficherSaisieCIS(
         const champ =
             document.createElement("input");
 
-        champ.type = "text";
+        champ.type = typeChamp === "password" ? "password" : "text";
         champ.className =
             "fenetre-cis-input";
         champ.value =
@@ -667,7 +668,7 @@ const DOMAINE_EMAIL_INTERNE =
     "inventaire-caserne.local";
 
 const VERSION_APPLICATION =
-    "2.9.15";
+    "2.9.16";
 
 const CLE_PROFIL_UTILISATEUR_CACHE =
     "profil_utilisateur_connecte_v1";
@@ -6015,7 +6016,7 @@ async function recupererDonneesSupabase() {
             .select("materiel_id,categorie_id"),
         supabase
             .from("interventions")
-            .select("id,date,numero"),
+            .select("id,date,numero,created_by,created_by_prenom,created_by_nom,created_at"),
         supabase
             .from("consommations")
             .select("id,intervention_id,materiel_id,materiel_nom,quantite")
@@ -6172,6 +6173,10 @@ function convertirDonneesSupabaseEnDonneesApplication(donnees) {
             id: String(intervention.id),
             date: String(intervention.date || ""),
             numeroIntervention: String(intervention.numero || ""),
+            createdBy: String(intervention.created_by || ""),
+            createdByPrenom: String(intervention.created_by_prenom || ""),
+            createdByNom: String(intervention.created_by_nom || ""),
+            createdAt: String(intervention.created_at || ""),
             consommations:
                 consommationsParIntervention.get(
                     String(intervention.id)
@@ -6580,7 +6585,11 @@ async function envoyerDonneesLocalesVersSupabase() {
         return {
             id: String(intervention.id),
             date: String(intervention.date || dateAujourdhui()),
-            numero: String(intervention.numeroIntervention || "")
+            numero: String(intervention.numeroIntervention || ""),
+            ...(intervention.createdBy ? { created_by: String(intervention.createdBy) } : {}),
+            ...(intervention.createdByPrenom ? { created_by_prenom: String(intervention.createdByPrenom) } : {}),
+            ...(intervention.createdByNom ? { created_by_nom: String(intervention.createdByNom) } : {}),
+            ...(intervention.createdAt ? { created_at: String(intervention.createdAt) } : {})
         };
 
     });
@@ -9665,6 +9674,18 @@ async function validerRetourIntervention() {
         numeroIntervention:
             numero,
 
+        createdBy:
+            String(utilisateurConnecte?.id || ""),
+
+        createdByPrenom:
+            String(profilUtilisateurConnecte?.prenom || ""),
+
+        createdByNom:
+            String(profilUtilisateurConnecte?.nom || ""),
+
+        createdAt:
+            new Date().toISOString(),
+
         consommations:
             consommations,
 
@@ -10581,6 +10602,15 @@ function afficherDetailInterventionArchive(
                     Date :
                     ${formaterDate(
                         intervention.date
+                    )}
+                </span>
+
+                <span>
+                    Noté par :
+                    ${echapperHTML(
+                        (intervention.createdByPrenom || intervention.created_by_prenom || "") +
+                        ((intervention.createdByPrenom || intervention.created_by_prenom) && (intervention.createdByNom || intervention.created_by_nom) ? " " : "") +
+                        (intervention.createdByNom || intervention.created_by_nom || "Non renseigné")
                     )}
                 </span>
 
@@ -12843,199 +12873,167 @@ function afficherHistoriqueInterventions() {
    DETAIL D'UNE INTERVENTION
    ========================================================= */
 
+function initialiserStylesActionsIntervention() {
+    if (document.getElementById("style-actions-intervention")) return;
+    const style = document.createElement("style");
+    style.id = "style-actions-intervention";
+    style.textContent = `
+        .auteur-intervention { margin-top: 7px; font-weight: 700; }
+        .actions-intervention { display:flex; gap:10px; margin:24px 0 8px; flex-wrap:wrap; }
+        .bouton-modifier-intervention, .bouton-supprimer-intervention { flex:1; min-width:140px; min-height:48px; border:0; border-radius:12px; color:#fff; font:inherit; font-weight:800; cursor:pointer; }
+        .bouton-modifier-intervention { background:#1687ff; }
+        .bouton-supprimer-intervention { background:#d62828; }
+        .bouton-supprimer-intervention:disabled { background:#8b9298 !important; color:#e7e7e7 !important; cursor:not-allowed; opacity:.8; }
+        .editeur-intervention { margin-top:18px; }
+        .editeur-intervention .ligne-edition-materiel { display:grid; grid-template-columns:minmax(0,1fr) 90px; gap:10px; align-items:center; margin:8px 0; }
+        .editeur-intervention input[type="number"] { width:100%; box-sizing:border-box; }
+    `;
+    document.head.appendChild(style);
+}
+
+function auteurInterventionEstUtilisateur(intervention) {
+    return Boolean(
+        intervention?.createdBy &&
+        utilisateurConnecte?.id &&
+        String(intervention.createdBy) === String(utilisateurConnecte.id)
+    );
+}
+
+function ageInterventionMs(intervention) {
+    const creation = Date.parse(intervention?.createdAt || "");
+    return Number.isFinite(creation) ? Math.max(0, Date.now() - creation) : Infinity;
+}
+
+function nomAuteurIntervention(intervention) {
+    const prenom = String(intervention?.createdByPrenom || "").trim();
+    const nom = String(intervention?.createdByNom || "").trim();
+    return (prenom + (prenom && nom ? " " : "") + nom) || "Non renseigné";
+}
+
+async function verifierMotDePasseUtilisateurConnecte(motDePasse) {
+    const supabase = await assurerBibliothequeSupabaseDisponible();
+    const identifiant = String(profilUtilisateurConnecte?.identifiant || "").trim();
+    if (!supabase || !identifiant) return false;
+    let tentative = await supabase.auth.signInWithPassword({
+        email: construireEmailTechnique(identifiant),
+        password: String(motDePasse ?? "")
+    });
+    if (tentative.error && String(motDePasse ?? "").length < 6) {
+        tentative = await supabase.auth.signInWithPassword({
+            email: construireEmailTechnique(identifiant),
+            password: preparerMotDePasseSupabase(motDePasse)
+        });
+    }
+    return !tentative.error && Boolean(tentative.data?.user);
+}
+
+async function supprimerRetourIntervention(interventionId) {
+    const intervention = historique.find(i => String(i.id) === String(interventionId));
+    if (!intervention) return alert("Intervention introuvable.");
+    const auteur = auteurInterventionEstUtilisateur(intervention);
+    const admin = utilisateurEstSPVAdmin();
+    if (!admin && (!auteur || ageInterventionMs(intervention) > 60 * 60 * 1000)) {
+        return alert("La suppression de ce retour n'est plus autorisée.");
+    }
+    const motDePasse = await afficherSaisieCIS("Saisissez le mot de passe de votre compte pour confirmer la suppression :", "", "password");
+    if (motDePasse === null) return;
+    if (!navigator.onLine) return alert("Une connexion Internet est nécessaire pour supprimer un retour d'intervention.");
+    if (!await verifierMotDePasseUtilisateurConnecte(motDePasse)) return alert("Mot de passe incorrect.");
+    if (!await afficherConfirmationCIS("Supprimer définitivement ce retour d'intervention et remettre les quantités dans le stock ?")) return;
+    const supabase = obtenirClientSupabase();
+    const { error } = await supabase.rpc("supprimer_retour_intervention", { p_intervention_id: String(interventionId) });
+    if (error) return alert("Suppression impossible : " + (error.message || "Erreur Supabase"));
+    try {
+        const donnees = await recupererDonneesSupabase();
+        await appliquerDonneesSupabaseLocalement(donnees);
+    } catch (_) {}
+    alert("Retour d'intervention supprimé.");
+    await afficherHistorique();
+}
+
+function afficherModificationRetourIntervention(interventionId) {
+    const intervention = historique.find(i => String(i.id) === String(interventionId));
+    if (!intervention) return alert("Intervention introuvable.");
+    if (!auteurInterventionEstUtilisateur(intervention) || ageInterventionMs(intervention) > 36 * 60 * 60 * 1000) {
+        return alert("Ce retour ne peut plus être modifié.");
+    }
+    const quantites = new Map((intervention.consommations || []).map(c => [String(c.materielId), Number(c.quantite || 0)]));
+    const lignes = materiels.slice().sort((a,b)=>String(a.nom).localeCompare(String(b.nom),"fr")).map(m => `
+        <div class="ligne-edition-materiel">
+            <label for="edit-qte-${m.id}">${echapperHTML(m.nom)}</label>
+            <input id="edit-qte-${m.id}" data-materiel-id="${m.id}" class="edit-qte-intervention" type="number" min="0" step="1" value="${quantites.get(String(m.id)) || 0}">
+        </div>`).join("");
+    document.getElementById("app").innerHTML = `
+        <main class="page editeur-intervention">
+            <button class="retour-button" onclick="afficherDetailIntervention('${intervention.id}')">← Retour</button>
+            <h2>Modifier le retour d'intervention</h2>
+            <div class="detail-header"><strong>Noté par : ${echapperHTML(nomAuteurIntervention(intervention))}</strong><span>Cette identité ne peut pas être modifiée.</span></div>
+            <label>Date</label><input id="edit-date-intervention" type="date" value="${echapperHTML(intervention.date)}">
+            <label>Numéro d'intervention</label><input id="edit-numero-intervention" value="${echapperHTML(intervention.numeroIntervention)}">
+            <h3>Matériel utilisé</h3>${lignes}
+            <button class="add-button" onclick="enregistrerModificationRetourIntervention('${intervention.id}')">Enregistrer les modifications</button>
+        </main>`;
+}
+
+async function enregistrerModificationRetourIntervention(interventionId) {
+    const intervention = historique.find(i => String(i.id) === String(interventionId));
+    if (!intervention || !auteurInterventionEstUtilisateur(intervention) || ageInterventionMs(intervention) > 36 * 60 * 60 * 1000) return alert("Ce retour ne peut plus être modifié.");
+    if (!navigator.onLine) return alert("Une connexion Internet est nécessaire pour modifier un retour d'intervention.");
+    const date = document.getElementById("edit-date-intervention")?.value;
+    const numero = document.getElementById("edit-numero-intervention")?.value.trim();
+    const consommations = Array.from(document.querySelectorAll(".edit-qte-intervention")).map(champ => ({ materiel_id: champ.dataset.materielId, quantite: Math.floor(Number(champ.value || 0)) })).filter(x => x.quantite > 0);
+    if (!date || !numero) return alert("La date et le numéro d'intervention sont obligatoires.");
+    if (!consommations.length) return alert("Veuillez conserver au moins un matériel utilisé.");
+    if (!await afficherConfirmationCIS("Enregistrer les modifications de ce retour d'intervention ?")) return;
+    const supabase = obtenirClientSupabase();
+    const { error } = await supabase.rpc("modifier_retour_intervention", { p_intervention_id:String(interventionId), p_date:date, p_numero:numero, p_consommations:consommations });
+    if (error) return alert("Modification impossible : " + (error.message || "Erreur Supabase"));
+    const donnees = await recupererDonneesSupabase();
+    await appliquerDonneesSupabaseLocalement(donnees);
+    alert("Retour d'intervention modifié.");
+    afficherDetailIntervention(interventionId);
+}
+
 function afficherDetailIntervention(
     interventionId
 ) {
-
-    const intervention =
-        historique.find(
-            function (item) {
-
-                return (
-                    String(item.id) ===
-                    String(interventionId)
-                );
-
-            }
-        );
-
-
-    if (!intervention) {
-
-        alert(
-            "Intervention introuvable."
-        );
-
-        return;
-
-    }
-
-
-    let html = `
-
-        <main class="page">
-
-            <button
-                class="retour-button"
-                onclick="afficherHistorique()"
-            >
-                ← Retour
-            </button>
-
-
-            <h2>Détail de l'intervention
-            </h2>
-
-
-            <div
-                class="detail-header"
-            >
-
-                <strong>
-                    Intervention
-                    ${echapperHTML(
-                        intervention.numeroIntervention
-                    )}
-                </strong>
-
-
-                <span>
-                    Date :
-                    ${formaterDate(
-                        intervention.date
-                    )}
-                </span>
-
-            </div>
-
-
-            <h3>Matériel utilisé
-            </h3>
-
-    `;
-
-
-    if (
-        !Array.isArray(
-            intervention.consommations
-        )
-        ||
-        intervention.consommations.length === 0
-    ) {
-
-        html += `
-
-            <div class="materiel">
-
-                Aucun matériel enregistré
-                pour cette intervention.
-
-            </div>
-
-        `;
-
+    initialiserStylesActionsIntervention();
+    const intervention = historique.find(item => String(item.id) === String(interventionId));
+    if (!intervention) { alert("Intervention introuvable."); return; }
+    const auteur = auteurInterventionEstUtilisateur(intervention);
+    const admin = utilisateurEstSPVAdmin();
+    const modificationPossible = auteur && ageInterventionMs(intervention) <= 36 * 60 * 60 * 1000;
+    const suppressionAuteurPossible = auteur && ageInterventionMs(intervention) <= 60 * 60 * 1000;
+    const afficherSuppression = auteur || admin;
+    let html = `<main class="page">
+        <button class="retour-button" onclick="afficherHistorique()">← Retour</button>
+        <h2>Détail de l'intervention</h2>
+        <div class="detail-header">
+            <strong>Intervention ${echapperHTML(intervention.numeroIntervention)}</strong>
+            <span>Date : ${formaterDate(intervention.date)}</span>
+            <span class="auteur-intervention">Noté par : ${echapperHTML(nomAuteurIntervention(intervention))}</span>
+        </div>
+        <h3>Matériel utilisé</h3>`;
+    if (!Array.isArray(intervention.consommations) || !intervention.consommations.length) {
+        html += `<div class="materiel">Aucun matériel enregistré pour cette intervention.</div>`;
     } else {
-
-        intervention.consommations.forEach(
-            function (consommation) {
-
-                const materiel =
-                    materiels.find(
-                        function (m) {
-
-                            return (
-                                String(m.id) ===
-                                String(
-                                    consommation.materielId
-                                )
-                            );
-
-                        }
-                    );
-
-
-                const stockMinimum =
-                    materiel &&
-                    materiel.minimum > 0 &&
-                    materiel.stock <=
-                    materiel.minimum;
-
-
-                html += `
-
-                    <div
-                        class="
-                            detail-historique
-                            ${
-                                stockMinimum
-                                ?
-                                "detail-stock-faible"
-                                :
-                                ""
-                            }
-                        "
-                    >
-
-                        <div>
-
-                            <strong>
-                                ${echapperHTML(
-                                    consommation.materiel
-                                )}
-                            </strong>
-
-
-                            ${
-                                materiel
-                                ?
-                                `
-                                <span>
-                                    Stock actuel :
-                                    ${materiel.stock}
-                                </span>
-                                `
-                                :
-                                ""
-                            }
-
-                        </div>
-
-
-                        <strong
-                            class="
-                                detail-quantite
-                                ${
-                                    stockMinimum
-                                    ?
-                                    "texte-stock-faible"
-                                    :
-                                    ""
-                                }
-                            "
-                        >
-                            ${consommation.quantite}
-                        </strong>
-
-                    </div>
-
-                `;
-
-            }
-        );
-
+        intervention.consommations.forEach(function(consommation) {
+            const materiel = materiels.find(m => String(m.id) === String(consommation.materielId));
+            const stockMinimum = materiel && materiel.minimum > 0 && materiel.stock <= materiel.minimum;
+            html += `<div class="detail-historique ${stockMinimum ? "detail-stock-faible" : ""}"><div><strong>${echapperHTML(consommation.materiel)}</strong>${materiel ? `<span>Stock actuel : ${materiel.stock}</span>` : ""}</div><strong class="detail-quantite ${stockMinimum ? "texte-stock-faible" : ""}">${consommation.quantite}</strong></div>`;
+        });
     }
-
-
-    html += `
-        </main>
-    `;
-
-
-    document.getElementById(
-        "app"
-    ).innerHTML =
-        html;
-
+    if (auteur || admin) {
+        html += `<div class="actions-intervention">`;
+        if (auteur) html += `<button class="bouton-modifier-intervention" ${modificationPossible ? `onclick="afficherModificationRetourIntervention('${intervention.id}')"` : "disabled"}>Modifier</button>`;
+        if (afficherSuppression) {
+            const suppressionPossible = admin || suppressionAuteurPossible;
+            html += `<button class="bouton-supprimer-intervention" ${suppressionPossible ? `onclick="supprimerRetourIntervention('${intervention.id}')"` : "disabled"}>Supprimer</button>`;
+        }
+        html += `</div>`;
+    }
+    html += `</main>`;
+    document.getElementById("app").innerHTML = html;
 }
 
 
@@ -16368,6 +16366,15 @@ window.afficherDetailConsommation =
 window.afficherDetailIntervention =
     afficherDetailIntervention;
 
+window.afficherModificationRetourIntervention =
+    afficherModificationRetourIntervention;
+
+window.enregistrerModificationRetourIntervention =
+    enregistrerModificationRetourIntervention;
+
+window.supprimerRetourIntervention =
+    supprimerRetourIntervention;
+
 window.ouvrirAdministration =
     ouvrirAdministration;
 
@@ -17000,11 +17007,6 @@ function initialiserInterfaceBureau() {
                 box-shadow: none !important;
             }
 
-            /*
-             * Contraste PC - Gestion des utilisateurs
-             * Les cartes sont sombres : les badges et champs ne doivent
-             * jamais afficher du texte clair sur un fond clair.
-             */
             body:not(.mode-connexion) .gestion-utilisateurs-page .badge-role {
                 background: #dfe8ef !important;
                 color: #101820 !important;
