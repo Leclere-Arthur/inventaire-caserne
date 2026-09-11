@@ -81,6 +81,45 @@ function initialiserFenetreCIS() {
             filter: brightness(1.05);
         }
 
+        .fenetre-cis-actions-double {
+            gap: 10px;
+        }
+
+        .fenetre-cis-annuler {
+            min-width: 92px;
+            min-height: 42px;
+            padding: 9px 18px;
+            border: 1px solid #cfd5da;
+            border-radius: 9px;
+            background: #f2f4f6;
+            color: #26313a;
+            font: inherit;
+            font-weight: 800;
+            cursor: pointer;
+        }
+
+        .fenetre-cis-question {
+            margin-bottom: 12px;
+        }
+
+        .fenetre-cis-input {
+            width: 100%;
+            min-height: 44px;
+            box-sizing: border-box;
+            padding: 10px 12px;
+            border: 1px solid #c7d0d7;
+            border-radius: 8px;
+            background: #ffffff;
+            color: #17202a;
+            font: inherit;
+            outline: none;
+        }
+
+        .fenetre-cis-input:focus {
+            border-color: #1f6f4a;
+            box-shadow: 0 0 0 3px rgba(31,111,74,.12);
+        }
+
         .fenetre-cis.succes .fenetre-cis-entete {
             background: #146b43;
         }
@@ -144,6 +183,340 @@ function determinerTypeFenetreCIS(message) {
     }
 
     return "information";
+}
+
+
+
+function afficherConfirmationCIS(message) {
+
+    initialiserFenetreCIS();
+
+    return new Promise(function (resolve) {
+
+        const ancienne =
+            document.querySelector(
+                ".fenetre-cis-overlay"
+            );
+
+        if (ancienne) {
+            ancienne.remove();
+        }
+
+        const overlay =
+            document.createElement("div");
+
+        overlay.className =
+            "fenetre-cis-overlay";
+
+        const contenu =
+            document.createElement("div");
+
+        contenu.className =
+            "fenetre-cis information";
+
+        const entete =
+            document.createElement("div");
+
+        entete.className =
+            "fenetre-cis-entete";
+
+        entete.innerHTML =
+            "<strong>CIS Le Chesne</strong>";
+
+        const corps =
+            document.createElement("div");
+
+        corps.className =
+            "fenetre-cis-corps";
+
+        corps.textContent =
+            String(message || "");
+
+        const actions =
+            document.createElement("div");
+
+        actions.className =
+            "fenetre-cis-actions fenetre-cis-actions-double";
+
+        const annuler =
+            document.createElement("button");
+
+        annuler.type = "button";
+        annuler.className =
+            "fenetre-cis-annuler";
+        annuler.textContent =
+            "Annuler";
+
+        const confirmer =
+            document.createElement("button");
+
+        confirmer.type = "button";
+        confirmer.className =
+            "fenetre-cis-ok";
+        confirmer.textContent =
+            "Confirmer";
+
+        let termine = false;
+
+        const fermer =
+            function (valeur) {
+
+                if (termine) {
+                    return;
+                }
+
+                termine = true;
+                overlay.remove();
+                resolve(valeur);
+
+            };
+
+        annuler.addEventListener(
+            "click",
+            function () {
+                fermer(false);
+            }
+        );
+
+        confirmer.addEventListener(
+            "click",
+            function () {
+                fermer(true);
+            }
+        );
+
+        overlay.addEventListener(
+            "click",
+            function (event) {
+
+                if (event.target === overlay) {
+                    fermer(false);
+                }
+
+            }
+        );
+
+        const gestionTouche =
+            function (event) {
+
+                if (event.key === "Escape") {
+
+                    document.removeEventListener(
+                        "keydown",
+                        gestionTouche
+                    );
+
+                    fermer(false);
+
+                } else if (event.key === "Enter") {
+
+                    document.removeEventListener(
+                        "keydown",
+                        gestionTouche
+                    );
+
+                    fermer(true);
+
+                }
+
+            };
+
+        document.addEventListener(
+            "keydown",
+            gestionTouche
+        );
+
+        actions.appendChild(annuler);
+        actions.appendChild(confirmer);
+
+        contenu.appendChild(entete);
+        contenu.appendChild(corps);
+        contenu.appendChild(actions);
+
+        overlay.appendChild(contenu);
+        document.body.appendChild(overlay);
+
+        window.setTimeout(
+            function () {
+                confirmer.focus();
+            },
+            20
+        );
+
+    });
+}
+
+
+function afficherSaisieCIS(
+    message,
+    valeurInitiale = ""
+) {
+
+    initialiserFenetreCIS();
+
+    return new Promise(function (resolve) {
+
+        const ancienne =
+            document.querySelector(
+                ".fenetre-cis-overlay"
+            );
+
+        if (ancienne) {
+            ancienne.remove();
+        }
+
+        const overlay =
+            document.createElement("div");
+
+        overlay.className =
+            "fenetre-cis-overlay";
+
+        const contenu =
+            document.createElement("div");
+
+        contenu.className =
+            "fenetre-cis information";
+
+        const entete =
+            document.createElement("div");
+
+        entete.className =
+            "fenetre-cis-entete";
+
+        entete.innerHTML =
+            "<strong>CIS Le Chesne</strong>";
+
+        const corps =
+            document.createElement("div");
+
+        corps.className =
+            "fenetre-cis-corps";
+
+        const texte =
+            document.createElement("div");
+
+        texte.className =
+            "fenetre-cis-question";
+
+        texte.textContent =
+            String(message || "");
+
+        const champ =
+            document.createElement("input");
+
+        champ.type = "text";
+        champ.className =
+            "fenetre-cis-input";
+        champ.value =
+            String(valeurInitiale || "");
+
+        corps.appendChild(texte);
+        corps.appendChild(champ);
+
+        const actions =
+            document.createElement("div");
+
+        actions.className =
+            "fenetre-cis-actions fenetre-cis-actions-double";
+
+        const annuler =
+            document.createElement("button");
+
+        annuler.type = "button";
+        annuler.className =
+            "fenetre-cis-annuler";
+        annuler.textContent =
+            "Annuler";
+
+        const valider =
+            document.createElement("button");
+
+        valider.type = "button";
+        valider.className =
+            "fenetre-cis-ok";
+        valider.textContent =
+            "Valider";
+
+        let termine = false;
+
+        const fermer =
+            function (valeur) {
+
+                if (termine) {
+                    return;
+                }
+
+                termine = true;
+                overlay.remove();
+                resolve(valeur);
+
+            };
+
+        annuler.addEventListener(
+            "click",
+            function () {
+                fermer(null);
+            }
+        );
+
+        valider.addEventListener(
+            "click",
+            function () {
+                fermer(champ.value);
+            }
+        );
+
+        overlay.addEventListener(
+            "click",
+            function (event) {
+
+                if (event.target === overlay) {
+                    fermer(null);
+                }
+
+            }
+        );
+
+        champ.addEventListener(
+            "keydown",
+            function (event) {
+
+                if (event.key === "Enter") {
+
+                    event.preventDefault();
+                    fermer(champ.value);
+
+                } else if (event.key === "Escape") {
+
+                    event.preventDefault();
+                    fermer(null);
+
+                }
+
+            }
+        );
+
+        actions.appendChild(annuler);
+        actions.appendChild(valider);
+
+        contenu.appendChild(entete);
+        contenu.appendChild(corps);
+        contenu.appendChild(actions);
+
+        overlay.appendChild(contenu);
+        document.body.appendChild(overlay);
+
+        window.setTimeout(
+            function () {
+
+                champ.focus();
+                champ.select();
+
+            },
+            20
+        );
+
+    });
 }
 
 
@@ -294,7 +667,7 @@ const DOMAINE_EMAIL_INTERNE =
     "inventaire-caserne.local";
 
 const VERSION_APPLICATION =
-    "2.9.7";
+    "2.9.8";
 
 const CLE_PROFIL_UTILISATEUR_CACHE =
     "profil_utilisateur_connecte_v1";
@@ -2455,7 +2828,7 @@ async function seConnecterApplication() {
 async function deconnecterApplication() {
 
     if (
-        !confirm(
+        !await afficherConfirmationCIS(
             "Voulez-vous vous déconnecter ?"
         )
     ) {
@@ -9061,7 +9434,7 @@ async function validerRetourIntervention() {
 
 
     if (
-        !confirm(
+        !await afficherConfirmationCIS(
             "Confirmer l'enregistrement du retour d'intervention ?"
         )
     ) {
@@ -10912,7 +11285,7 @@ async function validerReapprovisionnementAdministration() {
             .filter(Boolean);
 
     if (
-        !confirm(
+        !await afficherConfirmationCIS(
             "Ajouter au stock :\\n\\n" +
             lignesConfirmation.join("\\n") +
             "\\n\\nConfirmer ?"
@@ -11529,7 +11902,7 @@ async function validerReapprovisionnementArchive(
 
 
     if (
-        !confirm(
+        !await afficherConfirmationCIS(
             "Ajouter au stock :\n\n" +
             lignesConfirmation.join(
                 "\n"
@@ -13434,7 +13807,7 @@ async function changerMotDePasseUtilisateur(
 ) {
 
     const motDePasse =
-        prompt(
+        await afficherSaisieCIS(
             "Nouveau mot de passe pour " +
             identifiant +
             " :"
@@ -13494,7 +13867,7 @@ async function changerEtatUtilisateur(
 ) {
 
     if (
-        !confirm(
+        !await afficherConfirmationCIS(
             nouvelEtat
                 ? "Réactiver cet utilisateur ?"
                 : "Désactiver cet utilisateur ?"
@@ -13762,7 +14135,7 @@ async function supprimerRoleGestion(
 ) {
 
     if (
-        !confirm(
+        !await afficherConfirmationCIS(
             "Supprimer le rôle « " +
             nom +
             " » ?"
@@ -13928,7 +14301,7 @@ async function envoyerNotificationAdministration() {
 
 
     if (
-        !confirm(
+        !await afficherConfirmationCIS(
             "Envoyer cette notification à tous les appareils inscrits ?"
         )
     ) {
@@ -15140,10 +15513,10 @@ function gestionCategories() {
 }
 
 
-function ajouterCategorie() {
+async function ajouterCategorie() {
 
     const nom =
-        prompt(
+        await afficherSaisieCIS(
             "Nom de la nouvelle catégorie :"
         );
 
@@ -15217,12 +15590,12 @@ function ajouterCategorie() {
 }
 
 
-function modifierCategorie(
+async function modifierCategorie(
     ancienNom
 ) {
 
     const nouveauNom =
-        prompt(
+        await afficherSaisieCIS(
             "Nouveau nom de la catégorie :",
             ancienNom
         );
@@ -15338,7 +15711,7 @@ function modifierCategorie(
 }
 
 
-function supprimerCategorie(
+async function supprimerCategorie(
     nom
 ) {
 
@@ -15350,7 +15723,7 @@ function supprimerCategorie(
 
 
     if (
-        !confirm(
+        !await afficherConfirmationCIS(
             "Voulez-vous supprimer « " +
             nom +
             " » ?"
@@ -15450,7 +15823,7 @@ function modifierStock(
    SUPPRESSION MATERIEL
    ========================================================= */
 
-function supprimerMateriel(
+async function supprimerMateriel(
     id
 ) {
 
@@ -15482,7 +15855,7 @@ function supprimerMateriel(
 
 
     if (
-        !confirm(
+        !await afficherConfirmationCIS(
             "Voulez-vous supprimer « " +
             materiel.nom +
             " » ?"
@@ -15564,7 +15937,7 @@ async function remiseZeroHistorique() {
 
 
     if (
-        !confirm(
+        !await afficherConfirmationCIS(
             "Archiver l'historique actuel et commencer une nouvelle période ?"
         )
     ) {
@@ -16289,6 +16662,32 @@ function initialiserInterfaceBureau() {
 
             body:not(.mode-connexion) .recherche input {
                 min-height: 42px !important;
+            }
+
+            /*
+             * Contraste PC :
+             * les résumés issus de la mise en page mobile avaient un fond clair
+             * mais conservaient le texte clair du thème bureau.
+             */
+            body:not(.mode-connexion) .resume,
+            body:not(.mode-connexion) #resume-consommation .resume {
+                box-sizing: border-box;
+                padding: 16px 18px !important;
+                border: 1px solid var(--pc-bordure) !important;
+                border-radius: 10px !important;
+                background: #151f28 !important;
+                color: #f5f7f9 !important;
+                box-shadow: none !important;
+            }
+
+            body:not(.mode-connexion) .resume h1,
+            body:not(.mode-connexion) .resume h2,
+            body:not(.mode-connexion) .resume h3,
+            body:not(.mode-connexion) .resume p,
+            body:not(.mode-connexion) .resume span,
+            body:not(.mode-connexion) .resume strong,
+            body:not(.mode-connexion) #resume-consommation * {
+                color: #f5f7f9 !important;
             }
 
             body:not(.mode-connexion) .add-button,
