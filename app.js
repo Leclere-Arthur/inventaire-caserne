@@ -668,7 +668,7 @@ const DOMAINE_EMAIL_INTERNE =
     "inventaire-caserne.local";
 
 const VERSION_APPLICATION =
-    "2.9.24";
+    "2.9.25";
 
 const CLE_PROFIL_UTILISATEUR_CACHE =
     "profil_utilisateur_connecte_v1";
@@ -7277,10 +7277,13 @@ function afficherPortailPrincipal() {
                 </button>
             </div>
 
-            <header class="portail-cis-entete">
-                <h1>CIS Le Chesne</h1>
-                <p>Choisir un espace</p>
-            </header>
+            <button
+                class="retour-button portail-cis-retour"
+                type="button"
+                onclick="deconnecterApplication()"
+            >
+                ← Retour
+            </button>
 
             <section class="portail-cis-espaces">
                 <button
@@ -7363,23 +7366,27 @@ function initialiserStylePortailCIS() {
             opacity: .72;
         }
 
+        .portail-cis-retour {
+            margin: 18px 0 20px;
+        }
+
         .portail-cis-espaces {
             display: grid;
-            gap: 20px;
+            gap: 12px;
         }
 
         .portail-cis-carte {
             width: 100%;
-            min-height: 150px;
+            min-height: 82px;
             border: 0;
-            border-radius: 24px;
-            padding: 28px 26px;
+            border-radius: 16px;
+            padding: 18px 20px;
             color: #fff;
             display: flex;
             align-items: center;
             justify-content: space-between;
             text-align: left;
-            box-shadow: 0 12px 28px rgba(0,0,0,.13);
+            box-shadow: 0 5px 14px rgba(0,0,0,.10);
             cursor: pointer;
         }
 
@@ -7392,12 +7399,12 @@ function initialiserStylePortailCIS() {
         }
 
         .portail-cis-titre {
-            font-size: clamp(1.45rem, 5vw, 2rem);
+            font-size: 1.08rem;
             font-weight: 800;
         }
 
         .portail-cis-fleche {
-            font-size: 3rem;
+            font-size: 1.9rem;
             line-height: 1;
             font-weight: 300;
         }
@@ -7435,12 +7442,16 @@ function initialiserStylePortailCIS() {
 
             .portail-cis-espaces {
                 grid-template-columns: 1fr 1fr;
-                gap: 28px;
+                gap: 16px;
             }
 
             .portail-cis-carte {
-                min-height: 230px;
-                padding: 38px;
+                min-height: 112px;
+                padding: 24px 26px;
+            }
+
+            .portail-cis-titre {
+                font-size: 1.25rem;
             }
         }
     `;
