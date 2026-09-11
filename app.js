@@ -668,7 +668,7 @@ const DOMAINE_EMAIL_INTERNE =
     "inventaire-caserne.local";
 
 const VERSION_APPLICATION =
-    "2.9.18";
+    "2.9.19";
 
 const CLE_PROFIL_UTILISATEUR_CACHE =
     "profil_utilisateur_connecte_v1";
@@ -10609,7 +10609,6 @@ function afficherDetailInterventionArchive(
                 </span>
 
                 <span>
-                    Noté par :
                     ${echapperHTML(
                         (intervention.createdByPrenom || intervention.created_by_prenom || "") +
                         ((intervention.createdByPrenom || intervention.created_by_prenom) && (intervention.createdByNom || intervention.created_by_nom) ? " " : "") +
@@ -12823,6 +12822,9 @@ function afficherHistoriqueInterventions() {
                                     )}
                                 </span>
 
+                                <span class="auteur-intervention">
+                                    ${echapperHTML(nomAuteurIntervention(intervention))}
+                                </span>
 
                                 <small>
                                     ${
@@ -12970,7 +12972,7 @@ function afficherModificationRetourIntervention(interventionId) {
         <main class="page editeur-intervention">
             <button class="retour-button" onclick="afficherDetailIntervention('${intervention.id}')">← Retour</button>
             <h2>Modifier le retour d'intervention</h2>
-            <div class="detail-header"><strong>Noté par : ${echapperHTML(nomAuteurIntervention(intervention))}</strong><span>Cette identité ne peut pas être modifiée.</span></div>
+            <div class="detail-header"><strong>${echapperHTML(nomAuteurIntervention(intervention))}</strong><span>Cette identité ne peut pas être modifiée.</span></div>
             <label>Date</label><input id="edit-date-intervention" type="date" value="${echapperHTML(intervention.date)}">
             <label>Numéro d'intervention</label><input id="edit-numero-intervention" value="${echapperHTML(intervention.numeroIntervention)}">
             <h3>Matériel utilisé</h3>${lignes}
@@ -13014,7 +13016,7 @@ function afficherDetailIntervention(
         <div class="detail-header">
             <strong>Intervention ${echapperHTML(intervention.numeroIntervention)}</strong>
             <span>Date : ${formaterDate(intervention.date)}</span>
-            <span class="auteur-intervention">Noté par : ${echapperHTML(nomAuteurIntervention(intervention))}</span>
+            <span class="auteur-intervention">${echapperHTML(nomAuteurIntervention(intervention))}</span>
         </div>
         <h3>Matériel utilisé</h3>`;
     if (!Array.isArray(intervention.consommations) || !intervention.consommations.length) {
