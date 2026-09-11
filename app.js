@@ -668,7 +668,7 @@ const DOMAINE_EMAIL_INTERNE =
     "inventaire-caserne.local";
 
 const VERSION_APPLICATION =
-    "2.9.22";
+    "2.9.23";
 
 const CLE_PROFIL_UTILISATEUR_CACHE =
     "profil_utilisateur_connecte_v1";
@@ -13079,15 +13079,56 @@ function initialiserStylesActionsIntervention() {
             color:#17232c !important;
             font-size:1rem !important;
         }
-        .bouton-ajouter-materiel-edition {
-            width:100%;
-            min-height:48px;
-            border:0;
-            border-radius:11px;
-            background:#286b94;
-            color:#fff;
-            font:inherit;
-            font-weight:800;
+        .bloc-ajout-materiel-edition .reappro-resultats {
+            position:static !important;
+            width:100% !important;
+            max-height:230px !important;
+            overflow-y:auto !important;
+            margin:8px 0 0 !important;
+            padding:0 !important;
+            border:0 !important;
+            background:transparent !important;
+            box-shadow:none !important;
+        }
+        .bloc-ajout-materiel-edition .reappro-resultat {
+            display:flex !important;
+            width:100% !important;
+            min-height:58px !important;
+            box-sizing:border-box !important;
+            align-items:center !important;
+            justify-content:space-between !important;
+            gap:12px !important;
+            margin:0 0 8px !important;
+            padding:13px 15px !important;
+            border:1px solid #b9cbd6 !important;
+            border-radius:12px !important;
+            background:#fff !important;
+            color:#17324a !important;
+            text-align:left !important;
+            box-shadow:0 2px 7px rgba(30,50,65,.06) !important;
+            font:inherit !important;
+            cursor:pointer !important;
+        }
+        .bloc-ajout-materiel-edition .reappro-resultat strong {
+            display:block !important;
+            margin:0 !important;
+            color:#17324a !important;
+            font-size:1rem !important;
+            line-height:1.2 !important;
+        }
+        .bloc-ajout-materiel-edition .reappro-resultat small {
+            display:block !important;
+            margin:3px 0 0 !important;
+            color:#657785 !important;
+            font-size:.78rem !important;
+            font-weight:600 !important;
+        }
+        .bloc-ajout-materiel-edition .reappro-resultat .action-ajout-rapide {
+            flex:0 0 auto;
+            color:#286b94;
+            font-size:.82rem;
+            font-weight:900;
+            white-space:nowrap;
         }
         .bouton-enregistrer-edition-retour {
             width:100%;
@@ -13234,7 +13275,7 @@ function rechercherMaterielEditionRetour() {
 
     resultats.innerHTML = correspondances.map(m => {
         const reference = String(m.reference || "").trim();
-        return `<button type="button" class="reappro-resultat" onclick="selectionnerMaterielEditionRetour('${echapperHTML(String(m.id))}')"><strong>${echapperHTML(m.nom)}</strong>${reference ? `<small>Réf. ${echapperHTML(reference)}</small>` : ""}</button>`;
+        return `<button type="button" class="reappro-resultat" onclick="ajouterMaterielEditionRetourDirect('${echapperHTML(String(m.id))}')"><span><strong>${echapperHTML(m.nom)}</strong>${reference ? `<small>Réf. ${echapperHTML(reference)}</small>` : ""}</span><span class="action-ajout-rapide">Ajouter +</span></button>`;
     }).join("");
     resultats.classList.add("ouvert");
 }
@@ -13249,6 +13290,26 @@ function selectionnerMaterielEditionRetour(materielId) {
     champId.value = String(materiel.id);
     resultats.innerHTML = "";
     resultats.classList.remove("ouvert");
+}
+
+function ajouterMaterielEditionRetourDirect(materielId) {
+    const materiel = materiels.find(m => String(m.id) === String(materielId));
+    const recherche = document.getElementById("recherche-materiel-edition");
+    const champId = document.getElementById("ajout-materiel-edition-id");
+    const resultats = document.getElementById("resultats-materiel-edition");
+    const conteneur = document.getElementById("liste-materiels-edition");
+    if (!materiel || !conteneur) return;
+    if (document.getElementById(`edit-qte-${materiel.id}`)) return alert("Ce matériel est déjà renseigné.");
+    conteneur.insertAdjacentHTML("beforeend", htmlLigneMaterielEdition(materiel, 1));
+    if (champId) champId.value = "";
+    if (recherche) {
+        recherche.value = "";
+        recherche.focus();
+    }
+    if (resultats) {
+        resultats.innerHTML = "";
+        resultats.classList.remove("ouvert");
+    }
 }
 
 function ajouterMaterielEditionRetour() {
@@ -13319,7 +13380,6 @@ function afficherModificationRetourIntervention(interventionId) {
                         <input id="ajout-materiel-edition-id" type="hidden" value="">
                         <div id="resultats-materiel-edition" class="reappro-resultats"></div>
                     </div>
-                    <button type="button" class="bouton-ajouter-materiel-edition" onclick="ajouterMaterielEditionRetour()">Ajouter ce matériel</button>
                 </section>
 
                 <button class="bouton-enregistrer-edition-retour" onclick="enregistrerModificationRetourIntervention('${intervention.id}')">Enregistrer les modifications</button>
