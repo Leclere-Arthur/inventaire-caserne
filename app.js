@@ -667,7 +667,7 @@ const DOMAINE_EMAIL_INTERNE =
     "inventaire-caserne.local";
 
 const VERSION_APPLICATION =
-    "2.9.11";
+    "2.9.12";
 
 const CLE_PROFIL_UTILISATEUR_CACHE =
     "profil_utilisateur_connecte_v1";
@@ -2776,7 +2776,7 @@ async function seConnecterApplication() {
         }
 
 
-        const {
+        let {
             data,
             error
         } =
@@ -2787,8 +2787,29 @@ async function seConnecterApplication() {
                             identifiant
                         ),
                     password:
-                        preparerMotDePasseSupabase(motDePasse)
+                        motDePasse
                 });
+
+        if (
+            error &&
+            String(motDePasse).length < 6
+        ) {
+            const secondeTentative =
+                await supabase.auth
+                    .signInWithPassword({
+                        email:
+                            construireEmailTechnique(
+                                identifiant
+                            ),
+                        password:
+                            preparerMotDePasseSupabase(
+                                motDePasse
+                            )
+                    });
+
+            data = secondeTentative.data;
+            error = secondeTentative.error;
+        }
 
 
         if (
@@ -3489,7 +3510,7 @@ async function changerMonMotDePasse() {
                 .identifiant;
 
 
-        const {
+        let {
             error: erreurVerification
         } =
             await supabase.auth
@@ -3499,8 +3520,29 @@ async function changerMonMotDePasse() {
                             identifiant
                         ),
                     password:
-                        preparerMotDePasseSupabase(ancien)
+                        ancien
                 });
+
+        if (
+            erreurVerification &&
+            String(ancien).length < 6
+        ) {
+            const verificationAlternative =
+                await supabase.auth
+                    .signInWithPassword({
+                        email:
+                            construireEmailTechnique(
+                                identifiant
+                            ),
+                        password:
+                            preparerMotDePasseSupabase(
+                                ancien
+                            )
+                    });
+
+            erreurVerification =
+                verificationAlternative.error;
+        }
 
 
         if (erreurVerification) {
