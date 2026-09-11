@@ -14,7 +14,7 @@
  * à récupérer le nouvel app.js.
  */
 
-const CACHE_NAME = "inventaire-caserne-v54";
+const CACHE_NAME = "inventaire-caserne-v55";
 
 
 /*
@@ -44,6 +44,8 @@ const FICHIERS_APPLICATION = [
 
     "./fond-connexion.png",
 
+    "./fond-connexion-pc.png",
+
     "./logo-version-pc.png"
 
 ];
@@ -58,7 +60,7 @@ self.addEventListener(
     function (event) {
 
         console.log(
-            "Installation du Service Worker V54..."
+            "Installation du Service Worker V55..."
         );
 
 
@@ -153,7 +155,7 @@ self.addEventListener(
     function (event) {
 
         console.log(
-            "Activation du Service Worker V54..."
+            "Activation du Service Worker V55..."
         );
 
 
