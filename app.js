@@ -668,7 +668,7 @@ const DOMAINE_EMAIL_INTERNE =
     "inventaire-caserne.local";
 
 const VERSION_APPLICATION =
-    "2.9.19";
+    "2.9.20";
 
 const CLE_PROFIL_UTILISATEUR_CACHE =
     "profil_utilisateur_connecte_v1";
@@ -4716,6 +4716,37 @@ function normaliserIntervention(intervention) {
                 i.numero ||
                 ""
             ),
+
+        createdBy:
+            String(
+                i.createdBy ||
+                i.created_by ||
+                ""
+            ),
+
+        createdByPrenom:
+            String(
+                i.createdByPrenom ||
+                i.created_by_prenom ||
+                ""
+            ),
+
+        createdByNom:
+            String(
+                i.createdByNom ||
+                i.created_by_nom ||
+                ""
+            ),
+
+        createdAt:
+            String(
+                i.createdAt ||
+                i.created_at ||
+                ""
+            ),
+
+        synchronisationEnAttente:
+            i.synchronisationEnAttente === true,
 
         consommations:
             consommations.map(function (consommation) {
@@ -12959,7 +12990,8 @@ async function supprimerRetourIntervention(interventionId) {
 function afficherModificationRetourIntervention(interventionId) {
     const intervention = historique.find(i => String(i.id) === String(interventionId));
     if (!intervention) return alert("Intervention introuvable.");
-    if (!auteurInterventionEstUtilisateur(intervention) || ageInterventionMs(intervention) > 36 * 60 * 60 * 1000) {
+    const admin = utilisateurEstSPVAdmin();
+    if (!admin && (!auteurInterventionEstUtilisateur(intervention) || ageInterventionMs(intervention) > 36 * 60 * 60 * 1000)) {
         return alert("Ce retour ne peut plus être modifié.");
     }
     const quantites = new Map((intervention.consommations || []).map(c => [String(c.materielId), Number(c.quantite || 0)]));
@@ -12982,7 +13014,9 @@ function afficherModificationRetourIntervention(interventionId) {
 
 async function enregistrerModificationRetourIntervention(interventionId) {
     const intervention = historique.find(i => String(i.id) === String(interventionId));
-    if (!intervention || !auteurInterventionEstUtilisateur(intervention) || ageInterventionMs(intervention) > 36 * 60 * 60 * 1000) return alert("Ce retour ne peut plus être modifié.");
+    if (!intervention) return alert("Intervention introuvable.");
+    const admin = utilisateurEstSPVAdmin();
+    if (!admin && (!auteurInterventionEstUtilisateur(intervention) || ageInterventionMs(intervention) > 36 * 60 * 60 * 1000)) return alert("Ce retour ne peut plus être modifié.");
     if (!navigator.onLine) return alert("Une connexion Internet est nécessaire pour modifier un retour d'intervention.");
     const date = document.getElementById("edit-date-intervention")?.value;
     const numero = document.getElementById("edit-numero-intervention")?.value.trim();
@@ -13007,7 +13041,7 @@ function afficherDetailIntervention(
     if (!intervention) { alert("Intervention introuvable."); return; }
     const auteur = auteurInterventionEstUtilisateur(intervention);
     const admin = utilisateurEstSPVAdmin();
-    const modificationPossible = auteur && ageInterventionMs(intervention) <= 36 * 60 * 60 * 1000;
+    const modificationPossible = admin || (auteur && ageInterventionMs(intervention) <= 36 * 60 * 60 * 1000);
     const suppressionAuteurPossible = auteur && ageInterventionMs(intervention) <= 60 * 60 * 1000;
     const afficherSuppression = auteur || admin;
     let html = `<main class="page">
@@ -13030,7 +13064,7 @@ function afficherDetailIntervention(
     }
     if (auteur || admin) {
         html += `<div class="actions-intervention">`;
-        if (auteur) html += `<button class="bouton-modifier-intervention" ${modificationPossible ? `onclick="afficherModificationRetourIntervention('${intervention.id}')"` : "disabled"}>Modifier</button>`;
+        if (auteur || admin) html += `<button class="bouton-modifier-intervention" ${modificationPossible ? `onclick="afficherModificationRetourIntervention('${intervention.id}')"` : "disabled"}>Modifier</button>`;
         if (afficherSuppression) {
             const suppressionPossible = admin || suppressionAuteurPossible;
             html += `<button class="bouton-supprimer-intervention" ${suppressionPossible ? `onclick="supprimerRetourIntervention('${intervention.id}')"` : "disabled"}>Supprimer</button>`;
