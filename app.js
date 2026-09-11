@@ -668,7 +668,7 @@ const DOMAINE_EMAIL_INTERNE =
     "inventaire-caserne.local";
 
 const VERSION_APPLICATION =
-    "2.9.21";
+    "2.9.22";
 
 const CLE_PROFIL_UTILISATEUR_CACHE =
     "profil_utilisateur_connecte_v1";
@@ -13064,7 +13064,7 @@ function initialiserStylesActionsIntervention() {
             margin-bottom:9px;
             font-size:1rem;
         }
-        .bloc-ajout-materiel-edition select {
+        .bloc-ajout-materiel-edition .recherche-materiel-edition {
             display:block !important;
             width:100% !important;
             min-width:0 !important;
@@ -13197,17 +13197,76 @@ function changerQuantiteMaterielEdition(materielId, delta) {
     champ.value = Math.max(0, actuelle + Number(delta || 0));
 }
 
+function rechercherMaterielEditionRetour() {
+    const recherche = document.getElementById("recherche-materiel-edition");
+    const champId = document.getElementById("ajout-materiel-edition-id");
+    const resultats = document.getElementById("resultats-materiel-edition");
+    if (!recherche || !champId || !resultats) return;
+
+    champId.value = "";
+    const terme = String(recherche.value || "").trim().toLocaleLowerCase();
+    if (!terme) {
+        resultats.innerHTML = "";
+        resultats.classList.remove("ouvert");
+        return;
+    }
+
+    const dejaPresents = new Set(
+        Array.from(document.querySelectorAll(".edit-qte-intervention"))
+            .map(champ => String(champ.dataset.materielId || ""))
+    );
+
+    const correspondances = [...materiels]
+        .filter(m => !dejaPresents.has(String(m.id)))
+        .filter(m => {
+            const nom = String(m.nom || "").toLocaleLowerCase();
+            const reference = String(m.reference || "").toLocaleLowerCase();
+            return nom.includes(terme) || reference.includes(terme);
+        })
+        .sort((a,b) => String(a.nom || "").localeCompare(String(b.nom || ""), "fr", { sensitivity:"base" }))
+        .slice(0, 12);
+
+    if (!correspondances.length) {
+        resultats.innerHTML = '<div class="reappro-recherche-vide">Aucun matériel trouvé</div>';
+        resultats.classList.add("ouvert");
+        return;
+    }
+
+    resultats.innerHTML = correspondances.map(m => {
+        const reference = String(m.reference || "").trim();
+        return `<button type="button" class="reappro-resultat" onclick="selectionnerMaterielEditionRetour('${echapperHTML(String(m.id))}')"><strong>${echapperHTML(m.nom)}</strong>${reference ? `<small>Réf. ${echapperHTML(reference)}</small>` : ""}</button>`;
+    }).join("");
+    resultats.classList.add("ouvert");
+}
+
+function selectionnerMaterielEditionRetour(materielId) {
+    const materiel = materiels.find(m => String(m.id) === String(materielId));
+    const recherche = document.getElementById("recherche-materiel-edition");
+    const champId = document.getElementById("ajout-materiel-edition-id");
+    const resultats = document.getElementById("resultats-materiel-edition");
+    if (!materiel || !recherche || !champId || !resultats) return;
+    recherche.value = String(materiel.nom || "");
+    champId.value = String(materiel.id);
+    resultats.innerHTML = "";
+    resultats.classList.remove("ouvert");
+}
+
 function ajouterMaterielEditionRetour() {
-    const select = document.getElementById("ajout-materiel-edition");
+    const champId = document.getElementById("ajout-materiel-edition-id");
+    const recherche = document.getElementById("recherche-materiel-edition");
+    const resultats = document.getElementById("resultats-materiel-edition");
     const conteneur = document.getElementById("liste-materiels-edition");
-    if (!select || !conteneur || !select.value) return;
-    const materiel = materiels.find(m => String(m.id) === String(select.value));
+    if (!champId || !conteneur || !champId.value) return alert("Sélectionnez un matériel dans les propositions.");
+    const materiel = materiels.find(m => String(m.id) === String(champId.value));
     if (!materiel) return alert("Matériel introuvable.");
-    if (document.getElementById(`edit-qte-${materiel.id}`)) return;
+    if (document.getElementById(`edit-qte-${materiel.id}`)) return alert("Ce matériel est déjà renseigné.");
     conteneur.insertAdjacentHTML("beforeend", htmlLigneMaterielEdition(materiel, 1));
-    const option = select.querySelector(`option[value="${CSS.escape(String(materiel.id))}"]`);
-    if (option) option.remove();
-    select.value = "";
+    champId.value = "";
+    if (recherche) recherche.value = "";
+    if (resultats) {
+        resultats.innerHTML = "";
+        resultats.classList.remove("ouvert");
+    }
 }
 
 function afficherModificationRetourIntervention(interventionId) {
@@ -13227,11 +13286,7 @@ function afficherModificationRetourIntervention(interventionId) {
         .map(m => htmlLigneMaterielEdition(m, quantites.get(String(m.id))))
         .join("");
 
-    const optionsAjout = materiels
-        .filter(m => !idsActuels.has(String(m.id)))
-        .sort((a,b)=>String(a.nom).localeCompare(String(b.nom),"fr"))
-        .map(m => `<option value="${echapperHTML(String(m.id))}">${echapperHTML(m.nom)}</option>`)
-        .join("");
+
 
     document.getElementById("app").innerHTML = `
         <main class="page editeur-retour-special">
@@ -13240,7 +13295,7 @@ function afficherModificationRetourIntervention(interventionId) {
 
                 <section class="bandeau-edition-retour">
                     <span class="sur-titre">Espace de modification</span>
-                    <h2>Modifier le matériel utilisé</h2>
+                    <h2>Matériel déclaré · Inter n°${echapperHTML(intervention.numeroIntervention)}</h2>
                 </section>
 
                 <section class="infos-retour-verrouillees">
@@ -13252,22 +13307,18 @@ function afficherModificationRetourIntervention(interventionId) {
                         <span class="libelle">Date</span>
                         <span class="valeur">${echapperHTML(formaterDate(intervention.date))}</span>
                     </div>
-                    <div class="info-retour-verrouillee">
-                        <span class="libelle">Intervention</span>
-                        <span class="valeur">${echapperHTML(intervention.numeroIntervention)}</span>
-                    </div>
                 </section>
                 <p class="note-verrouillage-retour">La date, le numéro d'intervention et l'identité d'origine ne peuvent pas être modifiés.</p>
 
-                <h3 class="titre-materiel-edition">Matériel utilisé</h3>
                 <div id="liste-materiels-edition" class="liste-materiels-edition">${lignes || '<div class="materiel">Aucun matériel renseigné.</div>'}</div>
 
                 <section class="bloc-ajout-materiel-edition">
-                    <strong>Ajouter un autre matériel</strong>
-                    <select id="ajout-materiel-edition">
-                        <option value="">Choisir un matériel…</option>
-                        ${optionsAjout}
-                    </select>
+                    <strong>Ajouter un matériel</strong>
+                    <div class="reappro-recherche-wrap">
+                        <input id="recherche-materiel-edition" class="reappro-recherche recherche-materiel-edition" type="search" autocomplete="off" placeholder="Rechercher un matériel" aria-label="Rechercher un matériel" oninput="rechercherMaterielEditionRetour()" onfocus="rechercherMaterielEditionRetour()">
+                        <input id="ajout-materiel-edition-id" type="hidden" value="">
+                        <div id="resultats-materiel-edition" class="reappro-resultats"></div>
+                    </div>
                     <button type="button" class="bouton-ajouter-materiel-edition" onclick="ajouterMaterielEditionRetour()">Ajouter ce matériel</button>
                 </section>
 
