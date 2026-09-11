@@ -12,7 +12,7 @@ const DOMAINE_EMAIL_INTERNE =
     "inventaire-caserne.local";
 
 const VERSION_APPLICATION =
-    "2.8.32";
+    "2.9.0";
 
 const CLE_PROFIL_UTILISATEUR_CACHE =
     "profil_utilisateur_connecte_v1";
@@ -1194,8 +1194,15 @@ async function chargerProfilUtilisateurDepuisSupabase(
                     acces_inventaire,
                     acces_retour_intervention,
                     acces_historique,
+                    acces_archives,
                     acces_administration,
-                    acces_gestion_utilisateurs
+                    acces_ajout_materiel,
+                    acces_gestion_materiel,
+                    acces_gestion_categories,
+                    acces_reapprovisionnement,
+                    acces_remise_zero_historique,
+                    acces_gestion_utilisateurs,
+                    acces_notifications
                 )
             `)
             .eq(
@@ -1399,20 +1406,26 @@ function initialiserStyleConnexion() {
             min-height: 100%;
         }
 
+        html {
+            min-height: 100%;
+            background: #ffffff;
+        }
+
         body.mode-connexion {
             min-height: 100vh;
             min-height: 100dvh;
             margin: 0;
+            background-color: #ffffff;
             background-image:
                 url("./fond-connexion.png");
             background-position:
                 center center;
             background-size:
-                100% 100%;
+                cover;
             background-repeat:
                 no-repeat;
             background-attachment:
-                fixed;
+                scroll;
         }
 
         body.mode-connexion #app {
@@ -8976,17 +8989,21 @@ async function afficherHistorique() {
             ></div>
 
 
-            <div
-                class="archives-historique-lien-zone"
-            >
-                <button
-                    type="button"
-                    class="archives-historique-lien"
-                    onclick="afficherArchivesHistorique()"
-                >
-                    Consulter les archives
-                </button>
-            </div>
+            ${
+                utilisateurAPermission("acces_archives")
+                    ? `
+                        <div class="archives-historique-lien-zone">
+                            <button
+                                type="button"
+                                class="archives-historique-lien"
+                                onclick="afficherArchivesHistorique()"
+                            >
+                                Consulter les archives
+                            </button>
+                        </div>
+                    `
+                    : ""
+            }
 
         </main>
 
@@ -9209,7 +9226,7 @@ async function afficherArchivesHistorique() {
 
     if (
         !verifierPermissionOuRetourAccueil(
-            "acces_historique"
+            "acces_archives"
         )
     ) {
         return;
@@ -9825,6 +9842,17 @@ function initialiserStylesReapprovisionnementArchive() {
         "style-reapprovisionnement-archive";
 
     style.textContent = `
+        .menu-reapprovisionnement-admin {
+            background: #14532d !important;
+            color: #ffffff !important;
+            border-color: #14532d !important;
+        }
+
+        .menu-reapprovisionnement-admin strong,
+        .menu-reapprovisionnement-admin small {
+            color: #ffffff !important;
+        }
+
         .archive-reappro-bouton {
             display: block;
             width: 100%;
@@ -10221,7 +10249,7 @@ async function afficherReapprovisionnementArchive(
 
     if (
         !verifierPermissionOuRetourAccueil(
-            "acces_administration",
+            "acces_reapprovisionnement",
             "Vous n'avez pas accès au réapprovisionnement."
         )
     ) {
@@ -10417,6 +10445,220 @@ async function afficherReapprovisionnementArchive(
         </main>
 
     `;
+
+}
+
+
+async function afficherReapprovisionnementAdministration() {
+
+    if (
+        !verifierPermissionOuRetourAccueil(
+            "acces_reapprovisionnement",
+            "Vous n'avez pas accès au réapprovisionnement."
+        )
+    ) {
+        return;
+    }
+
+    await synchroniserAvantNavigation();
+
+    initialiserStylesReapprovisionnementArchive();
+
+    document.getElementById(
+        "app"
+    ).innerHTML = `
+
+        <main class="reappro-page">
+
+            <button
+                type="button"
+                class="reappro-retour"
+                onclick="afficherMenuAdministration()"
+            >
+                ← Retour à l'administration
+            </button>
+
+            <header class="reappro-entete">
+                <p class="reappro-sur-titre">
+                    Pharmacie · Stock
+                </p>
+                <h2>
+                    Réapprovisionnement
+                </h2>
+            </header>
+
+            <section class="reappro-feuille">
+
+                <div class="reappro-section-titre">
+                    Matériels à ajouter au stock
+                </div>
+
+                <div id="reappro-lignes-consommees"></div>
+                <div id="reappro-lignes-supplementaires"></div>
+
+                <div class="reappro-ajout-zone">
+                    <button
+                        type="button"
+                        class="reappro-ajouter"
+                        onclick="ajouterLigneReapprovisionnementArchive()"
+                    >
+                        Ajouter un matériel
+                    </button>
+                </div>
+
+                <button
+                    type="button"
+                    class="reappro-validation"
+                    onclick="validerReapprovisionnementAdministration()"
+                >
+                    Ajouter au stock
+                </button>
+
+                <p class="reappro-note">
+                    Les quantités saisies seront ajoutées au stock actuel.
+                </p>
+
+            </section>
+
+        </main>
+
+    `;
+
+}
+
+
+async function validerReapprovisionnementAdministration() {
+
+    if (
+        !verifierPermissionOuRetourAccueil(
+            "acces_reapprovisionnement",
+            "Vous n'avez pas accès au réapprovisionnement."
+        )
+    ) {
+        return;
+    }
+
+    const ajouts = new Map();
+
+    document.querySelectorAll(
+        ".reappro-ligne-supplementaire"
+    ).forEach(
+        function (ligne) {
+
+            const materielId =
+                String(
+                    ligne.querySelector(
+                        ".reappro-materiel-id"
+                    )?.value ||
+                    ""
+                );
+
+            const quantite =
+                Math.floor(
+                    Number(
+                        ligne.querySelector(
+                            ".reappro-quantite"
+                        )?.value ||
+                        0
+                    )
+                );
+
+            if (
+                materielId &&
+                Number.isFinite(quantite) &&
+                quantite > 0
+            ) {
+                ajouts.set(
+                    materielId,
+                    (ajouts.get(materielId) || 0) +
+                    quantite
+                );
+            }
+        }
+    );
+
+    if (ajouts.size === 0) {
+        alert(
+            "Ajoute au moins un matériel avec une quantité supérieure à 0."
+        );
+        return;
+    }
+
+    const lignesConfirmation =
+        Array.from(ajouts.entries())
+            .map(
+                function ([materielId, quantite]) {
+                    const materiel =
+                        materiels.find(
+                            function (item) {
+                                return String(item.id) === String(materielId);
+                            }
+                        );
+                    return materiel
+                        ? `${materiel.nom} : +${quantite}`
+                        : "";
+                }
+            )
+            .filter(Boolean);
+
+    if (
+        !confirm(
+            "Ajouter au stock :\\n\\n" +
+            lignesConfirmation.join("\\n") +
+            "\\n\\nConfirmer ?"
+        )
+    ) {
+        return;
+    }
+
+    let nombreModifie = 0;
+
+    ajouts.forEach(
+        function (quantite, materielId) {
+            const materiel =
+                materiels.find(
+                    function (item) {
+                        return String(item.id) === String(materielId);
+                    }
+                );
+
+            if (!materiel) {
+                return;
+            }
+
+            const ancienStock =
+                Number(materiel.stock || 0);
+
+            materiel.stock =
+                ancienStock +
+                Number(quantite);
+
+            preparerNotificationStock(
+                materiel,
+                ancienStock
+            );
+
+            nombreModifie += 1;
+        }
+    );
+
+    sauvegarderToutesLesDonnees();
+
+    try {
+        await synchroniserApresModification();
+    } catch (erreur) {
+        console.warn(
+            "Synchronisation du réapprovisionnement différée :",
+            erreur
+        );
+    }
+
+    alert(
+        nombreModifie +
+        " matériel(s) ajouté(s) au stock."
+    );
+
+    afficherReapprovisionnementAdministration();
 
 }
 
@@ -10832,7 +11074,7 @@ async function validerReapprovisionnementArchive(
 
     if (
         !verifierPermissionOuRetourAccueil(
-            "acces_administration",
+            "acces_reapprovisionnement",
             "Vous n'avez pas accès au réapprovisionnement."
         )
     ) {
@@ -12016,7 +12258,6 @@ function afficherMenuAdministration() {
         return;
     }
 
-
     document.getElementById(
         "app"
     ).innerHTML = `
@@ -12030,109 +12271,81 @@ function afficherMenuAdministration() {
                 ← Retour
             </button>
 
+            <h2>Administration</h2>
 
-            <h2>️ Administration
-            </h2>
+            <div class="menu-administration">
 
+                ${
+                    utilisateurAPermission("acces_ajout_materiel")
+                        ? `
+                            <button class="menu-button" onclick="ajouterMateriel()">
+                                <span class="menu-icon">➕</span>
+                                <span>
+                                    <strong>Ajouter du matériel</strong>
+                                    <small>Créer un nouveau matériel</small>
+                                </span>
+                            </button>
+                        `
+                        : ""
+                }
 
-            <div
-                class="menu-administration"
-            >
+                ${
+                    utilisateurAPermission("acces_gestion_materiel")
+                        ? `
+                            <button class="menu-button" onclick="gestionMateriels()">
+                                <span class="menu-icon">📦</span>
+                                <span>
+                                    <strong>Gestion du matériel</strong>
+                                    <small>Modifier ou supprimer</small>
+                                </span>
+                            </button>
+                        `
+                        : ""
+                }
 
-                <button
-                    class="menu-button"
-                    onclick="ajouterMateriel()"
-                >
+                ${
+                    utilisateurAPermission("acces_gestion_categories")
+                        ? `
+                            <button class="menu-button" onclick="gestionCategories()">
+                                <span class="menu-icon">📂</span>
+                                <span>
+                                    <strong>Gestion des catégories</strong>
+                                    <small>Créer, modifier ou supprimer</small>
+                                </span>
+                            </button>
+                        `
+                        : ""
+                }
 
-                    <span class="menu-icon">
-                        ➕
-                    </span>
+                ${
+                    utilisateurAPermission("acces_reapprovisionnement")
+                        ? `
+                            <button
+                                class="menu-button menu-reapprovisionnement-admin"
+                                onclick="afficherReapprovisionnementAdministration()"
+                            >
+                                <span>
+                                    <strong>Réapprovisionnement</strong>
+                                    <small>Ajouter du matériel au stock</small>
+                                </span>
+                            </button>
+                        `
+                        : ""
+                }
 
-                    <span>
-
-                        <strong>
-                            Ajouter du matériel
-                        </strong>
-
-                        <small>
-                            Créer un nouvel matériel
-                        </small>
-
-                    </span>
-
-                </button>
-
-
-                <button
-                    class="menu-button"
-                    onclick="gestionMateriels()"
-                >
-
-                    <span class="menu-icon">
-                        📦
-                    </span>
-
-                    <span>
-
-                        <strong>
-                            Gestion du matériel
-                        </strong>
-
-                        <small>
-                            Modifier ou supprimer
-                        </small>
-
-                    </span>
-
-                </button>
-
-
-                <button
-                    class="menu-button"
-                    onclick="gestionCategories()"
-                >
-
-                    <span class="menu-icon">
-                        📂
-                    </span>
-
-                    <span>
-
-                        <strong>
-                            Gestion des catégories
-                        </strong>
-
-                        <small>
-                            Créer, modifier ou supprimer
-                        </small>
-
-                    </span>
-
-                </button>
-
-
-                <button
-                    class="menu-button"
-                    onclick="remiseZeroHistorique()"
-                >
-
-                    <span class="menu-icon">
-                        🗑️
-                    </span>
-
-                    <span>
-
-                        <strong>
-                            Remise à zéro de l'historique
-                        </strong>
-
-                        <small>
-                            Archiver la période actuelle
-                        </small>
-
-                    </span>
-
-                </button>
+                ${
+                    utilisateurAPermission("acces_remise_zero_historique")
+                        ? `
+                            <button class="menu-button" onclick="remiseZeroHistorique()">
+                                <span class="menu-icon">🗑️</span>
+                                <span>
+                                    <strong>Remise à zéro de l'historique</strong>
+                                    <small>Archiver la période actuelle</small>
+                                </span>
+                            </button>
+                        `
+                        : ""
+                }
 
             </div>
 
@@ -12140,10 +12353,9 @@ function afficherMenuAdministration() {
 
     `;
 
+    initialiserStylesReapprovisionnementArchive();
+
 }
-
-
-
 
 /* =========================================================
    ADMINISTRATEUR APPLI
@@ -12605,40 +12817,18 @@ function rendreGestionUtilisateurs() {
 
                         <div class="permissions-role">
 
-                            ${permissionRoleHTML(
-                                role,
-                                "acces_inventaire",
-                                "Inventaire",
-                                prefixe
-                            )}
-
-                            ${permissionRoleHTML(
-                                role,
-                                "acces_retour_intervention",
-                                "Retour d'intervention",
-                                prefixe
-                            )}
-
-                            ${permissionRoleHTML(
-                                role,
-                                "acces_historique",
-                                "Historique",
-                                prefixe
-                            )}
-
-                            ${permissionRoleHTML(
-                                role,
-                                "acces_administration",
-                                "Administration",
-                                prefixe
-                            )}
-
-                            ${permissionRoleHTML(
-                                role,
-                                "acces_gestion_utilisateurs",
-                                "Gestion des utilisateurs",
-                                prefixe
-                            )}
+                            ${permissionRoleHTML(role,"acces_inventaire","Inventaire",prefixe)}
+                            ${permissionRoleHTML(role,"acces_retour_intervention","Retour d'intervention",prefixe)}
+                            ${permissionRoleHTML(role,"acces_historique","Historique",prefixe)}
+                            ${permissionRoleHTML(role,"acces_archives","Archives",prefixe)}
+                            ${permissionRoleHTML(role,"acces_administration","Administration",prefixe)}
+                            ${permissionRoleHTML(role,"acces_ajout_materiel","Ajouter du matériel",prefixe)}
+                            ${permissionRoleHTML(role,"acces_gestion_materiel","Gestion du matériel",prefixe)}
+                            ${permissionRoleHTML(role,"acces_gestion_categories","Gestion des catégories",prefixe)}
+                            ${permissionRoleHTML(role,"acces_reapprovisionnement","Réapprovisionnement",prefixe)}
+                            ${permissionRoleHTML(role,"acces_remise_zero_historique","Remise à zéro de l'historique",prefixe)}
+                            ${permissionRoleHTML(role,"acces_gestion_utilisateurs","Gestion des utilisateurs",prefixe)}
+                            ${permissionRoleHTML(role,"acces_notifications","Envoyer une notification",prefixe)}
 
                         </div>
 
@@ -12756,48 +12946,19 @@ function rendreGestionUtilisateurs() {
                     >
 
                     <div class="permissions-role">
-
-                        <label>
-                            <input
-                                type="checkbox"
-                                id="new-role-inventaire"
-                            >
-                            Inventaire
-                        </label>
-
-                        <label>
-                            <input
-                                type="checkbox"
-                                id="new-role-retour"
-                            >
-                            Retour d'intervention
-                        </label>
-
-                        <label>
-                            <input
-                                type="checkbox"
-                                id="new-role-historique"
-                            >
-                            Historique
-                        </label>
-
-                        <label>
-                            <input
-                                type="checkbox"
-                                id="new-role-administration"
-                            >
-                            Administration
-                        </label>
-
-                        <label>
-                            <input
-                                type="checkbox"
-                                id="new-role-utilisateurs"
-                            >
-                            Gestion des utilisateurs
-                        </label>
-
-                    </div>
+<label><input type="checkbox" id="new-role-inventaire"> Inventaire</label>
+<label><input type="checkbox" id="new-role-retour"> Retour d'intervention</label>
+<label><input type="checkbox" id="new-role-historique"> Historique</label>
+<label><input type="checkbox" id="new-role-archives"> Archives</label>
+<label><input type="checkbox" id="new-role-administration"> Administration</label>
+<label><input type="checkbox" id="new-role-ajout-materiel"> Ajouter du matériel</label>
+<label><input type="checkbox" id="new-role-gestion-materiel"> Gestion du matériel</label>
+<label><input type="checkbox" id="new-role-categories"> Gestion des catégories</label>
+<label><input type="checkbox" id="new-role-reapprovisionnement"> Réapprovisionnement</label>
+<label><input type="checkbox" id="new-role-remise-zero"> Remise à zéro de l'historique</label>
+<label><input type="checkbox" id="new-role-utilisateurs"> Gestion des utilisateurs</label>
+<label><input type="checkbox" id="new-role-notifications"> Envoyer une notification</label>
+</div>
 
                     <button
                         class="add-button"
@@ -13121,10 +13282,22 @@ async function creerRoleAdministration() {
                     lirePermissionRole(
                         "new-role-administration"
                     ),
+                acces_archives:
+                    lirePermissionRole("new-role-archives"),
+                acces_ajout_materiel:
+                    lirePermissionRole("new-role-ajout-materiel"),
+                acces_gestion_materiel:
+                    lirePermissionRole("new-role-gestion-materiel"),
+                acces_gestion_categories:
+                    lirePermissionRole("new-role-categories"),
+                acces_reapprovisionnement:
+                    lirePermissionRole("new-role-reapprovisionnement"),
+                acces_remise_zero_historique:
+                    lirePermissionRole("new-role-remise-zero"),
                 acces_gestion_utilisateurs:
-                    lirePermissionRole(
-                        "new-role-utilisateurs"
-                    )
+                    lirePermissionRole("new-role-utilisateurs"),
+                acces_notifications:
+                    lirePermissionRole("new-role-notifications")
             }
         );
 
@@ -13202,11 +13375,22 @@ async function enregistrerRole(
                         prefixe +
                         "-acces_administration"
                     ),
+                acces_archives:
+                    lirePermissionRole(prefixe + "-acces_archives"),
+                acces_ajout_materiel:
+                    lirePermissionRole(prefixe + "-acces_ajout_materiel"),
+                acces_gestion_materiel:
+                    lirePermissionRole(prefixe + "-acces_gestion_materiel"),
+                acces_gestion_categories:
+                    lirePermissionRole(prefixe + "-acces_gestion_categories"),
+                acces_reapprovisionnement:
+                    lirePermissionRole(prefixe + "-acces_reapprovisionnement"),
+                acces_remise_zero_historique:
+                    lirePermissionRole(prefixe + "-acces_remise_zero_historique"),
                 acces_gestion_utilisateurs:
-                    lirePermissionRole(
-                        prefixe +
-                        "-acces_gestion_utilisateurs"
-                    )
+                    lirePermissionRole(prefixe + "-acces_gestion_utilisateurs"),
+                acces_notifications:
+                    lirePermissionRole(prefixe + "-acces_notifications")
             }
         );
 
@@ -13320,7 +13504,9 @@ async function supprimerRoleGestion(
 function afficherNotificationsAdministration() {
 
     if (
-        !verifierAccesAdministrateurAppli()
+        !verifierPermissionOuRetourAccueil(
+            "acces_notifications"
+        )
     ) {
         return;
     }
@@ -13513,7 +13699,7 @@ async function envoyerNotificationAdministration() {
 function gestionMateriels() {
 
     if (!verifierPermissionOuRetourAccueil(
-        "acces_administration"
+        "acces_gestion_materiel"
     )) {
         return;
     }
@@ -13745,7 +13931,7 @@ function afficherListeAdmin() {
 function ajouterMateriel() {
 
     if (!verifierPermissionOuRetourAccueil(
-        "acces_administration"
+        "acces_ajout_materiel"
     )) {
         return;
     }
@@ -14538,7 +14724,7 @@ function lirePhotoPuis(
 function gestionCategories() {
 
     if (!verifierPermissionOuRetourAccueil(
-        "acces_administration"
+        "acces_gestion_categories"
     )) {
         return;
     }
@@ -15038,7 +15224,7 @@ async function remiseZeroHistorique() {
 
     if (
         !verifierPermissionOuRetourAccueil(
-            "acces_administration"
+            "acces_remise_zero_historique"
         )
     ) {
         return;
@@ -15299,6 +15485,12 @@ window.afficherDetailCommandeArchive =
 
 window.afficherReapprovisionnementArchive =
     afficherReapprovisionnementArchive;
+
+window.afficherReapprovisionnementAdministration =
+    afficherReapprovisionnementAdministration;
+
+window.validerReapprovisionnementAdministration =
+    validerReapprovisionnementAdministration;
 
 window.ajouterLigneReapprovisionnementArchive =
     ajouterLigneReapprovisionnementArchive;
