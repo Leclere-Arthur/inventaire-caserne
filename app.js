@@ -668,7 +668,7 @@ const DOMAINE_EMAIL_INTERNE =
     "inventaire-caserne.local";
 
 const VERSION_APPLICATION =
-    "2.9.20";
+    "2.9.21";
 
 const CLE_PROFIL_UTILISATEUR_CACHE =
     "profil_utilisateur_connecte_v1";
@@ -12920,9 +12920,200 @@ function initialiserStylesActionsIntervention() {
         .bouton-modifier-intervention { background:#1687ff; }
         .bouton-supprimer-intervention { background:#d62828; }
         .bouton-supprimer-intervention:disabled { background:#8b9298 !important; color:#e7e7e7 !important; cursor:not-allowed; opacity:.8; }
-        .editeur-intervention { margin-top:18px; }
-        .editeur-intervention .ligne-edition-materiel { display:grid; grid-template-columns:minmax(0,1fr) 90px; gap:10px; align-items:center; margin:8px 0; }
-        .editeur-intervention input[type="number"] { width:100%; box-sizing:border-box; }
+
+        /* Espace volontairement distinct pour la modification d'un retour */
+        .editeur-retour-special {
+            min-height:100vh;
+            box-sizing:border-box;
+            background:linear-gradient(180deg,#eef4f8 0,#f7f9fb 260px,#f7f9fb 100%);
+            padding-bottom:38px;
+        }
+        .editeur-retour-special .retour-button { margin-bottom:18px; }
+        .bandeau-edition-retour {
+            background:#17324a;
+            color:#fff;
+            border-radius:18px;
+            padding:20px;
+            margin:0 0 18px;
+            box-shadow:0 8px 24px rgba(20,42,60,.16);
+        }
+        .bandeau-edition-retour .sur-titre {
+            display:block;
+            font-size:.82rem;
+            font-weight:800;
+            letter-spacing:.08em;
+            text-transform:uppercase;
+            opacity:.72;
+            margin-bottom:5px;
+        }
+        .bandeau-edition-retour h2 {
+            color:#fff !important;
+            margin:0;
+            font-size:1.7rem;
+            line-height:1.15;
+        }
+        .infos-retour-verrouillees {
+            display:grid;
+            grid-template-columns:1fr;
+            gap:10px;
+            background:#fff;
+            border:1px solid #dce4ea;
+            border-radius:16px;
+            padding:16px;
+            margin-bottom:20px;
+            box-shadow:0 3px 12px rgba(30,50,65,.06);
+        }
+        .info-retour-verrouillee {
+            display:flex;
+            justify-content:space-between;
+            align-items:flex-start;
+            gap:18px;
+            padding:8px 0;
+            border-bottom:1px solid #edf1f4;
+        }
+        .info-retour-verrouillee:last-child { border-bottom:0; }
+        .info-retour-verrouillee .libelle {
+            color:#667783;
+            font-size:.9rem;
+            font-weight:700;
+        }
+        .info-retour-verrouillee .valeur {
+            color:#17232c;
+            font-size:1rem;
+            font-weight:800;
+            text-align:right;
+            overflow-wrap:anywhere;
+        }
+        .note-verrouillage-retour {
+            color:#64727c;
+            font-size:.86rem;
+            margin:-7px 0 21px;
+        }
+        .titre-materiel-edition {
+            color:#17324a;
+            font-size:1.25rem;
+            margin:0 0 12px;
+        }
+        .liste-materiels-edition {
+            display:flex;
+            flex-direction:column;
+            gap:10px;
+            margin-bottom:18px;
+        }
+        .ligne-edition-materiel {
+            display:grid;
+            grid-template-columns:minmax(0,1fr) auto;
+            gap:12px;
+            align-items:center;
+            background:#fff;
+            border:1px solid #dce4ea;
+            border-radius:15px;
+            padding:13px 14px;
+            box-shadow:0 2px 9px rgba(30,50,65,.05);
+        }
+        .ligne-edition-materiel .nom-materiel-edition {
+            color:#1d2932;
+            font-size:1rem;
+            font-weight:800;
+            line-height:1.25;
+        }
+        .controle-quantite-edition {
+            display:flex;
+            align-items:center;
+            gap:7px;
+        }
+        .controle-quantite-edition button {
+            width:38px;
+            height:38px;
+            min-width:38px;
+            padding:0;
+            border:0;
+            border-radius:10px;
+            background:#e8eef2;
+            color:#17324a;
+            font-size:1.35rem;
+            font-weight:900;
+            line-height:1;
+        }
+        .controle-quantite-edition input[type="number"] {
+            width:58px !important;
+            min-width:58px !important;
+            height:38px !important;
+            min-height:38px !important;
+            box-sizing:border-box !important;
+            padding:5px 4px !important;
+            margin:0 !important;
+            border:1px solid #cbd6dd !important;
+            border-radius:9px !important;
+            background:#fff !important;
+            color:#111 !important;
+            font-size:1rem !important;
+            font-weight:800 !important;
+            text-align:center !important;
+        }
+        .bloc-ajout-materiel-edition {
+            background:#dfeaf1;
+            border:1px solid #c5d6e1;
+            border-radius:16px;
+            padding:15px;
+            margin:17px 0 22px;
+        }
+        .bloc-ajout-materiel-edition strong {
+            display:block;
+            color:#17324a;
+            margin-bottom:9px;
+            font-size:1rem;
+        }
+        .bloc-ajout-materiel-edition select {
+            display:block !important;
+            width:100% !important;
+            min-width:0 !important;
+            height:50px !important;
+            min-height:50px !important;
+            box-sizing:border-box !important;
+            margin:0 0 10px !important;
+            padding:0 12px !important;
+            border:1px solid #b9cbd6 !important;
+            border-radius:11px !important;
+            background:#fff !important;
+            color:#17232c !important;
+            font-size:1rem !important;
+        }
+        .bouton-ajouter-materiel-edition {
+            width:100%;
+            min-height:48px;
+            border:0;
+            border-radius:11px;
+            background:#286b94;
+            color:#fff;
+            font:inherit;
+            font-weight:800;
+        }
+        .bouton-enregistrer-edition-retour {
+            width:100%;
+            min-height:56px;
+            border:0;
+            border-radius:14px;
+            background:#19754b;
+            color:#fff;
+            font:inherit;
+            font-size:1.05rem;
+            font-weight:900;
+            box-shadow:0 6px 16px rgba(25,117,75,.18);
+        }
+        @media (min-width: 700px) {
+            .infos-retour-verrouillees { grid-template-columns:repeat(3,minmax(0,1fr)); }
+            .info-retour-verrouillee { display:block; border:0; padding:4px 8px; }
+            .info-retour-verrouillee .valeur { display:block; text-align:left; margin-top:5px; }
+            .editeur-retour-special .contenu-editeur-retour { max-width:820px; margin:0 auto; }
+        }
+        @media (max-width: 430px) {
+            .editeur-retour-special { padding-left:16px !important; padding-right:16px !important; }
+            .bandeau-edition-retour { padding:17px; border-radius:15px; }
+            .bandeau-edition-retour h2 { font-size:1.45rem; }
+            .ligne-edition-materiel { grid-template-columns:1fr; }
+            .controle-quantite-edition { justify-content:flex-end; }
+        }
     `;
     document.head.appendChild(style);
 }
@@ -12987,28 +13178,101 @@ async function supprimerRetourIntervention(interventionId) {
     await afficherHistorique();
 }
 
+function htmlLigneMaterielEdition(materiel, quantite) {
+    return `
+        <div class="ligne-edition-materiel" data-ligne-materiel-id="${echapperHTML(String(materiel.id))}">
+            <div class="nom-materiel-edition">${echapperHTML(materiel.nom)}</div>
+            <div class="controle-quantite-edition">
+                <button type="button" aria-label="Retirer une unité" onclick="changerQuantiteMaterielEdition('${materiel.id}', -1)">−</button>
+                <input id="edit-qte-${materiel.id}" data-materiel-id="${materiel.id}" class="edit-qte-intervention" type="number" min="0" step="1" value="${Math.max(0, Math.floor(Number(quantite || 0)))}" inputmode="numeric">
+                <button type="button" aria-label="Ajouter une unité" onclick="changerQuantiteMaterielEdition('${materiel.id}', 1)">+</button>
+            </div>
+        </div>`;
+}
+
+function changerQuantiteMaterielEdition(materielId, delta) {
+    const champ = document.getElementById(`edit-qte-${materielId}`);
+    if (!champ) return;
+    const actuelle = Math.max(0, Math.floor(Number(champ.value || 0)));
+    champ.value = Math.max(0, actuelle + Number(delta || 0));
+}
+
+function ajouterMaterielEditionRetour() {
+    const select = document.getElementById("ajout-materiel-edition");
+    const conteneur = document.getElementById("liste-materiels-edition");
+    if (!select || !conteneur || !select.value) return;
+    const materiel = materiels.find(m => String(m.id) === String(select.value));
+    if (!materiel) return alert("Matériel introuvable.");
+    if (document.getElementById(`edit-qte-${materiel.id}`)) return;
+    conteneur.insertAdjacentHTML("beforeend", htmlLigneMaterielEdition(materiel, 1));
+    const option = select.querySelector(`option[value="${CSS.escape(String(materiel.id))}"]`);
+    if (option) option.remove();
+    select.value = "";
+}
+
 function afficherModificationRetourIntervention(interventionId) {
+    initialiserStylesActionsIntervention();
     const intervention = historique.find(i => String(i.id) === String(interventionId));
     if (!intervention) return alert("Intervention introuvable.");
     const admin = utilisateurEstSPVAdmin();
     if (!admin && (!auteurInterventionEstUtilisateur(intervention) || ageInterventionMs(intervention) > 36 * 60 * 60 * 1000)) {
         return alert("Ce retour ne peut plus être modifié.");
     }
+
     const quantites = new Map((intervention.consommations || []).map(c => [String(c.materielId), Number(c.quantite || 0)]));
-    const lignes = materiels.slice().sort((a,b)=>String(a.nom).localeCompare(String(b.nom),"fr")).map(m => `
-        <div class="ligne-edition-materiel">
-            <label for="edit-qte-${m.id}">${echapperHTML(m.nom)}</label>
-            <input id="edit-qte-${m.id}" data-materiel-id="${m.id}" class="edit-qte-intervention" type="number" min="0" step="1" value="${quantites.get(String(m.id)) || 0}">
-        </div>`).join("");
+    const idsActuels = new Set(Array.from(quantites.keys()));
+    const lignes = materiels
+        .filter(m => idsActuels.has(String(m.id)))
+        .sort((a,b)=>String(a.nom).localeCompare(String(b.nom),"fr"))
+        .map(m => htmlLigneMaterielEdition(m, quantites.get(String(m.id))))
+        .join("");
+
+    const optionsAjout = materiels
+        .filter(m => !idsActuels.has(String(m.id)))
+        .sort((a,b)=>String(a.nom).localeCompare(String(b.nom),"fr"))
+        .map(m => `<option value="${echapperHTML(String(m.id))}">${echapperHTML(m.nom)}</option>`)
+        .join("");
+
     document.getElementById("app").innerHTML = `
-        <main class="page editeur-intervention">
-            <button class="retour-button" onclick="afficherDetailIntervention('${intervention.id}')">← Retour</button>
-            <h2>Modifier le retour d'intervention</h2>
-            <div class="detail-header"><strong>${echapperHTML(nomAuteurIntervention(intervention))}</strong><span>Cette identité ne peut pas être modifiée.</span></div>
-            <label>Date</label><input id="edit-date-intervention" type="date" value="${echapperHTML(intervention.date)}">
-            <label>Numéro d'intervention</label><input id="edit-numero-intervention" value="${echapperHTML(intervention.numeroIntervention)}">
-            <h3>Matériel utilisé</h3>${lignes}
-            <button class="add-button" onclick="enregistrerModificationRetourIntervention('${intervention.id}')">Enregistrer les modifications</button>
+        <main class="page editeur-retour-special">
+            <div class="contenu-editeur-retour">
+                <button class="retour-button" onclick="afficherDetailIntervention('${intervention.id}')">← Retour</button>
+
+                <section class="bandeau-edition-retour">
+                    <span class="sur-titre">Espace de modification</span>
+                    <h2>Modifier le matériel utilisé</h2>
+                </section>
+
+                <section class="infos-retour-verrouillees">
+                    <div class="info-retour-verrouillee">
+                        <span class="libelle">Enregistré par</span>
+                        <span class="valeur">${echapperHTML(nomAuteurIntervention(intervention))}</span>
+                    </div>
+                    <div class="info-retour-verrouillee">
+                        <span class="libelle">Date</span>
+                        <span class="valeur">${echapperHTML(formaterDate(intervention.date))}</span>
+                    </div>
+                    <div class="info-retour-verrouillee">
+                        <span class="libelle">Intervention</span>
+                        <span class="valeur">${echapperHTML(intervention.numeroIntervention)}</span>
+                    </div>
+                </section>
+                <p class="note-verrouillage-retour">La date, le numéro d'intervention et l'identité d'origine ne peuvent pas être modifiés.</p>
+
+                <h3 class="titre-materiel-edition">Matériel utilisé</h3>
+                <div id="liste-materiels-edition" class="liste-materiels-edition">${lignes || '<div class="materiel">Aucun matériel renseigné.</div>'}</div>
+
+                <section class="bloc-ajout-materiel-edition">
+                    <strong>Ajouter un autre matériel</strong>
+                    <select id="ajout-materiel-edition">
+                        <option value="">Choisir un matériel…</option>
+                        ${optionsAjout}
+                    </select>
+                    <button type="button" class="bouton-ajouter-materiel-edition" onclick="ajouterMaterielEditionRetour()">Ajouter ce matériel</button>
+                </section>
+
+                <button class="bouton-enregistrer-edition-retour" onclick="enregistrerModificationRetourIntervention('${intervention.id}')">Enregistrer les modifications</button>
+            </div>
         </main>`;
 }
 
@@ -13018,15 +13282,23 @@ async function enregistrerModificationRetourIntervention(interventionId) {
     const admin = utilisateurEstSPVAdmin();
     if (!admin && (!auteurInterventionEstUtilisateur(intervention) || ageInterventionMs(intervention) > 36 * 60 * 60 * 1000)) return alert("Ce retour ne peut plus être modifié.");
     if (!navigator.onLine) return alert("Une connexion Internet est nécessaire pour modifier un retour d'intervention.");
-    const date = document.getElementById("edit-date-intervention")?.value;
-    const numero = document.getElementById("edit-numero-intervention")?.value.trim();
-    const consommations = Array.from(document.querySelectorAll(".edit-qte-intervention")).map(champ => ({ materiel_id: champ.dataset.materielId, quantite: Math.floor(Number(champ.value || 0)) })).filter(x => x.quantite > 0);
-    if (!date || !numero) return alert("La date et le numéro d'intervention sont obligatoires.");
+
+    const consommations = Array.from(document.querySelectorAll(".edit-qte-intervention"))
+        .map(champ => ({ materiel_id: champ.dataset.materielId, quantite: Math.floor(Number(champ.value || 0)) }))
+        .filter(x => x.quantite > 0);
+
     if (!consommations.length) return alert("Veuillez conserver au moins un matériel utilisé.");
-    if (!await afficherConfirmationCIS("Enregistrer les modifications de ce retour d'intervention ?")) return;
+    if (!await afficherConfirmationCIS("Enregistrer les modifications du matériel utilisé ?")) return;
+
     const supabase = obtenirClientSupabase();
-    const { error } = await supabase.rpc("modifier_retour_intervention", { p_intervention_id:String(interventionId), p_date:date, p_numero:numero, p_consommations:consommations });
+    const { error } = await supabase.rpc("modifier_retour_intervention", {
+        p_intervention_id: String(interventionId),
+        p_date: String(intervention.date),
+        p_numero: String(intervention.numeroIntervention),
+        p_consommations: consommations
+    });
     if (error) return alert("Modification impossible : " + (error.message || "Erreur Supabase"));
+
     const donnees = await recupererDonneesSupabase();
     await appliquerDonneesSupabaseLocalement(donnees);
     alert("Retour d'intervention modifié.");
