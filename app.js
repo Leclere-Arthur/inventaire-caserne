@@ -12,7 +12,7 @@ const DOMAINE_EMAIL_INTERNE =
     "inventaire-caserne.local";
 
 const VERSION_APPLICATION =
-    "2.9.2";
+    "2.9.3";
 
 const CLE_PROFIL_UTILISATEUR_CACHE =
     "profil_utilisateur_connecte_v1";
@@ -15697,26 +15697,22 @@ function initialiserInterfaceBureau() {
             .bureau-marque {
                 display: flex;
                 align-items: center;
-                gap: 12px;
-                padding: 3px 8px 20px;
+                justify-content: center;
+                padding: 0 2px 18px;
                 margin-bottom: 12px;
                 border-bottom: 1px solid rgba(255,255,255,.08);
             }
 
             .bureau-logo {
-                width: 56px;
-                height: 56px;
-                border-radius: 13px;
-                object-fit: cover;
-                background: #fff;
-                box-shadow: 0 5px 16px rgba(0,0,0,.22);
-            }
-
-            .bureau-marque strong {
                 display: block;
-                font-size: 16px;
-                line-height: 1.15;
-                letter-spacing: .01em;
+                width: 100%;
+                max-width: 218px;
+                height: auto;
+                max-height: 190px;
+                object-fit: contain;
+                border-radius: 0;
+                background: transparent;
+                box-shadow: none;
             }
 
             .bureau-nav {
@@ -16649,15 +16645,9 @@ function actualiserInterfaceBureau() {
 
             <img
                 class="bureau-logo"
-                src="./logo-cis-le-chesne.png"
-                alt=""
+                src="./logo-version-pc.png"
+                alt="Logo"
             >
-
-            <div>
-                <strong>
-                    CIS Le Chesne
-                </strong>
-            </div>
 
         </div>
 
