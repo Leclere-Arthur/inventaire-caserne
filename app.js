@@ -668,7 +668,7 @@ const DOMAINE_EMAIL_INTERNE =
     "inventaire-caserne.local";
 
 const VERSION_APPLICATION =
-    "2.9.23";
+    "2.9.24";
 
 const CLE_PROFIL_UTILISATEUR_CACHE =
     "profil_utilisateur_connecte_v1";
@@ -750,7 +750,7 @@ document.addEventListener("DOMContentLoaded", async function () {
 
     await initialiserSynchronisationSupabase();
 
-    afficherAccueil();
+    afficherPortailPrincipal();
 
 });
 
@@ -7244,6 +7244,213 @@ function formaterDate(date) {
 
 
 /* =========================================================
+   PORTAIL PRINCIPAL
+   ========================================================= */
+
+function afficherPortailPrincipal() {
+
+    initialiserStyleConnexion();
+
+    document.body.classList.remove(
+        "mode-connexion"
+    );
+
+    if (!profilUtilisateurConnecte) {
+        afficherConnexion();
+        return;
+    }
+
+    appliquerVisibiliteElementsConnectes(true);
+
+    const role = obtenirRoleUtilisateur();
+
+    document.getElementById("app").innerHTML = `
+        <main class="page portail-cis-page">
+            <div class="utilisateur-entete">
+                <button
+                    class="bouton-profil-accueil"
+                    type="button"
+                    onclick="afficherProfilUtilisateur()"
+                >
+                    <strong>${echapperHTML(obtenirNomUtilisateurAffiche())}</strong>
+                    <span>${echapperHTML(role?.nom || "")}</span>
+                </button>
+            </div>
+
+            <header class="portail-cis-entete">
+                <h1>CIS Le Chesne</h1>
+                <p>Choisir un espace</p>
+            </header>
+
+            <section class="portail-cis-espaces">
+                <button
+                    type="button"
+                    class="portail-cis-carte portail-cis-caserne"
+                    onclick="afficherEspaceCaserne()"
+                >
+                    <span class="portail-cis-titre">Espace Caserne</span>
+                    <span class="portail-cis-fleche">›</span>
+                </button>
+
+                <button
+                    type="button"
+                    class="portail-cis-carte portail-cis-pharmacie"
+                    onclick="afficherAccueil()"
+                >
+                    <span class="portail-cis-titre">Espace Pharmacie</span>
+                    <span class="portail-cis-fleche">›</span>
+                </button>
+            </section>
+        </main>
+    `;
+
+    actualiserInterfaceBureau();
+}
+
+
+function afficherEspaceCaserne() {
+
+    document.getElementById("app").innerHTML = `
+        <main class="page portail-cis-page espace-caserne-page">
+            <button
+                class="retour-button"
+                type="button"
+                onclick="afficherPortailPrincipal()"
+            >
+                ← Retour
+            </button>
+
+            <header class="portail-cis-entete caserne">
+                <h1>Espace Caserne</h1>
+                <p>CIS Le Chesne</p>
+            </header>
+
+            <section class="espace-caserne-attente">
+                <strong>Espace en préparation</strong>
+                <p>Les fonctions de l'espace Caserne seront ajoutées prochainement.</p>
+            </section>
+        </main>
+    `;
+
+    actualiserInterfaceBureau();
+}
+
+
+function initialiserStylePortailCIS() {
+
+    if (document.getElementById("style-portail-cis")) {
+        return;
+    }
+
+    const style = document.createElement("style");
+    style.id = "style-portail-cis";
+    style.textContent = `
+        .portail-cis-page {
+            max-width: 760px;
+            margin: 0 auto;
+        }
+
+        .portail-cis-entete {
+            margin: 26px 0 30px;
+        }
+
+        .portail-cis-entete h1 {
+            margin-bottom: 6px;
+        }
+
+        .portail-cis-entete p {
+            margin: 0;
+            opacity: .72;
+        }
+
+        .portail-cis-espaces {
+            display: grid;
+            gap: 20px;
+        }
+
+        .portail-cis-carte {
+            width: 100%;
+            min-height: 150px;
+            border: 0;
+            border-radius: 24px;
+            padding: 28px 26px;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            text-align: left;
+            box-shadow: 0 12px 28px rgba(0,0,0,.13);
+            cursor: pointer;
+        }
+
+        .portail-cis-caserne {
+            background: #741f25;
+        }
+
+        .portail-cis-pharmacie {
+            background: #205f43;
+        }
+
+        .portail-cis-titre {
+            font-size: clamp(1.45rem, 5vw, 2rem);
+            font-weight: 800;
+        }
+
+        .portail-cis-fleche {
+            font-size: 3rem;
+            line-height: 1;
+            font-weight: 300;
+        }
+
+        .espace-caserne-attente {
+            margin-top: 28px;
+            padding: 28px;
+            border-radius: 22px;
+            background: #fff;
+            border: 1px solid #e1e5e8;
+            box-shadow: 0 8px 22px rgba(0,0,0,.06);
+        }
+
+        .espace-caserne-attente strong {
+            font-size: 1.2rem;
+        }
+
+        .bouton-retour-portail {
+            width: 100%;
+            margin: 0 0 18px;
+            padding: 13px 16px;
+            border: 1px solid #d9e0e5;
+            border-radius: 14px;
+            background: #fff;
+            color: #27313a;
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        @media (min-width: 1000px) {
+            .portail-cis-page {
+                max-width: 980px;
+                padding-top: 42px;
+            }
+
+            .portail-cis-espaces {
+                grid-template-columns: 1fr 1fr;
+                gap: 28px;
+            }
+
+            .portail-cis-carte {
+                min-height: 230px;
+                padding: 38px;
+            }
+        }
+    `;
+
+    document.head.appendChild(style);
+}
+
+initialiserStylePortailCIS();
+
+/* =========================================================
    ACCUEIL
    ========================================================= */
 
@@ -7504,6 +7711,15 @@ function afficherAccueil() {
                 </button>
 
             </div>
+
+
+            <button
+                class="bouton-retour-portail"
+                type="button"
+                onclick="afficherPortailPrincipal()"
+            >
+                ← Choisir un autre espace
+            </button>
 
 
             <header class="accueil-header">
@@ -16721,6 +16937,12 @@ window.enregistrerRole =
 
 window.supprimerRoleGestion =
     supprimerRoleGestion;
+
+window.afficherPortailPrincipal =
+    afficherPortailPrincipal;
+
+window.afficherEspaceCaserne =
+    afficherEspaceCaserne;
 
 window.afficherAccueil =
     afficherAccueil;
