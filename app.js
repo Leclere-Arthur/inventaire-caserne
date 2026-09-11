@@ -12,7 +12,7 @@ const DOMAINE_EMAIL_INTERNE =
     "inventaire-caserne.local";
 
 const VERSION_APPLICATION =
-    "2.9.5";
+    "2.9.6";
 
 const CLE_PROFIL_UTILISATEUR_CACHE =
     "profil_utilisateur_connecte_v1";
@@ -5776,51 +5776,12 @@ async function envoyerDonneesLocalesVersSupabase() {
     }
 
     /*
-     * Sauvegarde des anciennes périodes.
-     * Elle est faite AVANT la suppression des interventions courantes,
-     * afin qu'une remise à zéro ne puisse jamais perdre l'historique.
+     * Les archives ne sont pas écrites pendant une synchronisation normale.
+     * Elles sont créées uniquement par l'action "Commande effectuée"
+     * via la fonction Supabase sécurisée archiver_historique_courant.
+     * Cela évite qu'un retour d'intervention soit bloqué par les règles RLS
+     * de la table archives_historique.
      */
-    const lignesArchives =
-        archivesHistorique.map(
-            function (archive) {
-
-                return {
-                    id: String(archive.id),
-                    date_commande:
-                        String(
-                            archive.date ||
-                            dateAujourdhui()
-                        ),
-                    interventions:
-                        Array.isArray(
-                            archive.interventions
-                        )
-                            ? archive.interventions
-                            : []
-                };
-
-            }
-        );
-
-
-    if (lignesArchives.length > 0) {
-
-        const resultatArchives =
-            await supabase
-                .from("archives_historique")
-                .upsert(
-                    lignesArchives,
-                    {
-                        onConflict: "id"
-                    }
-                );
-
-        if (resultatArchives.error) {
-            throw resultatArchives.error;
-        }
-
-    }
-
 
     const lignesInterventions = historique.map(function (intervention) {
 
