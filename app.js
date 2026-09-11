@@ -667,7 +667,7 @@ const DOMAINE_EMAIL_INTERNE =
     "inventaire-caserne.local";
 
 const VERSION_APPLICATION =
-    "2.9.12";
+    "2.9.13";
 
 const CLE_PROFIL_UTILISATEUR_CACHE =
     "profil_utilisateur_connecte_v1";
@@ -1351,7 +1351,19 @@ async function appliquerMiseAJourApplication() {
                 if (
                     rechargementApresMiseAJourEnCours
                 ) {
-                    window.location.reload();
+                    const url =
+                        new URL(
+                            window.location.href
+                        );
+
+                    url.searchParams.set(
+                        "_maj",
+                        Date.now()
+                    );
+
+                    window.location.replace(
+                        url.toString()
+                    );
                 }
 
             },
@@ -1515,8 +1527,18 @@ async function initialiserSystemeMiseAJourApplication() {
                  * replace() évite de laisser l'ancienne page dans
                  * l'historique de navigation.
                  */
+                const url =
+                    new URL(
+                        window.location.href
+                    );
+
+                url.searchParams.set(
+                    "_maj",
+                    Date.now()
+                );
+
                 window.location.replace(
-                    window.location.href
+                    url.toString()
                 );
             }
 

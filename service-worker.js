@@ -14,7 +14,7 @@
  * à récupérer le nouvel app.js.
  */
 
-const CACHE_NAME = "inventaire-caserne-v53";
+const CACHE_NAME = "inventaire-caserne-v54";
 
 
 /*
@@ -58,7 +58,7 @@ self.addEventListener(
     function (event) {
 
         console.log(
-            "Installation du Service Worker V53..."
+            "Installation du Service Worker V54..."
         );
 
 
@@ -76,8 +76,41 @@ self.addEventListener(
                         );
 
 
-                        return cache.addAll(
-                            FICHIERS_APPLICATION
+                        return Promise.all(
+                            FICHIERS_APPLICATION.map(
+                                async function (fichier) {
+
+                                    const requete =
+                                        new Request(
+                                            fichier,
+                                            {
+                                                cache:
+                                                    "reload"
+                                            }
+                                        );
+
+                                    const reponse =
+                                        await fetch(
+                                            requete
+                                        );
+
+                                    if (
+                                        !reponse ||
+                                        !reponse.ok
+                                    ) {
+                                        throw new Error(
+                                            "Impossible de mettre à jour : " +
+                                            fichier
+                                        );
+                                    }
+
+                                    await cache.put(
+                                        fichier,
+                                        reponse.clone()
+                                    );
+
+                                }
+                            )
                         );
 
                     }
@@ -120,7 +153,7 @@ self.addEventListener(
     function (event) {
 
         console.log(
-            "Activation du Service Worker V53..."
+            "Activation du Service Worker V54..."
         );
 
 
@@ -376,90 +409,73 @@ self.addEventListener(
 
         event.respondWith(
 
-            caches
-                .match(
-                    event.request
+            fetch(
+                new Request(
+                    event.request,
+                    {
+                        cache:
+                            "no-store"
+                    }
                 )
+            )
                 .then(
-                    function (reponseCache) {
+                    async function (
+                        reponseReseau
+                    ) {
 
-                        /*
-                         * Pour les fichiers locaux de l'application,
-                         * on peut utiliser le cache hors connexion.
-                         */
+                        if (
+                            reponseReseau &&
+                            reponseReseau.status === 200 &&
+                            reponseReseau.type !== "opaque"
+                        ) {
+
+                            const cache =
+                                await caches.open(
+                                    CACHE_NAME
+                                );
+
+                            await cache.put(
+                                event.request,
+                                reponseReseau.clone()
+                            );
+
+                        }
+
+                        return reponseReseau;
+
+                    }
+                )
+                .catch(
+                    async function () {
+
+                        const reponseCache =
+                            await caches.match(
+                                event.request
+                            );
+
                         if (
                             reponseCache
                         ) {
                             return reponseCache;
                         }
 
-
-                        return fetch(
-                            event.request
-                        )
-                            .then(
-                                function (reponseReseau) {
-
-                                    if (
-                                        reponseReseau &&
-                                        reponseReseau.status ===
-                                        200 &&
-                                        reponseReseau.type !==
-                                        "opaque"
-                                    ) {
-
-                                        const copie =
-                                            reponseReseau.clone();
-
-
-                                        caches
-                                            .open(
-                                                CACHE_NAME
-                                            )
-                                            .then(
-                                                function (cache) {
-
-                                                    cache.put(
-                                                        event.request,
-                                                        copie
-                                                    );
-
-                                                }
-                                            );
-
-                                    }
-
-
-                                    return reponseReseau;
-
-                                }
-                            )
-                            .catch(
-                                function () {
-
-                                    if (
-                                        event.request.mode ===
-                                        "navigate"
-                                    ) {
-
-                                        return caches.match(
-                                            "./index.html"
-                                        );
-
-                                    }
-
-
-                                    return new Response(
-                                        "",
-                                        {
-                                            status: 503,
-                                            statusText:
-                                                "Hors connexion"
-                                        }
-                                    );
-
-                                }
+                        if (
+                            event.request.mode ===
+                            "navigate"
+                        ) {
+                            return caches.match(
+                                "./index.html"
                             );
+                        }
+
+                        return new Response(
+                            "",
+                            {
+                                status: 503,
+                                statusText:
+                                    "Hors connexion"
+                            }
+                        );
 
                     }
                 )
