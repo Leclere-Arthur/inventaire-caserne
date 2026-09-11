@@ -12,7 +12,7 @@ const DOMAINE_EMAIL_INTERNE =
     "inventaire-caserne.local";
 
 const VERSION_APPLICATION =
-    "2.9.4";
+    "2.9.5";
 
 const CLE_PROFIL_UTILISATEUR_CACHE =
     "profil_utilisateur_connecte_v1";
@@ -3909,7 +3909,7 @@ function normaliserIntervention(intervention) {
 
         id:
             i.id ||
-            genererId(),
+            genererUUID(),
 
         date:
             String(
@@ -4753,8 +4753,21 @@ async function synchroniserManuellement() {
             erreur
         );
 
+        const detailErreur =
+            String(
+                erreur?.message ||
+                erreur?.details ||
+                erreur?.hint ||
+                ""
+            ).trim();
+
         alert(
-            "⚠️ La synchronisation n'a pas pu être effectuée."
+            "⚠️ La synchronisation n'a pas pu être effectuée." +
+            (
+                detailErreur
+                    ? "\n\nDétail : " + detailErreur
+                    : ""
+            )
         );
 
     } finally {
@@ -4886,7 +4899,7 @@ async function synchroniserApresModification() {
             "📴 Modification enregistrée localement. Elle sera synchronisée lors de la prochaine action en ligne."
         );
 
-        return;
+        return false;
     }
 
 
@@ -4899,7 +4912,7 @@ async function synchroniserApresModification() {
             "⚠️ Supabase n'est pas encore joignable. La modification reste enregistrée localement."
         );
 
-        return;
+        return false;
 
     }
 
@@ -4949,12 +4962,16 @@ async function synchroniserApresModification() {
             "✅ Modification synchronisée avec Supabase."
         );
 
+        return true;
+
     } catch (erreur) {
 
         console.warn(
             "⚠️ La modification reste enregistrée localement et sera renvoyée plus tard.",
             erreur
         );
+
+        return false;
 
     } finally {
 
@@ -6320,13 +6337,11 @@ window.addEventListener("online", function () {
 
 function genererId() {
 
-    return (
-        Date.now() +
-        "-" +
-        Math.random()
-            .toString(36)
-            .substring(2)
-    );
+    /*
+     * Tous les identifiants créés par l'application utilisent désormais
+     * le même format UUID que les tables Supabase.
+     */
+    return genererUUID();
 
 }
 
@@ -8889,7 +8904,7 @@ async function validerRetourIntervention() {
     historique.push({
 
         id:
-            genererId(),
+            genererUUID(),
 
         date:
             date,
@@ -8914,13 +8929,28 @@ async function validerRetourIntervention() {
 
     try {
 
-        await synchroniserApresModification();
+        const synchronise =
+            await synchroniserApresModification();
 
-        alert(
-            navigator.onLine
-                ? "✅ Retour d'intervention enregistré !"
-                : "✅ Retour enregistré hors connexion. Il sera synchronisé plus tard."
-        );
+        if (!navigator.onLine) {
+
+            alert(
+                "✅ Retour enregistré hors connexion. Il sera synchronisé plus tard."
+            );
+
+        } else if (synchronise) {
+
+            alert(
+                "✅ Retour d'intervention enregistré et synchronisé !"
+            );
+
+        } else {
+
+            alert(
+                "⚠️ Retour enregistré sur cet appareil, mais la synchronisation avec la base de données a échoué. Les données sont conservées et pourront être renvoyées."
+            );
+
+        }
 
         await afficherHistorique();
 
@@ -14633,7 +14663,7 @@ function enregistrerMateriel() {
     const nouveauMateriel = {
 
         id:
-            genererId(),
+            genererUUID(),
 
         nom:
             nom,

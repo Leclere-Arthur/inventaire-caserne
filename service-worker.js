@@ -14,7 +14,7 @@
  * à récupérer le nouvel app.js.
  */
 
-const CACHE_NAME = "inventaire-caserne-v45";
+const CACHE_NAME = "inventaire-caserne-v46";
 
 
 /*
@@ -42,7 +42,9 @@ const FICHIERS_APPLICATION = [
 
     "./apple-touch-icon.png",
 
-    "./fond-connexion.png"
+    "./fond-connexion.png",
+
+    "./logo-version-pc.png"
 
 ];
 
@@ -56,7 +58,7 @@ self.addEventListener(
     function (event) {
 
         console.log(
-            "Installation du Service Worker V45..."
+            "Installation du Service Worker V46..."
         );
 
 
@@ -118,7 +120,7 @@ self.addEventListener(
     function (event) {
 
         console.log(
-            "Activation du Service Worker V45..."
+            "Activation du Service Worker V46..."
         );
 
 
