@@ -668,7 +668,7 @@ const DOMAINE_EMAIL_INTERNE =
     "inventaire-caserne.local";
 
 const VERSION_APPLICATION =
-    "2.9.26";
+    "2.9.27";
 
 const CLE_PROFIL_UTILISATEUR_CACHE =
     "profil_utilisateur_connecte_v1";
@@ -7694,35 +7694,14 @@ function afficherAccueil() {
             <div class="utilisateur-entete">
 
                 <button
-                    class="bouton-profil-accueil"
+                    class="retour-button"
                     type="button"
-                    onclick="afficherProfilUtilisateur()"
+                    onclick="afficherPortailPrincipal()"
                 >
-
-                    <strong>
-                        ${echapperHTML(
-                            obtenirNomUtilisateurAffiche()
-                        )}
-                    </strong>
-
-                    <span>
-                        ${echapperHTML(
-                            role?.nom || ""
-                        )}
-                    </span>
-
+                    ← Retour
                 </button>
 
             </div>
-
-
-            <button
-                class="retour-button"
-                type="button"
-                onclick="afficherPortailPrincipal()"
-            >
-                ← Retour
-            </button>
 
 
             <header class="accueil-header">
