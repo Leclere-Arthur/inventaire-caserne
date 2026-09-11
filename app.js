@@ -667,7 +667,7 @@ const DOMAINE_EMAIL_INTERNE =
     "inventaire-caserne.local";
 
 const VERSION_APPLICATION =
-    "2.9.14";
+    "2.9.15";
 
 const CLE_PROFIL_UTILISATEUR_CACHE =
     "profil_utilisateur_connecte_v1";
@@ -16998,6 +16998,40 @@ function initialiserInterfaceBureau() {
                 background: #101820 !important;
                 color: #eef2f5 !important;
                 box-shadow: none !important;
+            }
+
+            /*
+             * Contraste PC - Gestion des utilisateurs
+             * Les cartes sont sombres : les badges et champs ne doivent
+             * jamais afficher du texte clair sur un fond clair.
+             */
+            body:not(.mode-connexion) .gestion-utilisateurs-page .badge-role {
+                background: #dfe8ef !important;
+                color: #101820 !important;
+                border: 1px solid #c4d0da !important;
+            }
+
+            body:not(.mode-connexion) .gestion-utilisateurs-page input,
+            body:not(.mode-connexion) .gestion-utilisateurs-page select {
+                background: #16212a !important;
+                color: #eef2f5 !important;
+                border-color: #394955 !important;
+            }
+
+            body:not(.mode-connexion) .gestion-utilisateurs-page input::placeholder {
+                color: #9ba8b2 !important;
+                opacity: 1;
+            }
+
+            body:not(.mode-connexion) .gestion-utilisateurs-page select option {
+                background: #ffffff;
+                color: #17202a;
+            }
+
+            body:not(.mode-connexion) .gestion-utilisateurs-page label,
+            body:not(.mode-connexion) .gestion-utilisateurs-page small,
+            body:not(.mode-connexion) .gestion-utilisateurs-page strong {
+                color: inherit;
             }
 
             body:not(.mode-connexion) .permissions-role {
