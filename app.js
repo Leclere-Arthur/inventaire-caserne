@@ -668,7 +668,7 @@ const DOMAINE_EMAIL_INTERNE =
     "inventaire-caserne.local";
 
 const VERSION_APPLICATION =
-    "2.9.25";
+    "2.9.26";
 
 const CLE_PROFIL_UTILISATEUR_CACHE =
     "profil_utilisateur_connecte_v1";
@@ -7277,14 +7277,6 @@ function afficherPortailPrincipal() {
                 </button>
             </div>
 
-            <button
-                class="retour-button portail-cis-retour"
-                type="button"
-                onclick="deconnecterApplication()"
-            >
-                ← Retour
-            </button>
-
             <section class="portail-cis-espaces">
                 <button
                     type="button"
@@ -7725,11 +7717,11 @@ function afficherAccueil() {
 
 
             <button
-                class="bouton-retour-portail"
+                class="retour-button"
                 type="button"
                 onclick="afficherPortailPrincipal()"
             >
-                ← Choisir un autre espace
+                ← Retour
             </button>
 
 
