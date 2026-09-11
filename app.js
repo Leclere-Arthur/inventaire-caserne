@@ -12,7 +12,7 @@ const DOMAINE_EMAIL_INTERNE =
     "inventaire-caserne.local";
 
 const VERSION_APPLICATION =
-    "2.9.3";
+    "2.9.4";
 
 const CLE_PROFIL_UTILISATEUR_CACHE =
     "profil_utilisateur_connecte_v1";
@@ -10333,15 +10333,13 @@ async function afficherReapprovisionnementArchive(
                                 </span>
                             </div>
 
-                            <input
-                                class="reappro-quantite"
-                                type="number"
-                                min="0"
-                                step="1"
-                                inputmode="numeric"
-                                placeholder="0"
-                                aria-label="Quantité à ajouter pour ${echapperHTML(materiel.nom)}"
-                            >
+                            <select
+            class="reappro-quantite"
+            aria-label="Quantité à ajouter"
+        >
+            <option value="">Quantité</option>
+            ${Array.from({ length: 99 }, (_, index) => `<option value="${index + 1}">${index + 1}</option>`).join("")}
+        </select>
                         </div>
                     `;
 
@@ -10758,15 +10756,13 @@ function ajouterLigneReapprovisionnementArchive() {
 
         </div>
 
-        <input
+        <select
             class="reappro-quantite"
-            type="number"
-            min="0"
-            step="1"
-            inputmode="numeric"
-            placeholder="0"
             aria-label="Quantité à ajouter"
         >
+            <option value="">Quantité</option>
+            ${Array.from({ length: 99 }, (_, index) => `<option value="${index + 1}">${index + 1}</option>`).join("")}
+        </select>
 
         <button
             type="button"
@@ -16385,6 +16381,8 @@ function initialiserInterfaceBureau() {
 
             body:not(.mode-connexion) .reappro-quantite {
                 text-align: center;
+                cursor: pointer;
+                appearance: auto !important;
             }
 
             body:not(.mode-connexion) .reappro-resultats {
