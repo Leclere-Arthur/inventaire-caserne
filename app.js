@@ -1,6 +1,288 @@
 "use strict";
 
 /* =========================================================
+   FENETRES PERSONNALISEES CIS LE CHESNE
+   Remplace les alert() du navigateur par une fenêtre intégrée
+   avec un message qui reprend exactement l'opération effectuée.
+   ========================================================= */
+
+function initialiserFenetreCIS() {
+
+    if (document.getElementById("fenetre-cis-style")) {
+        return;
+    }
+
+    const style = document.createElement("style");
+    style.id = "fenetre-cis-style";
+    style.textContent = `
+        .fenetre-cis-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 20000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            box-sizing: border-box;
+            background: rgba(0, 0, 0, .48);
+            backdrop-filter: blur(3px);
+        }
+
+        .fenetre-cis {
+            width: min(92vw, 430px);
+            box-sizing: border-box;
+            overflow: hidden;
+            border-radius: 16px;
+            background: #ffffff;
+            color: #17202a;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, .28);
+            animation: fenetreCisEntree .16s ease-out;
+        }
+
+        .fenetre-cis-entete {
+            padding: 18px 20px 15px;
+            background: #111820;
+            color: #ffffff;
+        }
+
+        .fenetre-cis-entete strong {
+            display: block;
+            font-size: 17px;
+            line-height: 1.2;
+        }
+
+        .fenetre-cis-corps {
+            padding: 20px;
+            font-size: 15px;
+            line-height: 1.45;
+            white-space: pre-line;
+        }
+
+        .fenetre-cis-actions {
+            display: flex;
+            justify-content: flex-end;
+            padding: 0 20px 20px;
+        }
+
+        .fenetre-cis-ok {
+            min-width: 92px;
+            min-height: 42px;
+            padding: 9px 18px;
+            border: 0;
+            border-radius: 9px;
+            background: #1f6f4a;
+            color: #ffffff;
+            font: inherit;
+            font-weight: 800;
+            cursor: pointer;
+        }
+
+        .fenetre-cis-ok:hover {
+            filter: brightness(1.05);
+        }
+
+        .fenetre-cis.succes .fenetre-cis-entete {
+            background: #146b43;
+        }
+
+        .fenetre-cis.avertissement .fenetre-cis-entete {
+            background: #9b6518;
+        }
+
+        .fenetre-cis.erreur .fenetre-cis-entete {
+            background: #9f2832;
+        }
+
+        @keyframes fenetreCisEntree {
+            from {
+                opacity: 0;
+                transform: translateY(8px) scale(.985);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+    `;
+
+    document.head.appendChild(style);
+}
+
+
+function determinerTypeFenetreCIS(message) {
+
+    const texte =
+        String(message || "").toLowerCase();
+
+    if (
+        texte.includes("erreur") ||
+        texte.includes("échou") ||
+        texte.includes("refus") ||
+        texte.includes("impossible")
+    ) {
+        return "erreur";
+    }
+
+    if (
+        texte.includes("⚠️") ||
+        texte.includes("attention") ||
+        texte.includes("hors connexion")
+    ) {
+        return "avertissement";
+    }
+
+    if (
+        texte.includes("✅") ||
+        texte.includes("succès") ||
+        texte.includes("enregistré") ||
+        texte.includes("ajouté") ||
+        texte.includes("supprimé") ||
+        texte.includes("modifié") ||
+        texte.includes("effectué")
+    ) {
+        return "succes";
+    }
+
+    return "information";
+}
+
+
+function afficherFenetreCIS(message) {
+
+    initialiserFenetreCIS();
+
+    return new Promise(function (resolve) {
+
+        const ancienne =
+            document.querySelector(
+                ".fenetre-cis-overlay"
+            );
+
+        if (ancienne) {
+            ancienne.remove();
+        }
+
+        const type =
+            determinerTypeFenetreCIS(message);
+
+        const overlay =
+            document.createElement("div");
+
+        overlay.className =
+            "fenetre-cis-overlay";
+
+        const contenu =
+            document.createElement("div");
+
+        contenu.className =
+            "fenetre-cis " + type;
+
+        const entete =
+            document.createElement("div");
+
+        entete.className =
+            "fenetre-cis-entete";
+
+        entete.innerHTML =
+            "<strong>CIS Le Chesne</strong>";
+
+        const corps =
+            document.createElement("div");
+
+        corps.className =
+            "fenetre-cis-corps";
+
+        corps.textContent =
+            String(message || "");
+
+        const actions =
+            document.createElement("div");
+
+        actions.className =
+            "fenetre-cis-actions";
+
+        const ok =
+            document.createElement("button");
+
+        ok.type = "button";
+        ok.className =
+            "fenetre-cis-ok";
+        ok.textContent = "OK";
+
+        const fermer =
+            function () {
+
+                overlay.remove();
+                resolve();
+
+            };
+
+        ok.addEventListener(
+            "click",
+            fermer
+        );
+
+        overlay.addEventListener(
+            "click",
+            function (event) {
+
+                if (event.target === overlay) {
+                    fermer();
+                }
+
+            }
+        );
+
+        document.addEventListener(
+            "keydown",
+            function gestionTouche(event) {
+
+                if (
+                    event.key === "Enter" ||
+                    event.key === "Escape"
+                ) {
+                    document.removeEventListener(
+                        "keydown",
+                        gestionTouche
+                    );
+                    fermer();
+                }
+
+            }
+        );
+
+        actions.appendChild(ok);
+        contenu.appendChild(entete);
+        contenu.appendChild(corps);
+        contenu.appendChild(actions);
+        overlay.appendChild(contenu);
+        document.body.appendChild(overlay);
+
+        window.setTimeout(
+            function () {
+                ok.focus();
+            },
+            20
+        );
+
+    });
+}
+
+
+/*
+ * Tous les anciens alert() de l'application passent maintenant
+ * par la fenêtre CIS Le Chesne. Le texte reste celui de l'action
+ * réelle : retour enregistré, stock ajouté, utilisateur modifié, etc.
+ */
+window.alert = function (message) {
+
+    afficherFenetreCIS(message);
+
+};
+
+
+
+/* =========================================================
    INVENTAIRE CASERNE
    APP.JS COMPLET
    ========================================================= */
@@ -12,7 +294,7 @@ const DOMAINE_EMAIL_INTERNE =
     "inventaire-caserne.local";
 
 const VERSION_APPLICATION =
-    "2.9.6";
+    "2.9.7";
 
 const CLE_PROFIL_UTILISATEUR_CACHE =
     "profil_utilisateur_connecte_v1";

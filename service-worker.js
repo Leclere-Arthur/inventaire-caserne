@@ -14,7 +14,7 @@
  * à récupérer le nouvel app.js.
  */
 
-const CACHE_NAME = "inventaire-caserne-v47";
+const CACHE_NAME = "inventaire-caserne-v48";
 
 
 /*
@@ -58,7 +58,7 @@ self.addEventListener(
     function (event) {
 
         console.log(
-            "Installation du Service Worker V47..."
+            "Installation du Service Worker V48..."
         );
 
 
@@ -120,7 +120,7 @@ self.addEventListener(
     function (event) {
 
         console.log(
-            "Activation du Service Worker V47..."
+            "Activation du Service Worker V48..."
         );
 
 
