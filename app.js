@@ -668,7 +668,7 @@ const DOMAINE_EMAIL_INTERNE =
     "inventaire-caserne.local";
 
 const VERSION_APPLICATION =
-    "2.9.17";
+    "2.9.18";
 
 const CLE_PROFIL_UTILISATEUR_CACHE =
     "profil_utilisateur_connecte_v1";
@@ -6589,7 +6589,10 @@ async function envoyerDonneesLocalesVersSupabase() {
             ...(intervention.createdBy ? { created_by: String(intervention.createdBy) } : {}),
             ...(intervention.createdByPrenom ? { created_by_prenom: String(intervention.createdByPrenom) } : {}),
             ...(intervention.createdByNom ? { created_by_nom: String(intervention.createdByNom) } : {}),
-            ...(intervention.createdAt ? { created_at: String(intervention.createdAt) } : {})
+            created_at: String(
+                intervention.createdAt ||
+                ((intervention.date || dateAujourdhui()) + "T00:00:00.000Z")
+            )
         };
 
     });
