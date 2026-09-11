@@ -667,7 +667,7 @@ const DOMAINE_EMAIL_INTERNE =
     "inventaire-caserne.local";
 
 const VERSION_APPLICATION =
-    "2.9.8";
+    "2.9.10";
 
 const CLE_PROFIL_UTILISATEUR_CACHE =
     "profil_utilisateur_connecte_v1";
@@ -13189,7 +13189,51 @@ async function appelerGestionUtilisateurs(
 
 
     if (error) {
-        throw error;
+
+        /*
+         * Supabase renvoie souvent seulement :
+         * "Edge Function returned a non-2xx status code".
+         * On lit donc le corps réel de la réponse de l'Edge Function
+         * pour afficher à l'utilisateur la vraie cause.
+         */
+        let messageDetaille = "";
+
+        try {
+
+            if (
+                error.context &&
+                typeof error.context.clone === "function"
+            ) {
+
+                const reponse =
+                    error.context.clone();
+
+                const contenu =
+                    await reponse.json();
+
+                messageDetaille =
+                    String(
+                        contenu?.error ||
+                        contenu?.message ||
+                        ""
+                    ).trim();
+
+            }
+
+        } catch (erreurLecture) {
+
+            console.warn(
+                "Lecture du détail Edge Function impossible :",
+                erreurLecture
+            );
+
+        }
+
+        throw new Error(
+            messageDetaille ||
+            error?.message ||
+            "Opération impossible."
+        );
     }
 
 
@@ -13712,6 +13756,7 @@ async function creerUtilisateurAdministration() {
     }
 
 
+
     try {
 
         await appelerGestionUtilisateurs(
@@ -13818,15 +13863,6 @@ async function changerMotDePasseUtilisateur(
         return;
     }
 
-
-    if (
-        motDePasse.length < 4
-    ) {
-        alert(
-            "Le mot de passe doit contenir au moins 4 caractères."
-        );
-        return;
-    }
 
 
     try {
