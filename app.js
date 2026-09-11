@@ -667,7 +667,7 @@ const DOMAINE_EMAIL_INTERNE =
     "inventaire-caserne.local";
 
 const VERSION_APPLICATION =
-    "2.9.10";
+    "2.9.11";
 
 const CLE_PROFIL_UTILISATEUR_CACHE =
     "profil_utilisateur_connecte_v1";
@@ -1629,6 +1629,62 @@ function normaliserIdentifiantConnexion(
             ""
         );
 
+}
+
+
+function preparerMotDePasseSupabase(motDePasse) {
+
+    const valeur = String(motDePasse ?? "");
+
+    /*
+     * Supabase Auth impose 6 caractères minimum.
+     * L'utilisateur peut cependant choisir un code plus court.
+     * Les codes de 6 caractères ou plus restent inchangés,
+     * afin de préserver tous les comptes existants.
+     */
+    if (valeur.length >= 6) {
+        return valeur;
+    }
+
+    return valeur + "|CIS|" + valeur.length;
+
+}
+
+
+function traduireErreurAuthentification(message) {
+
+    const texte = String(message || "").trim();
+
+    if (/password should be at least\s+\d+\s+characters?/i.test(texte)) {
+        return "Le code choisi n'a pas pu être accepté.";
+    }
+
+    if (/invalid login credentials/i.test(texte)) {
+        return "Identifiant ou code incorrect.";
+    }
+
+    if (/user already registered/i.test(texte)) {
+        return "Cet utilisateur existe déjà.";
+    }
+
+    if (/email not confirmed/i.test(texte)) {
+        return "Le compte n'est pas encore activé.";
+    }
+
+    if (/new password should be different from the old password/i.test(texte) ||
+        /same password/i.test(texte)) {
+        return "Le nouveau code doit être différent de l'ancien.";
+    }
+
+    if (/rate limit/i.test(texte) || /too many requests/i.test(texte)) {
+        return "Trop de tentatives. Réessayez dans quelques instants.";
+    }
+
+    if (/edge function returned a non-2xx status code/i.test(texte)) {
+        return "L'opération n'a pas pu être effectuée.";
+    }
+
+    return texte;
 }
 
 
@@ -2731,7 +2787,7 @@ async function seConnecterApplication() {
                             identifiant
                         ),
                     password:
-                        motDePasse
+                        preparerMotDePasseSupabase(motDePasse)
                 });
 
 
@@ -3443,7 +3499,7 @@ async function changerMonMotDePasse() {
                             identifiant
                         ),
                     password:
-                        ancien
+                        preparerMotDePasseSupabase(ancien)
                 });
 
 
@@ -3464,7 +3520,7 @@ async function changerMonMotDePasse() {
             await supabase.auth
                 .updateUser({
                     password:
-                        nouveau
+                        preparerMotDePasseSupabase(nouveau)
                 });
 
 
@@ -3487,7 +3543,7 @@ async function changerMonMotDePasse() {
 
 
         alert(
-            "✅ Mot de passe modifié."
+            "✅ Code modifié."
         );
 
     } catch (erreur) {
@@ -3498,7 +3554,11 @@ async function changerMonMotDePasse() {
         );
 
         alert(
-            "⚠️ Impossible de changer le mot de passe pour le moment."
+            "⚠️ " +
+            traduireErreurAuthentification(
+                erreur?.message ||
+                "Impossible de changer le code pour le moment."
+            )
         );
 
     }
@@ -13230,9 +13290,11 @@ async function appelerGestionUtilisateurs(
         }
 
         throw new Error(
-            messageDetaille ||
-            error?.message ||
-            "Opération impossible."
+            traduireErreurAuthentification(
+                messageDetaille ||
+                error?.message ||
+                "Opération impossible."
+            )
         );
     }
 
@@ -13242,8 +13304,10 @@ async function appelerGestionUtilisateurs(
         data.ok !== true
     ) {
         throw new Error(
-            data?.error ||
-            "Opération impossible."
+            traduireErreurAuthentification(
+                data?.error ||
+                "Opération impossible."
+            )
         );
     }
 
@@ -13766,7 +13830,7 @@ async function creerUtilisateurAdministration() {
                 nom,
                 prenom,
                 mot_de_passe:
-                    motDePasse,
+                    preparerMotDePasseSupabase(motDePasse),
                 role_id:
                     roleId
             }
@@ -13853,7 +13917,7 @@ async function changerMotDePasseUtilisateur(
 
     const motDePasse =
         await afficherSaisieCIS(
-            "Nouveau mot de passe pour " +
+            "Nouveau code pour " +
             identifiant +
             " :"
         );
@@ -13873,13 +13937,13 @@ async function changerMotDePasseUtilisateur(
                 user_id:
                     userId,
                 mot_de_passe:
-                    motDePasse
+                    preparerMotDePasseSupabase(motDePasse)
             }
         );
 
 
         alert(
-            "✅ Mot de passe modifié."
+            "✅ Code modifié."
         );
 
     } catch (erreur) {
