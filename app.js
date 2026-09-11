@@ -12,7 +12,7 @@ const DOMAINE_EMAIL_INTERNE =
     "inventaire-caserne.local";
 
 const VERSION_APPLICATION =
-    "2.9.1";
+    "2.9.2";
 
 const CLE_PROFIL_UTILISATEUR_CACHE =
     "profil_utilisateur_connecte_v1";
@@ -10479,17 +10479,50 @@ async function afficherReapprovisionnementAdministration() {
             </button>
 
             <header class="reappro-entete">
-                <p class="reappro-sur-titre">
-                    Pharmacie · Stock
-                </p>
-                <h2>
-                    Réapprovisionnement
-                </h2>
+
+                <div class="reappro-entete-contenu">
+                    <p class="reappro-sur-titre">
+                        Stock
+                    </p>
+
+                    <h2>
+                        Réapprovisionnement
+                    </h2>
+
+                    <p class="reappro-sous-titre-bureau bureau-seulement">
+                        Ajoutez les matériels reçus pour les remettre en stock.
+                    </p>
+                </div>
+
+                <div class="reappro-date-bureau bureau-seulement">
+                    <span class="reappro-date-label">
+                        Date du réapprovisionnement
+                    </span>
+                    <strong>
+                        ${formaterDate(dateAujourdhui())}
+                    </strong>
+                </div>
+
             </header>
 
             <section class="reappro-feuille">
 
-                <div class="reappro-section-titre">
+                <div class="reappro-icone-bureau bureau-seulement">
+                    +
+                </div>
+
+                <h3 class="reappro-grand-titre bureau-seulement">
+                    Nouveau réapprovisionnement
+                </h3>
+
+                <div class="reappro-table-entete bureau-seulement">
+                    <span>#</span>
+                    <span>Matériel</span>
+                    <span>Quantité</span>
+                    <span>Action</span>
+                </div>
+
+                <div class="reappro-section-titre mobile-seulement">
                     Matériels à ajouter au stock
                 </div>
 
@@ -10502,7 +10535,8 @@ async function afficherReapprovisionnementAdministration() {
                         class="reappro-ajouter"
                         onclick="ajouterLigneReapprovisionnementArchive()"
                     >
-                        Ajouter un matériel
+                        <span class="bureau-seulement">+&nbsp;&nbsp; Ajouter un autre matériel</span>
+                        <span class="mobile-seulement">Ajouter un matériel</span>
                     </button>
                 </div>
 
@@ -10511,11 +10545,16 @@ async function afficherReapprovisionnementAdministration() {
                     class="reappro-validation"
                     onclick="validerReapprovisionnementAdministration()"
                 >
-                    Ajouter au stock
+                    <span class="bureau-seulement">
+                        Enregistrer le réapprovisionnement
+                    </span>
+                    <span class="mobile-seulement">
+                        Ajouter au stock
+                    </span>
                 </button>
 
                 <p class="reappro-note">
-                    Les quantités saisies seront ajoutées au stock actuel.
+                    Les quantités saisies seront ajoutées au stock actuel des matériels.
                 </p>
 
             </section>
@@ -15558,10 +15597,10 @@ window.remiseZeroHistorique =
 window.basculerCategorie =
     basculerCategorie;
 
+
 /* =========================================================
-   INTERFACE BUREAU
-   Présentation dédiée aux écrans PC.
-   L'interface mobile reste inchangée.
+   INTERFACE BUREAU V43
+   Mobile inchangé / PC entièrement dédié
    ========================================================= */
 
 function initialiserInterfaceBureau() {
@@ -15573,54 +15612,81 @@ function initialiserInterfaceBureau() {
 
     const style = document.createElement("style");
     style.id = "style-interface-bureau";
+
     style.textContent = `
         #navigation-bureau {
             display: none;
         }
 
+        .bureau-seulement {
+            display: none !important;
+        }
+
         @media (min-width: 1000px) {
 
             :root {
-                --bureau-sidebar: 252px;
-                --bureau-fond: #f4f6f8;
-                --bureau-carte: #ffffff;
-                --bureau-bordure: #e3e7eb;
-                --bureau-texte: #18212b;
-                --bureau-secondaire: #6b7580;
-                --bureau-vert: #174f38;
-                --bureau-vert-clair: #e9f2ed;
+                --pc-sidebar: 252px;
+                --pc-fond: #0d141b;
+                --pc-fond-2: #111a22;
+                --pc-panel: #141e27;
+                --pc-panel-2: #18232d;
+                --pc-bordure: #26333f;
+                --pc-bordure-claire: #34424f;
+                --pc-texte: #f5f7f9;
+                --pc-secondaire: #9eabb6;
+                --pc-vert: #0f6a43;
+                --pc-vert-fonce: #084b30;
+                --pc-vert-clair: #dff3e7;
+                --pc-rouge: #df3b45;
+            }
+
+            .bureau-seulement {
+                display: block !important;
+            }
+
+            .mobile-seulement {
+                display: none !important;
             }
 
             html,
             body {
                 min-height: 100%;
-                background: var(--bureau-fond);
+                background: var(--pc-fond);
             }
 
             body:not(.mode-connexion) {
-                background: var(--bureau-fond) !important;
+                background:
+                    radial-gradient(circle at 85% 8%, rgba(49,72,89,.16), transparent 30%),
+                    linear-gradient(135deg, #0b1117 0%, #101820 100%) !important;
+                color: var(--pc-texte);
             }
 
             body:not(.mode-connexion) #app {
-                margin-left: var(--bureau-sidebar);
-                width: calc(100% - var(--bureau-sidebar));
+                width: calc(100% - var(--pc-sidebar));
                 min-height: 100vh;
+                margin-left: var(--pc-sidebar);
                 box-sizing: border-box;
-                background: var(--bureau-fond);
+                background: transparent;
             }
+
+            /* =====================================================
+               MENU LATERAL
+               ===================================================== */
 
             #navigation-bureau {
                 position: fixed;
                 z-index: 9000;
                 inset: 0 auto 0 0;
-                width: var(--bureau-sidebar);
+                width: var(--pc-sidebar);
                 box-sizing: border-box;
                 display: flex;
                 flex-direction: column;
-                padding: 22px 16px 18px;
-                background: #101820;
+                padding: 20px 15px 18px;
+                background:
+                    linear-gradient(180deg, #111820 0%, #161f29 100%);
                 color: #fff;
                 border-right: 1px solid rgba(255,255,255,.07);
+                box-shadow: 10px 0 30px rgba(0,0,0,.12);
             }
 
             body.mode-connexion #navigation-bureau,
@@ -15632,33 +15698,25 @@ function initialiserInterfaceBureau() {
                 display: flex;
                 align-items: center;
                 gap: 12px;
-                padding: 2px 7px 22px;
-                margin-bottom: 14px;
-                border-bottom: 1px solid rgba(255,255,255,.10);
+                padding: 3px 8px 20px;
+                margin-bottom: 12px;
+                border-bottom: 1px solid rgba(255,255,255,.08);
             }
 
             .bureau-logo {
-                width: 46px;
-                height: 46px;
-                border-radius: 12px;
+                width: 56px;
+                height: 56px;
+                border-radius: 13px;
                 object-fit: cover;
                 background: #fff;
+                box-shadow: 0 5px 16px rgba(0,0,0,.22);
             }
 
             .bureau-marque strong {
                 display: block;
                 font-size: 16px;
-                line-height: 1.2;
+                line-height: 1.15;
                 letter-spacing: .01em;
-            }
-
-            .bureau-marque small {
-                display: block;
-                margin-top: 4px;
-                color: #94a1ad;
-                font-size: 11px;
-                text-transform: uppercase;
-                letter-spacing: .08em;
             }
 
             .bureau-nav {
@@ -15669,49 +15727,54 @@ function initialiserInterfaceBureau() {
 
             .bureau-nav-separateur {
                 margin: 17px 10px 7px;
-                color: #6f7d89;
+                color: #65727d;
                 font-size: 10px;
-                font-weight: 800;
+                font-weight: 850;
                 text-transform: uppercase;
-                letter-spacing: .12em;
+                letter-spacing: .13em;
             }
 
             .bureau-nav-bouton {
                 width: 100%;
-                min-height: 42px;
-                box-sizing: border-box;
+                min-height: 43px;
                 display: flex;
                 align-items: center;
                 gap: 11px;
+                box-sizing: border-box;
                 padding: 9px 11px;
-                border: 0;
+                border: 1px solid transparent;
                 border-radius: 9px;
                 background: transparent;
-                color: #cbd3da;
+                color: #c8d0d7;
                 text-align: left;
                 font: inherit;
                 font-size: 13px;
-                font-weight: 650;
+                font-weight: 700;
                 cursor: pointer;
-                transition: background .15s ease, color .15s ease;
+                transition: .16s ease;
             }
 
             .bureau-nav-bouton:hover {
-                background: rgba(255,255,255,.07);
+                background: #1b2631;
+                border-color: #293642;
                 color: #fff;
             }
 
             .bureau-nav-bouton.actif {
-                background: #22313c;
+                background: #29333f;
+                border-color: #36434f;
                 color: #fff;
+                box-shadow: inset 3px 0 0 #fff;
             }
 
             .bureau-nav-bouton.reappro {
-                color: #bfe3ce;
+                color: #bfe6d2;
             }
 
             .bureau-nav-bouton.reappro.actif {
-                background: #174f38;
+                background: #0c5537;
+                border-color: #137149;
+                box-shadow: inset 3px 0 0 #7ee0aa;
                 color: #fff;
             }
 
@@ -15721,20 +15784,21 @@ function initialiserInterfaceBureau() {
                 flex: 0 0 7px;
                 border-radius: 50%;
                 background: currentColor;
-                opacity: .72;
+                opacity: .8;
             }
 
             .bureau-utilisateur {
                 margin-top: auto;
                 padding-top: 14px;
-                border-top: 1px solid rgba(255,255,255,.10);
+                border-top: 1px solid rgba(255,255,255,.08);
             }
 
             .bureau-profil {
                 width: 100%;
                 display: block;
+                box-sizing: border-box;
                 padding: 10px 11px;
-                border: 0;
+                border: 1px solid transparent;
                 border-radius: 9px;
                 background: transparent;
                 color: #fff;
@@ -15743,7 +15807,8 @@ function initialiserInterfaceBureau() {
             }
 
             .bureau-profil:hover {
-                background: rgba(255,255,255,.07);
+                background: #1b2631;
+                border-color: #293642;
             }
 
             .bureau-profil strong,
@@ -15757,87 +15822,111 @@ function initialiserInterfaceBureau() {
 
             .bureau-profil small {
                 margin-top: 3px;
-                color: #8f9ca7;
+                color: #8e9ba7;
                 font-size: 11px;
             }
+
+            /* =====================================================
+               STRUCTURE GENERALE DES PAGES
+               ===================================================== */
 
             body:not(.mode-connexion) #app > .page,
             body:not(.mode-connexion) #app > .reappro-page {
                 width: auto !important;
-                max-width: 1440px !important;
+                max-width: none !important;
                 min-height: 100vh;
                 margin: 0 !important;
-                padding: 38px 46px 60px !important;
+                padding: 34px 42px 58px !important;
                 box-sizing: border-box;
             }
 
-            body:not(.mode-connexion) .page > .retour-button,
-            body:not(.mode-connexion) .reappro-retour {
-                display: none !important;
+            body:not(.mode-connexion) #app > .page {
+                background: transparent !important;
             }
 
+            body:not(.mode-connexion) .page > .retour-button,
+            body:not(.mode-connexion) .reappro-retour,
             body:not(.mode-connexion) .utilisateur-entete {
                 display: none !important;
             }
 
+            body:not(.mode-connexion) .page > h1,
+            body:not(.mode-connexion) .page > h2,
+            body:not(.mode-connexion) .page > h3 {
+                color: var(--pc-texte) !important;
+            }
+
+            body:not(.mode-connexion) .page > h2 {
+                margin: 0 0 25px !important;
+                font-size: 28px !important;
+                font-weight: 850 !important;
+                line-height: 1.15 !important;
+                letter-spacing: -.025em;
+            }
+
+            body:not(.mode-connexion) .page > h3 {
+                margin: 26px 0 12px !important;
+                color: #cbd3d9 !important;
+                font-size: 14px !important;
+                font-weight: 800 !important;
+            }
+
             body:not(.mode-connexion) .accueil-header {
-                margin: 0 0 30px !important;
+                margin: 0 0 28px !important;
                 padding: 0 !important;
                 text-align: left !important;
             }
 
             body:not(.mode-connexion) .accueil-header h1 {
                 margin: 0 !important;
-                color: var(--bureau-texte);
+                color: var(--pc-texte) !important;
                 font-size: 31px !important;
-                line-height: 1.15;
-                letter-spacing: -.02em;
+                line-height: 1.1 !important;
+                letter-spacing: -.03em;
             }
 
             body:not(.mode-connexion) .accueil-header p {
                 margin: 7px 0 0 !important;
-                color: var(--bureau-secondaire);
-                font-size: 14px !important;
+                color: var(--pc-secondaire) !important;
+                font-size: 13px !important;
             }
 
-            body:not(.mode-connexion) .page > h2 {
-                margin: 0 0 26px !important;
-                color: var(--bureau-texte);
-                font-size: 28px !important;
-                line-height: 1.2;
-                letter-spacing: -.02em;
-            }
+            /* =====================================================
+               ACCUEIL / ADMINISTRATION
+               Plus de gros boutons type téléphone
+               ===================================================== */
 
-            /* Accueil PC : commandes compactes, pas de gros boutons mobiles. */
             body:not(.mode-connexion) .menu-principal,
             body:not(.mode-connexion) .menu-administration {
                 display: grid !important;
-                grid-template-columns: repeat(3, minmax(220px, 1fr));
-                gap: 14px !important;
-                max-width: 1040px;
+                grid-template-columns: repeat(3, minmax(210px, 1fr));
+                gap: 12px !important;
+                max-width: 1120px;
             }
 
             body:not(.mode-connexion) .menu-principal .menu-button,
             body:not(.mode-connexion) .menu-administration .menu-button {
-                min-height: 82px !important;
+                min-height: 76px !important;
                 margin: 0 !important;
-                padding: 16px 17px !important;
+                padding: 15px 16px !important;
                 display: flex !important;
                 align-items: center;
                 gap: 13px;
-                border: 1px solid var(--bureau-bordure) !important;
-                border-radius: 11px !important;
-                background: var(--bureau-carte) !important;
-                color: var(--bureau-texte) !important;
-                box-shadow: 0 1px 2px rgba(16,24,32,.04) !important;
+                box-sizing: border-box;
+                border: 1px solid var(--pc-bordure) !important;
+                border-radius: 9px !important;
+                background: linear-gradient(180deg, #151f28, #121a22) !important;
+                color: var(--pc-texte) !important;
+                box-shadow: none !important;
                 text-align: left !important;
                 cursor: pointer;
+                transition: .16s ease;
             }
 
             body:not(.mode-connexion) .menu-principal .menu-button:hover,
             body:not(.mode-connexion) .menu-administration .menu-button:hover {
-                border-color: #cbd2d8 !important;
-                box-shadow: 0 5px 16px rgba(16,24,32,.07) !important;
+                background: #1a2630 !important;
+                border-color: var(--pc-bordure-claire) !important;
                 transform: translateY(-1px);
             }
 
@@ -15848,26 +15937,28 @@ function initialiserInterfaceBureau() {
                 place-items: center;
                 flex: 0 0 34px;
                 border-radius: 8px;
-                background: #f0f3f5;
-                font-size: 17px !important;
+                background: #202d38;
+                font-size: 16px !important;
             }
 
             body:not(.mode-connexion) .menu-button strong {
-                font-size: 14px !important;
-                line-height: 1.25;
+                display: block;
+                color: #f4f7f9 !important;
+                font-size: 13px !important;
+                line-height: 1.2;
             }
 
             body:not(.mode-connexion) .menu-button small {
-                margin-top: 4px !important;
-                color: var(--bureau-secondaire) !important;
+                display: block;
+                margin-top: 5px !important;
+                color: var(--pc-secondaire) !important;
                 font-size: 11px !important;
                 line-height: 1.3;
             }
 
             body:not(.mode-connexion) .menu-administration .menu-reapprovisionnement-admin {
-                background: var(--bureau-vert) !important;
-                border-color: var(--bureau-vert) !important;
-                color: #fff !important;
+                background: linear-gradient(180deg, #12603f, #0c4c32) !important;
+                border-color: #1a7450 !important;
             }
 
             body:not(.mode-connexion) .menu-administration .menu-reapprovisionnement-admin strong,
@@ -15875,164 +15966,542 @@ function initialiserInterfaceBureau() {
                 color: #fff !important;
             }
 
-            /* Champs et cartes plus sobres sur ordinateur. */
-            body:not(.mode-connexion) .recherche {
-                max-width: 560px;
-                margin-bottom: 22px !important;
+            /* =====================================================
+               FORMULAIRES / PANNEAUX
+               ===================================================== */
+
+            body:not(.mode-connexion) .formulaire,
+            body:not(.mode-connexion) .bloc-admin,
+            body:not(.mode-connexion) .profil-carte,
+            body:not(.mode-connexion) .detail-header {
+                box-sizing: border-box;
+                max-width: 1120px;
+                padding: 20px !important;
+                border: 1px solid var(--pc-bordure) !important;
+                border-radius: 10px !important;
+                background: linear-gradient(180deg, #151f28, #121a22) !important;
+                color: var(--pc-texte) !important;
+                box-shadow: none !important;
+            }
+
+            body:not(.mode-connexion) .formulaire label,
+            body:not(.mode-connexion) .bloc-admin label,
+            body:not(.mode-connexion) .profil-carte label {
+                color: #cbd4da !important;
+                font-size: 12px !important;
+                font-weight: 750 !important;
             }
 
             body:not(.mode-connexion) input,
             body:not(.mode-connexion) select,
             body:not(.mode-connexion) textarea {
-                font-size: 14px;
+                box-sizing: border-box;
+                border: 1px solid #34414c !important;
+                border-radius: 7px !important;
+                background: #0f171e !important;
+                color: #f2f5f7 !important;
+                font-size: 13px !important;
+                box-shadow: none !important;
             }
 
-            body:not(.mode-connexion) .materiel-card,
-            body:not(.mode-connexion) .historique-card,
-            body:not(.mode-connexion) .intervention-card,
-            body:not(.mode-connexion) .categorie-card {
+            body:not(.mode-connexion) input::placeholder,
+            body:not(.mode-connexion) textarea::placeholder {
+                color: #73808b !important;
+            }
+
+            body:not(.mode-connexion) input:focus,
+            body:not(.mode-connexion) select:focus,
+            body:not(.mode-connexion) textarea:focus {
+                border-color: #63717d !important;
+                outline: none !important;
+                box-shadow: 0 0 0 3px rgba(99,113,125,.12) !important;
+            }
+
+            body:not(.mode-connexion) .recherche {
+                max-width: 560px;
+                margin: 0 0 22px !important;
+            }
+
+            body:not(.mode-connexion) .recherche input {
+                min-height: 42px !important;
+            }
+
+            body:not(.mode-connexion) .add-button,
+            body:not(.mode-connexion) .petit-bouton,
+            body:not(.mode-connexion) .profil-bouton-principal {
+                min-height: 38px !important;
+                padding: 8px 13px !important;
+                border: 1px solid #3a4854 !important;
+                border-radius: 7px !important;
+                background: #202c36 !important;
+                color: #fff !important;
+                font-size: 12px !important;
+                font-weight: 750 !important;
+                box-shadow: none !important;
+            }
+
+            /* =====================================================
+               INVENTAIRE / HISTORIQUE / ARCHIVES
+               Cartes transformées en lignes bureau
+               ===================================================== */
+
+            body:not(.mode-connexion) .categorie-bloc {
+                max-width: 1180px;
+                margin-bottom: 18px !important;
+                border: 1px solid var(--pc-bordure) !important;
                 border-radius: 10px !important;
-                box-shadow: 0 1px 3px rgba(16,24,32,.06) !important;
+                overflow: hidden;
+                background: #121b23 !important;
+                box-shadow: none !important;
             }
 
-            /* Réapprovisionnement PC : DA pharmacie dédiée. */
+            body:not(.mode-connexion) .categorie-titre {
+                min-height: 46px !important;
+                padding: 10px 15px !important;
+                border: 0 !important;
+                border-bottom: 1px solid var(--pc-bordure) !important;
+                border-radius: 0 !important;
+                background: #18232d !important;
+                color: #f5f7f9 !important;
+                box-shadow: none !important;
+                font-size: 13px !important;
+            }
+
+            body:not(.mode-connexion) .categorie-contenu {
+                padding: 0 !important;
+            }
+
+            body:not(.mode-connexion) .materiel,
+            body:not(.mode-connexion) .detail-historique,
+            body:not(.mode-connexion) .historique-total,
+            body:not(.mode-connexion) .intervention-cliquable,
+            body:not(.mode-connexion) .archive-commande {
+                max-width: 1180px;
+                box-sizing: border-box;
+                margin: 0 !important;
+                padding: 12px 15px !important;
+                border: 0 !important;
+                border-bottom: 1px solid #222f39 !important;
+                border-radius: 0 !important;
+                background: #111a22 !important;
+                color: var(--pc-texte) !important;
+                box-shadow: none !important;
+            }
+
+            body:not(.mode-connexion) .materiel:last-child,
+            body:not(.mode-connexion) .detail-historique:last-child,
+            body:not(.mode-connexion) .intervention-cliquable:last-child {
+                border-bottom: 0 !important;
+            }
+
+            body:not(.mode-connexion) .materiel:hover,
+            body:not(.mode-connexion) .intervention-cliquable:hover {
+                background: #16212a !important;
+            }
+
+            body:not(.mode-connexion) .carte-materiel-horizontal {
+                min-height: 78px !important;
+            }
+
+            body:not(.mode-connexion) .carte-photo-droite {
+                width: 58px !important;
+                height: 58px !important;
+                border-radius: 7px !important;
+            }
+
+            body:not(.mode-connexion) .photo-materiel {
+                border-radius: 7px !important;
+            }
+
+            body:not(.mode-connexion) .archive-periode {
+                max-width: 1180px;
+                margin-bottom: 18px !important;
+                border: 1px solid var(--pc-bordure);
+                border-radius: 10px;
+                overflow: hidden;
+                background: #111a22;
+            }
+
+            body:not(.mode-connexion) .archive-commande {
+                background: #124d35 !important;
+                border-bottom-color: #1f684a !important;
+            }
+
+            body:not(.mode-connexion) .archive-interventions-titre {
+                margin: 0 !important;
+                padding: 10px 15px !important;
+                background: #17212a;
+                color: #9ba8b2 !important;
+                font-size: 11px !important;
+            }
+
+            /* =====================================================
+               GESTION UTILISATEURS / ROLES
+               ===================================================== */
+
+            body:not(.mode-connexion) .gestion-utilisateurs-page {
+                max-width: none !important;
+            }
+
+            body:not(.mode-connexion) .gestion-utilisateurs-page .bloc-admin {
+                max-width: 1180px;
+                margin-bottom: 18px !important;
+            }
+
+            body:not(.mode-connexion) .carte-utilisateur,
+            body:not(.mode-connexion) .carte-role {
+                margin: 10px 0 !important;
+                padding: 16px !important;
+                border: 1px solid #2b3944 !important;
+                border-radius: 9px !important;
+                background: #101820 !important;
+                color: #eef2f5 !important;
+                box-shadow: none !important;
+            }
+
+            body:not(.mode-connexion) .permissions-role {
+                display: grid !important;
+                grid-template-columns: repeat(3, minmax(190px, 1fr));
+                gap: 7px !important;
+                margin-top: 13px !important;
+            }
+
+            body:not(.mode-connexion) .permissions-role label {
+                min-height: 38px;
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                box-sizing: border-box;
+                padding: 8px 10px;
+                border: 1px solid #2a3741;
+                border-radius: 7px;
+                background: #151e26;
+                color: #dce3e8 !important;
+                font-size: 11px !important;
+            }
+
+            body:not(.mode-connexion) .permissions-role input[type="checkbox"] {
+                width: 15px !important;
+                height: 15px !important;
+                min-height: 0 !important;
+                accent-color: #18a766;
+            }
+
+            /* =====================================================
+               REAPPROVISIONNEMENT PC
+               Reprise fidèle de la direction visuelle de la maquette
+               ===================================================== */
+
             body:not(.mode-connexion) #app > .reappro-page {
-                max-width: 1280px !important;
-                background: #eef2ef !important;
+                position: relative;
+                overflow: hidden;
+                max-width: none !important;
+                padding: 34px 42px 58px !important;
+                background:
+                    radial-gradient(circle at 82% 5%, rgba(51,142,92,.25), transparent 26%),
+                    radial-gradient(circle at 105% 105%, rgba(63,146,101,.18), transparent 34%),
+                    linear-gradient(145deg, #073b29 0%, #075237 45%, #043522 100%) !important;
+                color: #fff;
+            }
+
+            body:not(.mode-connexion) #app > .reappro-page::before,
+            body:not(.mode-connexion) #app > .reappro-page::after {
+                content: "";
+                position: absolute;
+                pointer-events: none;
+                border: 40px solid rgba(255,255,255,.035);
+                border-radius: 50%;
+            }
+
+            body:not(.mode-connexion) #app > .reappro-page::before {
+                width: 640px;
+                height: 640px;
+                right: -330px;
+                top: -390px;
+            }
+
+            body:not(.mode-connexion) #app > .reappro-page::after {
+                width: 760px;
+                height: 760px;
+                left: 20%;
+                bottom: -690px;
+            }
+
+            body:not(.mode-connexion) .reappro-entete,
+            body:not(.mode-connexion) .reappro-feuille {
+                position: relative;
+                z-index: 1;
+                width: min(100%, 1120px) !important;
+                max-width: 1120px !important;
+                margin-left: 0 !important;
+                box-sizing: border-box;
             }
 
             body:not(.mode-connexion) .reappro-entete {
-                max-width: 1040px;
-                margin: 0 0 0 !important;
-                padding: 26px 30px 24px !important;
-                box-sizing: border-box;
-                border-radius: 14px 14px 0 0 !important;
-                background: #123d2c !important;
+                min-height: 144px;
+                display: flex !important;
+                align-items: flex-start;
+                justify-content: space-between;
+                gap: 28px;
+                padding: 8px 2px 26px !important;
+                background: transparent !important;
                 color: #fff !important;
             }
 
+            body:not(.mode-connexion) .reappro-entete-contenu {
+                min-width: 0;
+            }
+
             body:not(.mode-connexion) .reappro-sur-titre {
-                margin: 0 0 7px !important;
-                color: #a9cbbb !important;
+                margin: 0 0 8px !important;
+                color: #96cdb0 !important;
                 font-size: 11px !important;
-                font-weight: 800 !important;
-                letter-spacing: .12em !important;
+                font-weight: 850 !important;
+                letter-spacing: .15em !important;
                 text-transform: uppercase;
             }
 
             body:not(.mode-connexion) .reappro-entete h2 {
                 margin: 0 !important;
                 color: #fff !important;
-                font-size: 28px !important;
-                letter-spacing: -.02em;
+                font-size: 35px !important;
+                line-height: 1.08;
+                font-weight: 900 !important;
+                letter-spacing: -.035em;
+            }
+
+            body:not(.mode-connexion) .reappro-sous-titre-bureau {
+                margin: 10px 0 0 !important;
+                color: rgba(255,255,255,.74) !important;
+                font-size: 13px !important;
+            }
+
+            body:not(.mode-connexion) .reappro-date-bureau {
+                min-width: 190px;
+                padding: 14px 17px;
+                border: 1px solid rgba(157,224,185,.30);
+                border-radius: 11px;
+                background: rgba(46,140,88,.24);
+                color: #fff;
+                text-align: left;
+                backdrop-filter: blur(4px);
+            }
+
+            body:not(.mode-connexion) .reappro-date-label {
+                display: block;
+                margin-bottom: 4px;
+                color: rgba(255,255,255,.72);
+                font-size: 10px;
+            }
+
+            body:not(.mode-connexion) .reappro-date-bureau strong {
+                font-size: 13px;
             }
 
             body:not(.mode-connexion) .reappro-feuille {
-                max-width: 1040px !important;
-                margin: 0 !important;
-                padding: 28px 30px 32px !important;
-                box-sizing: border-box;
-                border: 1px solid #d8e0db !important;
-                border-top: 0 !important;
-                border-radius: 0 0 14px 14px !important;
-                background: #fff !important;
-                box-shadow: 0 8px 28px rgba(25,52,40,.08) !important;
+                margin-top: 0 !important;
+                padding: 54px 30px 28px !important;
+                border: 14px solid rgba(208,247,224,.38) !important;
+                border-radius: 16px !important;
+                background:
+                    linear-gradient(180deg, #fbfffc 0%, #f4fbf6 100%) !important;
+                color: #111a15 !important;
+                box-shadow: 0 18px 48px rgba(0,0,0,.18) !important;
             }
 
-            body:not(.mode-connexion) .reappro-section-titre {
-                margin-bottom: 16px !important;
-                padding-bottom: 10px !important;
-                border-bottom: 1px solid #e2e7e4 !important;
-                color: #506058 !important;
-                font-size: 11px !important;
-                font-weight: 800 !important;
-                letter-spacing: .09em;
-                text-transform: uppercase;
+            body:not(.mode-connexion) .reappro-icone-bureau {
+                position: absolute;
+                left: 50%;
+                top: -35px;
+                transform: translateX(-50%);
+                width: 64px;
+                height: 64px;
+                display: grid !important;
+                place-items: center;
+                border-radius: 14px;
+                background: #178b54;
+                color: #fff;
+                font-size: 35px;
+                font-weight: 400;
+                box-shadow: 0 8px 18px rgba(20,112,67,.25);
             }
 
-            body:not(.mode-connexion) .reappro-ligne {
-                min-height: 54px !important;
+            body:not(.mode-connexion) .reappro-grand-titre {
+                margin: 0 0 20px !important;
+                color: #101713 !important;
+                text-align: center;
+                font-size: 24px !important;
+                font-weight: 900 !important;
+                letter-spacing: -.02em;
+            }
+
+            body:not(.mode-connexion) .reappro-table-entete {
+                display: grid !important;
+                grid-template-columns: 36px minmax(300px, 1fr) 120px 70px;
+                gap: 12px;
+                align-items: center;
+                padding: 10px 4px;
+                border-top: 1px solid #dce9e0;
+                border-bottom: 1px solid #dce9e0;
+                color: #27342c;
+                font-size: 11px;
+                font-weight: 850;
+            }
+
+            body:not(.mode-connexion) .reappro-ligne-supplementaire {
+                position: relative;
+                grid-template-columns: minmax(300px, 1fr) 120px 42px !important;
+                gap: 12px !important;
+                align-items: center !important;
+                min-height: 58px !important;
                 margin: 0 !important;
-                padding: 9px 0 !important;
-                border-bottom: 1px solid #edf0ee !important;
-                border-radius: 0 !important;
+                padding: 10px 4px 10px 52px !important;
+                border-bottom: 1px solid #e1ebe4 !important;
                 background: transparent !important;
                 box-shadow: none !important;
             }
 
-            body:not(.mode-connexion) .reappro-ligne-supplementaire {
-                grid-template-columns: minmax(300px, 1fr) 120px 38px !important;
-                gap: 12px !important;
+            body:not(.mode-connexion) .reappro-ligne-supplementaire::before {
+                content: counter(reappro-row);
+                counter-increment: reappro-row;
+                position: absolute;
+                left: 8px;
+                top: 50%;
+                transform: translateY(-50%);
+                color: #526059;
+                font-size: 12px;
+                font-weight: 750;
+            }
+
+            body:not(.mode-connexion) #reappro-lignes-supplementaires {
+                counter-reset: reappro-row;
             }
 
             body:not(.mode-connexion) .reappro-recherche,
             body:not(.mode-connexion) .reappro-quantite {
-                min-height: 40px !important;
-                border: 1px solid #cfd8d2 !important;
+                min-height: 42px !important;
+                border: 1px solid #cfdad2 !important;
                 border-radius: 7px !important;
-                background: #fbfcfb !important;
-                font-size: 13px !important;
+                background: #fff !important;
+                color: #172019 !important;
+                font-size: 12px !important;
+            }
+
+            body:not(.mode-connexion) .reappro-quantite {
+                text-align: center;
+            }
+
+            body:not(.mode-connexion) .reappro-resultats {
+                border: 1px solid #cfdad2 !important;
+                border-radius: 7px !important;
+                background: #fff !important;
+                box-shadow: 0 10px 28px rgba(20,45,30,.16) !important;
+            }
+
+            body:not(.mode-connexion) .reappro-resultat {
+                background: #fff !important;
+                color: #172019 !important;
+            }
+
+            body:not(.mode-connexion) .reappro-resultat:hover {
+                background: #edf7f1 !important;
+            }
+
+            body:not(.mode-connexion) .reappro-supprimer-ligne {
+                width: 36px !important;
+                height: 36px !important;
+                border: 0 !important;
+                border-radius: 7px !important;
+                background: #df3b45 !important;
+                color: #fff !important;
+                font-size: 18px !important;
             }
 
             body:not(.mode-connexion) .reappro-ajout-zone {
-                margin: 18px 0 !important;
-                text-align: left !important;
+                margin: 18px 0 22px !important;
+                padding: 0 !important;
+                border: 0 !important;
             }
 
             body:not(.mode-connexion) .reappro-ajouter {
-                width: auto !important;
-                min-height: 38px !important;
-                padding: 8px 14px !important;
-                border: 1px solid #b9cbbf !important;
-                border-radius: 7px !important;
-                background: #edf5f0 !important;
-                color: #174f38 !important;
-                font-size: 12px !important;
-                font-weight: 800 !important;
+                width: 100% !important;
+                min-height: 66px !important;
+                border: 2px dashed #1c9b5e !important;
+                border-radius: 9px !important;
+                background: rgba(231,248,237,.55) !important;
+                color: #126a41 !important;
+                font-size: 13px !important;
+                font-weight: 850 !important;
                 box-shadow: none !important;
             }
 
+            body:not(.mode-connexion) .reappro-ajouter:hover {
+                background: #e8f7ed !important;
+            }
+
             body:not(.mode-connexion) .reappro-validation {
-                width: auto !important;
-                min-width: 180px;
-                min-height: 42px !important;
-                margin-top: 8px !important;
-                padding: 9px 18px !important;
-                border-radius: 7px !important;
-                background: #174f38 !important;
+                width: 100% !important;
+                min-height: 48px !important;
+                margin: 0 !important;
+                border: 0 !important;
+                border-radius: 8px !important;
+                background: linear-gradient(180deg, #087c49, #05663d) !important;
+                color: #fff !important;
                 font-size: 13px !important;
+                font-weight: 900 !important;
                 box-shadow: none !important;
             }
 
             body:not(.mode-connexion) .reappro-note {
-                max-width: 520px;
+                max-width: none !important;
+                margin: 18px 0 0 !important;
+                padding: 13px 15px !important;
+                border: 1px solid rgba(47,160,95,.40);
+                border-radius: 8px;
+                background: rgba(31,139,78,.08);
+                color: #316044 !important;
                 font-size: 11px !important;
+                text-align: left !important;
             }
 
-            /* Gestion des rôles : exploiter la largeur du PC. */
-            body:not(.mode-connexion) .permissions-role {
-                display: grid !important;
-                grid-template-columns: repeat(3, minmax(190px, 1fr));
-                gap: 8px 14px !important;
+            /* Réappro rapide depuis archives : même DA générale sur PC */
+            body:not(.mode-connexion) .reappro-ligne-consommee {
+                grid-template-columns: minmax(300px, 1fr) 120px !important;
+                gap: 12px !important;
+                padding: 10px 4px !important;
+                border-bottom: 1px solid #e1ebe4 !important;
+                background: transparent !important;
+                color: #172019 !important;
             }
 
-            body:not(.mode-connexion) .permissions-role label {
-                min-height: 36px;
-                box-sizing: border-box;
-                display: flex;
-                align-items: center;
-                gap: 8px;
-                padding: 7px 9px;
-                border: 1px solid #e3e7eb;
-                border-radius: 7px;
-                background: #fafbfc;
-                font-size: 12px;
+            body:not(.mode-connexion) .reappro-nom {
+                color: #172019 !important;
             }
 
-            @media (max-width: 1180px) {
+            body:not(.mode-connexion) .reappro-stock {
+                color: #6e7a72 !important;
+            }
+
+            /* Profil PC */
+            body:not(.mode-connexion) .profil-page {
+                max-width: 980px !important;
+            }
+
+            body:not(.mode-connexion) .profil-entete {
+                color: var(--pc-texte) !important;
+            }
+
+            body:not(.mode-connexion) .profil-role,
+            body:not(.mode-connexion) .profil-version,
+            body:not(.mode-connexion) .profil-notification-texte,
+            body:not(.mode-connexion) .profil-mise-a-jour-texte {
+                color: var(--pc-secondaire) !important;
+            }
+
+            @media (max-width: 1220px) {
                 body:not(.mode-connexion) .menu-principal,
                 body:not(.mode-connexion) .menu-administration {
-                    grid-template-columns: repeat(2, minmax(220px, 1fr));
+                    grid-template-columns: repeat(2, minmax(210px, 1fr));
                 }
 
                 body:not(.mode-connexion) .permissions-role {
@@ -16041,6 +16510,7 @@ function initialiserInterfaceBureau() {
             }
         }
     `;
+
     document.head.appendChild(style);
 
     const navigation = document.createElement("aside");
@@ -16049,17 +16519,32 @@ function initialiserInterfaceBureau() {
     document.body.appendChild(navigation);
 
     const appElement = document.getElementById("app");
+
     if (appElement) {
-        const observateur = new MutationObserver(function () {
-            window.requestAnimationFrame(actualiserInterfaceBureau);
-        });
-        observateur.observe(appElement, {
-            childList: true,
-            subtree: false
-        });
+
+        const observateur =
+            new MutationObserver(
+                function () {
+                    window.requestAnimationFrame(
+                        actualiserInterfaceBureau
+                    );
+                }
+            );
+
+        observateur.observe(
+            appElement,
+            {
+                childList: true,
+                subtree: false
+            }
+        );
     }
 
-    window.addEventListener("resize", actualiserInterfaceBureau);
+    window.addEventListener(
+        "resize",
+        actualiserInterfaceBureau
+    );
+
     actualiserInterfaceBureau();
 }
 
@@ -16079,12 +16564,25 @@ function obtenirRubriqueBureauActive() {
     if (titre.includes("réapprovisionnement")) return "reappro";
     if (titre.includes("inventaire")) return "inventaire";
     if (titre.includes("retour")) return "retour";
-    if (titre.includes("historique") || titre.includes("archive") || titre.includes("commande effectuée")) return "historique";
-    if (titre.includes("administrateur appli") || titre.includes("utilisateur") || titre.includes("rôle") || titre.includes("notification")) return "admin-appli";
-    if (titre.includes("administration") || titre.includes("matériel") || titre.includes("catégorie")) return "administration";
+    if (
+        titre.includes("historique") ||
+        titre.includes("archive") ||
+        titre.includes("commande effectuée")
+    ) return "historique";
+    if (
+        titre.includes("administrateur appli") ||
+        titre.includes("utilisateur") ||
+        titre.includes("rôle") ||
+        titre.includes("notification")
+    ) return "admin-appli";
+    if (
+        titre.includes("administration") ||
+        titre.includes("matériel") ||
+        titre.includes("catégorie")
+    ) return "administration";
     if (titre.includes("profil")) return "profil";
-    return "accueil";
 
+    return "accueil";
 }
 
 
@@ -16105,11 +16603,15 @@ function actualiserInterfaceBureau() {
             "mode-connexion"
         )
     ) {
-        navigation.classList.add("masquee");
+        navigation.classList.add(
+            "masquee"
+        );
         return;
     }
 
-    navigation.classList.remove("masquee");
+    navigation.classList.remove(
+        "masquee"
+    );
 
     const role =
         obtenirRoleUtilisateur();
@@ -16117,85 +16619,164 @@ function actualiserInterfaceBureau() {
     const actif =
         obtenirRubriqueBureauActive();
 
-    const bouton = function (
-        id,
-        libelle,
-        action,
-        visible = true,
-        classe = ""
-    ) {
-        if (!visible) {
-            return "";
-        }
+    const bouton =
+        function (
+            id,
+            libelle,
+            action,
+            visible = true,
+            classe = ""
+        ) {
 
-        return `
-            <button
-                type="button"
-                class="bureau-nav-bouton ${actif === id ? "actif" : ""} ${classe}"
-                onclick="${action}"
-            >
-                <span class="bureau-nav-puce"></span>
-                <span>${echapperHTML(libelle)}</span>
-            </button>
-        `;
-    };
+            if (!visible) {
+                return "";
+            }
+
+            return `
+                <button
+                    type="button"
+                    class="bureau-nav-bouton ${actif === id ? "actif" : ""} ${classe}"
+                    onclick="${action}"
+                >
+                    <span class="bureau-nav-puce"></span>
+                    <span>${echapperHTML(libelle)}</span>
+                </button>
+            `;
+        };
 
     navigation.innerHTML = `
         <div class="bureau-marque">
+
             <img
                 class="bureau-logo"
                 src="./logo-cis-le-chesne.png"
                 alt=""
             >
+
             <div>
-                <strong>CIS Le Chesne</strong>
-                <small>Gestion pharmacie</small>
+                <strong>
+                    CIS Le Chesne
+                </strong>
             </div>
+
         </div>
 
-        <nav class="bureau-nav" aria-label="Navigation principale">
-            ${bouton("accueil", "Accueil", "afficherAccueil()")}
-            ${bouton("inventaire", "Inventaire", "afficherInventaire()", utilisateurAPermission("acces_inventaire"))}
-            ${bouton("retour", "Retour d'intervention", "afficherRetourIntervention()", utilisateurAPermission("acces_retour_intervention"))}
-            ${bouton("historique", "Historique", "afficherHistorique()", utilisateurAPermission("acces_historique"))}
+        <nav
+            class="bureau-nav"
+            aria-label="Navigation principale"
+        >
+
+            ${bouton(
+                "accueil",
+                "Accueil",
+                "afficherAccueil()"
+            )}
+
+            ${bouton(
+                "inventaire",
+                "Inventaire",
+                "afficherInventaire()",
+                utilisateurAPermission(
+                    "acces_inventaire"
+                )
+            )}
+
+            ${bouton(
+                "retour",
+                "Retour d'intervention",
+                "afficherRetourIntervention()",
+                utilisateurAPermission(
+                    "acces_retour_intervention"
+                )
+            )}
+
+            ${bouton(
+                "historique",
+                "Historique",
+                "afficherHistorique()",
+                utilisateurAPermission(
+                    "acces_historique"
+                )
+            )}
 
             ${
-                utilisateurAPermission("acces_administration")
-                    ? `<div class="bureau-nav-separateur">Gestion</div>`
+                utilisateurAPermission(
+                    "acces_administration"
+                )
+                    ? `
+                        <div class="bureau-nav-separateur">
+                            Gestion
+                        </div>
+                    `
                     : ""
             }
 
-            ${bouton("administration", "Administration", "afficherMenuAdministration()", utilisateurAPermission("acces_administration"))}
-            ${bouton("reappro", "Réapprovisionnement", "afficherReapprovisionnementAdministration()", utilisateurAPermission("acces_reapprovisionnement"), "reappro")}
-            ${bouton("admin-appli", "Administrateur APPLI", "afficherMenuAdministrateurAppli()", utilisateurEstSPVAdmin())}
+            ${bouton(
+                "administration",
+                "Administration",
+                "afficherMenuAdministration()",
+                utilisateurAPermission(
+                    "acces_administration"
+                )
+            )}
+
+            ${bouton(
+                "reappro",
+                "Réapprovisionnement",
+                "afficherReapprovisionnementAdministration()",
+                utilisateurAPermission(
+                    "acces_reapprovisionnement"
+                ),
+                "reappro"
+            )}
+
+            ${bouton(
+                "admin-appli",
+                "Administrateur APPLI",
+                "afficherMenuAdministrateurAppli()",
+                utilisateurEstSPVAdmin()
+            )}
+
         </nav>
 
         <div class="bureau-utilisateur">
+
             <button
                 type="button"
                 class="bureau-profil ${actif === "profil" ? "actif" : ""}"
                 onclick="afficherProfilUtilisateur()"
             >
                 <strong>
-                    ${echapperHTML(obtenirNomUtilisateurAffiche())}
+                    ${echapperHTML(
+                        obtenirNomUtilisateurAffiche()
+                    )}
                 </strong>
+
                 <small>
-                    ${echapperHTML(role?.nom || "")}
+                    ${echapperHTML(
+                        role?.nom || ""
+                    )}
                 </small>
             </button>
+
         </div>
     `;
-
 }
 
 
-/* Démarrage de l'interface bureau sans modifier le fonctionnement mobile. */
-if (document.readyState === "loading") {
+/* Démarrage de l'interface bureau */
+if (
+    document.readyState ===
+    "loading"
+) {
+
     document.addEventListener(
         "DOMContentLoaded",
         initialiserInterfaceBureau
     );
-} else {
-    initialiserInterfaceBureau();
-}
 
+} else {
+
+    initialiserInterfaceBureau();
+
+}
