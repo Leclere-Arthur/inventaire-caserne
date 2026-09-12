@@ -668,7 +668,7 @@ const DOMAINE_EMAIL_INTERNE =
     "inventaire-caserne.local";
 
 const VERSION_APPLICATION =
-    "2.9.27";
+    "2.9.28";
 
 const CLE_PROFIL_UTILISATEUR_CACHE =
     "profil_utilisateur_connecte_v1";
@@ -1936,7 +1936,25 @@ async function chargerProfilUtilisateurDepuisSupabase(
                     acces_reapprovisionnement,
                     acces_remise_zero_historique,
                     acces_gestion_utilisateurs,
-                    acces_notifications
+                    acces_notifications,
+                    acces_espace_caserne,
+                    acces_sport,
+                    acces_sport_admin,
+                    acces_manoeuvre,
+                    acces_manoeuvre_admin,
+                    acces_casernement,
+                    acces_casernement_admin,
+                    acces_reunion,
+                    acces_reunion_admin,
+                    acces_amical_public,
+                    acces_amical_membre,
+                    acces_amical_admin,
+                    acces_comite_centre,
+                    acces_comite_centre_admin,
+                    acces_administratif,
+                    acces_administratif_admin,
+                    acces_entretien_individuel,
+                    acces_entretien_individuel_admin
                 )
             `)
             .eq(
@@ -7303,31 +7321,138 @@ function afficherPortailPrincipal() {
 }
 
 
-function afficherEspaceCaserne() {
+async function afficherEspaceCaserne() {
 
+    if (!utilisateurAPermission("acces_espace_caserne") && !utilisateurEstSPVAdmin()) {
+        alert("Vous n'avez pas accès à l'Espace Caserne.");
+        afficherPortailPrincipal();
+        return;
+    }
+
+    initialiserStyleEspaceCaserne();
+    await afficherActualitesCaserne();
+}
+
+function obtenirRubriquesCaserne() {
+    return [
+        ["sport", "Sport", "acces_sport", "acces_sport_admin"],
+        ["manoeuvre", "Manœuvre", "acces_manoeuvre", "acces_manoeuvre_admin"],
+        ["casernement", "Casernement", "acces_casernement", "acces_casernement_admin"],
+        ["reunion", "Réunion", "acces_reunion", "acces_reunion_admin"],
+        ["amical", "Amical", "acces_amical_public", "acces_amical_admin"],
+        ["comite_centre", "Comité de centre", "acces_comite_centre", "acces_comite_centre_admin"],
+        ["administratif", "Administratif", "acces_administratif", "acces_administratif_admin"],
+        ["entretien_individuel", "Entretien individuel", "acces_entretien_individuel", "acces_entretien_individuel_admin"]
+    ];
+}
+
+function utilisateurPeutVoirRubriqueCaserne(rubrique) {
+    if (utilisateurEstSPVAdmin()) return true;
+    if (rubrique[0] === "amical" && utilisateurAPermission("acces_amical_membre")) return true;
+    return utilisateurAPermission(rubrique[2]) || utilisateurAPermission(rubrique[3]);
+}
+
+function navigationCaserne(active) {
+    return `
+        <nav class="caserne-nav-bas">
+            <button onclick="afficherPortailPrincipal()" class="${active === "accueil" ? "actif" : ""}"><span>⌂</span>Accueil</button>
+            <button onclick="afficherEspaceCaserne()" class="${active === "caserne" ? "actif" : ""}"><span>▣</span>Caserne</button>
+            <button onclick="afficherAccueil()" class="${active === "pharmacie" ? "actif" : ""}"><span>✚</span>Pharmacie</button>
+            <button onclick="afficherProfilUtilisateur()" class="${active === "profil" ? "actif" : ""}"><span>○</span>Profil</button>
+            <button onclick="ouvrirMenuCaserne()" class="caserne-menu-bulle" aria-label="Menu"><span>☰</span></button>
+        </nav>`;
+}
+
+function ouvrirMenuCaserne() {
+    initialiserStyleEspaceCaserne();
+    const rubriques = obtenirRubriquesCaserne().filter(utilisateurPeutVoirRubriqueCaserne);
     document.getElementById("app").innerHTML = `
-        <main class="page portail-cis-page espace-caserne-page">
-            <button
-                class="retour-button"
-                type="button"
-                onclick="afficherPortailPrincipal()"
-            >
-                ← Retour
-            </button>
-
-            <header class="portail-cis-entete caserne">
-                <h1>Espace Caserne</h1>
-                <p>CIS Le Chesne</p>
-            </header>
-
-            <section class="espace-caserne-attente">
-                <strong>Espace en préparation</strong>
-                <p>Les fonctions de l'espace Caserne seront ajoutées prochainement.</p>
+        <main class="caserne-shell caserne-menu-page">
+            <header class="caserne-top"><small>ESPACE CASERNE</small><h1>Menu</h1><p>Accès aux rubriques</p></header>
+            <section class="caserne-menu-grille">
+                ${rubriques.map(r => `<button onclick="afficherRubriqueCaserne('${r[0]}')"><strong>${echapperHTML(r[1])}</strong><span>Ouvrir →</span></button>`).join("") || '<p>Aucune rubrique autorisée.</p>'}
             </section>
-        </main>
-    `;
-
+        </main>${navigationCaserne("caserne")}`;
     actualiserInterfaceBureau();
+}
+
+function formaterDateHeureCaserne(valeur) {
+    if (!valeur) return "Date à définir";
+    const d = new Date(valeur);
+    if (Number.isNaN(d.getTime())) return String(valeur);
+    return d.toLocaleString("fr-FR", {day:"2-digit", month:"long", year:"numeric", hour:"2-digit", minute:"2-digit"});
+}
+
+async function chargerPublicationsCaserne(type) {
+    const supabase = obtenirClientSupabase();
+    if (!supabase || !navigator.onLine) return [];
+    let q = supabase.from("caserne_publications").select("id,type_publication,titre,description,sous_type,visibilite,date_evenement,date_preparation,demande_reponse,demande_reponse_preparation,created_at").order("date_evenement", {ascending:true, nullsFirst:false});
+    if (type) q = q.eq("type_publication", type);
+    const {data,error}=await q;
+    if (error) { console.warn("Publications Caserne :", error); return []; }
+    return Array.isArray(data) ? data : [];
+}
+
+function cartePublicationCaserne(p) {
+    const titre = p.titre || ({sport:"Séance de sport",manoeuvre:"Manœuvre",casernement:"Casernement",reunion:"Réunion",amical:"Amical",comite_centre:"Comité de centre",administratif:"Administratif"}[p.type_publication] || "Actualité");
+    return `<article class="caserne-actu-card">
+        <div class="caserne-actu-meta"><span>${echapperHTML(String(p.type_publication || "").replaceAll("_"," "))}</span><time>${echapperHTML(formaterDateHeureCaserne(p.date_evenement))}</time></div>
+        <h2>${echapperHTML(titre)}</h2>
+        ${p.description ? `<p>${echapperHTML(p.description)}</p>` : ""}
+        ${p.demande_reponse ? '<div class="caserne-reponse-attente">Réponse attendue : Présent / Absent</div>' : ""}
+    </article>`;
+}
+
+async function afficherActualitesCaserne() {
+    const publications = await chargerPublicationsCaserne();
+    const maintenant = Date.now();
+    const prochaines = publications.filter(p => !p.date_evenement || new Date(p.date_evenement).getTime() >= maintenant - 86400000);
+    document.getElementById("app").innerHTML = `
+        <main class="caserne-shell">
+            <header class="caserne-top"><small>ESPACE CASERNE</small><h1>Actualités</h1><p>Les prochains rendez-vous de la caserne</p></header>
+            <section class="caserne-fil">
+                ${prochaines.length ? prochaines.map(cartePublicationCaserne).join("") : '<div class="caserne-vide"><strong>Rien de prévu pour le moment</strong><p>Les prochains événements apparaîtront ici.</p></div>'}
+            </section>
+        </main>${navigationCaserne("caserne")}`;
+    actualiserInterfaceBureau();
+}
+
+async function afficherRubriqueCaserne(type) {
+    const rubrique = obtenirRubriquesCaserne().find(r => r[0] === type);
+    if (!rubrique || !utilisateurPeutVoirRubriqueCaserne(rubrique)) { alert("Accès non autorisé."); return; }
+    const estAdmin = utilisateurEstSPVAdmin() || utilisateurAPermission(rubrique[3]);
+    const publications = type === "entretien_individuel" ? [] : await chargerPublicationsCaserne(type);
+    document.getElementById("app").innerHTML = `
+        <main class="caserne-shell ${estAdmin ? "caserne-avec-admin" : ""}">
+            <header class="caserne-top"><small>ESPACE CASERNE</small><h1>${echapperHTML(rubrique[1])}</h1><p>${estAdmin ? "Vue publique · accès administration disponible" : "Informations et événements"}</p></header>
+            ${estAdmin ? '<section class="caserne-admin-acces"><strong>Administration</strong><span>Les outils de création et de gestion de cette rubrique seront disponibles dans l’étape suivante.</span></section>' : ""}
+            <section class="caserne-fil">
+                ${type === "entretien_individuel" ? '<div class="caserne-vide"><strong>Entretiens individuels</strong><p>Les créneaux et réservations seront affichés ici.</p></div>' : (publications.length ? publications.map(cartePublicationCaserne).join("") : '<div class="caserne-vide"><strong>Aucune publication</strong><p>Cette rubrique est prête à recevoir ses contenus.</p></div>')}
+            </section>
+        </main>${navigationCaserne("caserne")}`;
+    actualiserInterfaceBureau();
+}
+
+function initialiserStyleEspaceCaserne() {
+    if (document.getElementById("style-espace-caserne-v69")) return;
+    const style=document.createElement("style");
+    style.id="style-espace-caserne-v69";
+    style.textContent=`
+        body:has(.caserne-shell){background:#f4ebe8!important;padding-bottom:92px!important}
+        .caserne-shell{max-width:820px;margin:0 auto;padding:0 18px 110px;font-family:Arial,sans-serif;color:#2b1716}
+        .caserne-top{margin:0 -18px 22px;padding:34px 22px 28px;background:#7d2425;color:white;border-radius:0 0 28px 28px;box-shadow:0 10px 28px rgba(70,20,20,.16)}
+        .caserne-top small{font-size:11px;font-weight:800;letter-spacing:2px;opacity:.72}.caserne-top h1{font-size:34px;line-height:1;margin:8px 0 9px}.caserne-top p{margin:0;opacity:.86}
+        .caserne-fil{display:grid;gap:14px}.caserne-actu-card{background:#fff;border:1px solid #ead9d4;border-radius:18px;padding:18px;box-shadow:0 6px 18px rgba(80,40,30,.06)}
+        .caserne-actu-meta{display:flex;justify-content:space-between;gap:12px;align-items:center;font-size:12px;margin-bottom:12px}.caserne-actu-meta span{text-transform:uppercase;font-weight:800;letter-spacing:.8px;color:#7d2425}.caserne-actu-meta time{color:#745f5b;text-align:right}
+        .caserne-actu-card h2{font-size:20px;margin:0 0 8px}.caserne-actu-card p{margin:0;line-height:1.5;color:#5b4945}.caserne-reponse-attente{margin-top:14px;background:#f3d6d0;border-radius:10px;padding:10px 12px;font-weight:700;color:#702022}
+        .caserne-vide{background:#fff;border:1px dashed #cfaeaa;border-radius:18px;padding:28px 20px;text-align:center}.caserne-vide strong{font-size:18px}.caserne-vide p{color:#75615e;margin-bottom:0}
+        .caserne-menu-grille{display:grid;grid-template-columns:1fr 1fr;gap:12px}.caserne-menu-grille button{border:0;border-radius:18px;background:#fff;padding:20px 16px;text-align:left;box-shadow:0 5px 18px rgba(80,40,30,.07);min-height:105px;display:flex;flex-direction:column;justify-content:space-between;color:#2b1716}.caserne-menu-grille button strong{font-size:17px}.caserne-menu-grille button span{font-size:12px;color:#8c3434;font-weight:700}
+        .caserne-admin-acces{margin:0 0 16px;background:#e7c2a5;border-left:5px solid #9b5d2e;border-radius:14px;padding:15px 16px;display:flex;flex-direction:column;gap:4px}.caserne-admin-acces strong{color:#5f3215}.caserne-admin-acces span{font-size:13px;color:#654c3c}
+        .caserne-nav-bas{position:fixed;z-index:5000;left:50%;bottom:12px;transform:translateX(-50%);width:min(calc(100% - 24px),620px);height:68px;background:#fff;border:1px solid #eadbd7;border-radius:22px;box-shadow:0 12px 34px rgba(50,20,20,.18);display:grid;grid-template-columns:repeat(4,1fr);padding:5px 54px 5px 6px}
+        .caserne-nav-bas>button:not(.caserne-menu-bulle){border:0;background:transparent;color:#7d6b67;font-size:10px;font-weight:700;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px}.caserne-nav-bas>button span{font-size:21px;line-height:1}.caserne-nav-bas>button.actif{color:#8a2527}.caserne-menu-bulle{position:absolute;right:8px;top:8px;width:50px;height:50px;border-radius:50%;border:0;background:#7d2425;color:#fff;box-shadow:0 5px 15px rgba(80,20,20,.25)}.caserne-menu-bulle span{font-size:20px!important}
+        @media(min-width:1000px){body:has(.caserne-shell) .sidebar-pc{display:none!important}body:has(.caserne-shell) #app{margin-left:0!important}.caserne-shell{padding-top:20px}.caserne-top{border-radius:28px;margin:0 0 24px}.caserne-nav-bas{bottom:22px}}
+    `;
+    document.head.appendChild(style);
 }
 
 
@@ -14313,6 +14438,24 @@ function rendreGestionUtilisateurs() {
                             ${permissionRoleHTML(role,"acces_remise_zero_historique","Remise à zéro de l'historique",prefixe)}
                             ${permissionRoleHTML(role,"acces_gestion_utilisateurs","Gestion des utilisateurs",prefixe)}
                             ${permissionRoleHTML(role,"acces_notifications","Envoyer une notification",prefixe)}
+                            ${permissionRoleHTML(role,"acces_espace_caserne","Espace Caserne",prefixe)}
+${permissionRoleHTML(role,"acces_sport","Sport",prefixe)}
+${permissionRoleHTML(role,"acces_sport_admin","Sport — Admin",prefixe)}
+${permissionRoleHTML(role,"acces_manoeuvre","Manœuvre",prefixe)}
+${permissionRoleHTML(role,"acces_manoeuvre_admin","Manœuvre — Admin",prefixe)}
+${permissionRoleHTML(role,"acces_casernement","Casernement",prefixe)}
+${permissionRoleHTML(role,"acces_casernement_admin","Casernement — Admin",prefixe)}
+${permissionRoleHTML(role,"acces_reunion","Réunion",prefixe)}
+${permissionRoleHTML(role,"acces_reunion_admin","Réunion — Admin",prefixe)}
+${permissionRoleHTML(role,"acces_amical_public","Amical — Public",prefixe)}
+${permissionRoleHTML(role,"acces_amical_membre","Amical — Membre",prefixe)}
+${permissionRoleHTML(role,"acces_amical_admin","Amical — Admin",prefixe)}
+${permissionRoleHTML(role,"acces_comite_centre","Comité de centre",prefixe)}
+${permissionRoleHTML(role,"acces_comite_centre_admin","Comité de centre — Admin",prefixe)}
+${permissionRoleHTML(role,"acces_administratif","Administratif",prefixe)}
+${permissionRoleHTML(role,"acces_administratif_admin","Administratif — Admin",prefixe)}
+${permissionRoleHTML(role,"acces_entretien_individuel","Entretien individuel",prefixe)}
+${permissionRoleHTML(role,"acces_entretien_individuel_admin","Entretien individuel — Admin",prefixe)}
 
                         </div>
 
@@ -14442,6 +14585,24 @@ function rendreGestionUtilisateurs() {
 <label><input type="checkbox" id="new-role-remise-zero"> Remise à zéro de l'historique</label>
 <label><input type="checkbox" id="new-role-utilisateurs"> Gestion des utilisateurs</label>
 <label><input type="checkbox" id="new-role-notifications"> Envoyer une notification</label>
+<label><input type="checkbox" id="new-role-espace-caserne"> Espace Caserne</label>
+<label><input type="checkbox" id="new-role-sport"> Sport</label>
+<label><input type="checkbox" id="new-role-sport-admin"> Sport — Admin</label>
+<label><input type="checkbox" id="new-role-manoeuvre"> Manœuvre</label>
+<label><input type="checkbox" id="new-role-manoeuvre-admin"> Manœuvre — Admin</label>
+<label><input type="checkbox" id="new-role-casernement"> Casernement</label>
+<label><input type="checkbox" id="new-role-casernement-admin"> Casernement — Admin</label>
+<label><input type="checkbox" id="new-role-reunion"> Réunion</label>
+<label><input type="checkbox" id="new-role-reunion-admin"> Réunion — Admin</label>
+<label><input type="checkbox" id="new-role-amical-public"> Amical — Public</label>
+<label><input type="checkbox" id="new-role-amical-membre"> Amical — Membre</label>
+<label><input type="checkbox" id="new-role-amical-admin"> Amical — Admin</label>
+<label><input type="checkbox" id="new-role-comite-centre"> Comité de centre</label>
+<label><input type="checkbox" id="new-role-comite-centre-admin"> Comité de centre — Admin</label>
+<label><input type="checkbox" id="new-role-administratif"> Administratif</label>
+<label><input type="checkbox" id="new-role-administratif-admin"> Administratif — Admin</label>
+<label><input type="checkbox" id="new-role-entretien-individuel"> Entretien individuel</label>
+<label><input type="checkbox" id="new-role-entretien-individuel-admin"> Entretien individuel — Admin</label>
 </div>
 
                     <button
@@ -14773,7 +14934,43 @@ async function creerRoleAdministration() {
                 acces_gestion_utilisateurs:
                     lirePermissionRole("new-role-utilisateurs"),
                 acces_notifications:
-                    lirePermissionRole("new-role-notifications")
+                    lirePermissionRole("new-role-notifications"),
+                acces_espace_caserne:
+                    lirePermissionRole("new-role-espace-caserne"),
+                acces_sport:
+                    lirePermissionRole("new-role-sport"),
+                acces_sport_admin:
+                    lirePermissionRole("new-role-sport-admin"),
+                acces_manoeuvre:
+                    lirePermissionRole("new-role-manoeuvre"),
+                acces_manoeuvre_admin:
+                    lirePermissionRole("new-role-manoeuvre-admin"),
+                acces_casernement:
+                    lirePermissionRole("new-role-casernement"),
+                acces_casernement_admin:
+                    lirePermissionRole("new-role-casernement-admin"),
+                acces_reunion:
+                    lirePermissionRole("new-role-reunion"),
+                acces_reunion_admin:
+                    lirePermissionRole("new-role-reunion-admin"),
+                acces_amical_public:
+                    lirePermissionRole("new-role-amical-public"),
+                acces_amical_membre:
+                    lirePermissionRole("new-role-amical-membre"),
+                acces_amical_admin:
+                    lirePermissionRole("new-role-amical-admin"),
+                acces_comite_centre:
+                    lirePermissionRole("new-role-comite-centre"),
+                acces_comite_centre_admin:
+                    lirePermissionRole("new-role-comite-centre-admin"),
+                acces_administratif:
+                    lirePermissionRole("new-role-administratif"),
+                acces_administratif_admin:
+                    lirePermissionRole("new-role-administratif-admin"),
+                acces_entretien_individuel:
+                    lirePermissionRole("new-role-entretien-individuel"),
+                acces_entretien_individuel_admin:
+                    lirePermissionRole("new-role-entretien-individuel-admin")
             }
         );
 
@@ -14866,7 +15063,43 @@ async function enregistrerRole(
                 acces_gestion_utilisateurs:
                     lirePermissionRole(prefixe + "-acces_gestion_utilisateurs"),
                 acces_notifications:
-                    lirePermissionRole(prefixe + "-acces_notifications")
+                    lirePermissionRole(prefixe + "-acces_notifications"),
+                acces_espace_caserne:
+                    lirePermissionRole(prefixe + "-acces_espace_caserne"),
+                acces_sport:
+                    lirePermissionRole(prefixe + "-acces_sport"),
+                acces_sport_admin:
+                    lirePermissionRole(prefixe + "-acces_sport_admin"),
+                acces_manoeuvre:
+                    lirePermissionRole(prefixe + "-acces_manoeuvre"),
+                acces_manoeuvre_admin:
+                    lirePermissionRole(prefixe + "-acces_manoeuvre_admin"),
+                acces_casernement:
+                    lirePermissionRole(prefixe + "-acces_casernement"),
+                acces_casernement_admin:
+                    lirePermissionRole(prefixe + "-acces_casernement_admin"),
+                acces_reunion:
+                    lirePermissionRole(prefixe + "-acces_reunion"),
+                acces_reunion_admin:
+                    lirePermissionRole(prefixe + "-acces_reunion_admin"),
+                acces_amical_public:
+                    lirePermissionRole(prefixe + "-acces_amical_public"),
+                acces_amical_membre:
+                    lirePermissionRole(prefixe + "-acces_amical_membre"),
+                acces_amical_admin:
+                    lirePermissionRole(prefixe + "-acces_amical_admin"),
+                acces_comite_centre:
+                    lirePermissionRole(prefixe + "-acces_comite_centre"),
+                acces_comite_centre_admin:
+                    lirePermissionRole(prefixe + "-acces_comite_centre_admin"),
+                acces_administratif:
+                    lirePermissionRole(prefixe + "-acces_administratif"),
+                acces_administratif_admin:
+                    lirePermissionRole(prefixe + "-acces_administratif_admin"),
+                acces_entretien_individuel:
+                    lirePermissionRole(prefixe + "-acces_entretien_individuel"),
+                acces_entretien_individuel_admin:
+                    lirePermissionRole(prefixe + "-acces_entretien_individuel_admin")
             }
         );
 
@@ -16923,6 +17156,10 @@ window.supprimerRoleGestion =
 window.afficherPortailPrincipal =
     afficherPortailPrincipal;
 
+
+window.afficherActualitesCaserne = afficherActualitesCaserne;
+window.afficherRubriqueCaserne = afficherRubriqueCaserne;
+window.ouvrirMenuCaserne = ouvrirMenuCaserne;
 window.afficherEspaceCaserne =
     afficherEspaceCaserne;
 
