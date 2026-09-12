@@ -8244,9 +8244,10 @@ function initialiserStyleEspaceCaserne() {
     const style=document.createElement("style");
     style.id="style-espace-caserne-v74";
     style.textContent=`
-        body:has(.caserne-shell){background:#f4ebe8!important;padding-bottom:92px!important}
-        .caserne-shell{max-width:820px;margin:0 auto;padding:0 18px 110px;font-family:Arial,sans-serif;color:#2b1716}
-        .caserne-top{margin:0 -18px 22px;padding:34px 22px 28px;background:#7d2425;color:white;border-radius:0 0 28px 28px;box-shadow:0 10px 28px rgba(70,20,20,.16)}
+        html:has(body .caserne-shell){background:#f4ebe8!important}
+        body:has(.caserne-shell){background:#f4ebe8!important;padding-bottom:92px!important;min-height:100dvh;overscroll-behavior-y:none}
+        .caserne-shell{max-width:820px;margin:0 auto;padding:0 18px 110px;font-family:Arial,sans-serif;color:#2b1716;min-height:100dvh;background:#f4ebe8}
+        .caserne-top{margin:calc(-1 * env(safe-area-inset-top, 0px)) -18px 22px;padding:calc(34px + env(safe-area-inset-top, 0px)) 22px 28px;background:#7d2425;color:white;border-radius:0 0 28px 28px;box-shadow:0 10px 28px rgba(70,20,20,.16)}
         .caserne-top small{font-size:11px;font-weight:800;letter-spacing:2px;opacity:.72}.caserne-top h1{font-size:34px;line-height:1;margin:8px 0 9px}.caserne-top p{margin:0;opacity:.86}
         .caserne-fil{display:grid;gap:14px}.caserne-actu-card{background:#fff;border:1px solid #ead9d4;border-radius:18px;padding:18px;box-shadow:0 6px 18px rgba(80,40,30,.06)}
         .caserne-actu-meta{display:flex;justify-content:space-between;gap:12px;align-items:center;font-size:12px;margin-bottom:12px}.caserne-actu-meta span{text-transform:uppercase;font-weight:800;letter-spacing:.8px;color:#7d2425}.caserne-actu-meta time{color:#745f5b;text-align:right}
@@ -8265,6 +8266,60 @@ function initialiserStyleEspaceCaserne() {
         @media(min-width:1000px){body:has(.caserne-shell) .sidebar-pc{display:none!important}body:has(.caserne-shell) #app{margin-left:0!important}.caserne-shell{padding-top:20px}.caserne-top{border-radius:28px;margin:0 0 24px}.caserne-nav-bas{bottom:22px}}
     `;
     document.head.appendChild(style);
+}
+
+
+function synchroniserApparencePWACaserne() {
+    const dansCaserne = Boolean(document.querySelector(".caserne-shell"));
+
+    let theme = document.querySelector('meta[name="theme-color"]');
+    if (!theme) {
+        theme = document.createElement("meta");
+        theme.name = "theme-color";
+        document.head.appendChild(theme);
+    }
+
+    let status = document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]');
+    if (!status) {
+        status = document.createElement("meta");
+        status.name = "apple-mobile-web-app-status-bar-style";
+        document.head.appendChild(status);
+    }
+
+    const viewport = document.querySelector('meta[name="viewport"]');
+
+    if (!window.__cisThemeInitial) {
+        window.__cisThemeInitial = theme.getAttribute("content") || "#1f2937";
+        window.__cisStatusInitial = status.getAttribute("content") || "default";
+        window.__cisViewportInitial = viewport ? (viewport.getAttribute("content") || "width=device-width, initial-scale=1.0") : null;
+    }
+
+    if (dansCaserne) {
+        theme.setAttribute("content", "#7d2425");
+        status.setAttribute("content", "black-translucent");
+        if (viewport) {
+            const base = (window.__cisViewportInitial || viewport.getAttribute("content") || "width=device-width, initial-scale=1.0")
+                .replace(/\s*,?\s*viewport-fit\s*=\s*[^,]+/gi, "");
+            viewport.setAttribute("content", `${base}, viewport-fit=cover`);
+        }
+        document.documentElement.style.backgroundColor = "#f4ebe8";
+    } else {
+        theme.setAttribute("content", window.__cisThemeInitial || "#1f2937");
+        status.setAttribute("content", window.__cisStatusInitial || "default");
+        if (viewport && window.__cisViewportInitial) viewport.setAttribute("content", window.__cisViewportInitial);
+        document.documentElement.style.backgroundColor = "";
+    }
+}
+
+if (!window.__cisThemeObserverInstalle) {
+    window.__cisThemeObserverInstalle = true;
+    const observerThemeCaserne = new MutationObserver(() => synchroniserApparencePWACaserne());
+    observerThemeCaserne.observe(document.documentElement, {subtree:true, childList:true});
+    window.addEventListener("pageshow", synchroniserApparencePWACaserne);
+    document.addEventListener("visibilitychange", () => {
+        if (!document.hidden) synchroniserApparencePWACaserne();
+    });
+    setTimeout(synchroniserApparencePWACaserne, 0);
 }
 
 
