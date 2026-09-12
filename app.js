@@ -668,7 +668,7 @@ const DOMAINE_EMAIL_INTERNE =
     "inventaire-caserne.local";
 
 const VERSION_APPLICATION =
-    "2.9.34";
+    "2.9.35";
 
 const CLE_PROFIL_UTILISATEUR_CACHE =
     "profil_utilisateur_connecte_v1";
@@ -7517,7 +7517,7 @@ function obtenirConfigurationPublicationCaserne(type) {
         reunion:{titre:"Réunion", admin:"ADMINISTRATION RÉUNION", action:"Publier la réunion", dossier:"reunion", aide:"Créer une réunion"},
         amical:{titre:"Amical", admin:"ADMINISTRATION AMICAL", action:"Publier", dossier:"amical", aide:"Créer une publication de l'Amical"},
         comite_centre:{titre:"Comité de centre", admin:"ADMINISTRATION COMITÉ DE CENTRE", action:"Publier", dossier:"comite-centre", aide:"Créer une publication du Comité de centre"},
-        administratif:{titre:"Administratif", admin:"ADMINISTRATION ADMINISTRATIF", action:"Publier", dossier:"administratif", aide:"Créer une information administrative"}
+        administratif:{titre:"Administratif", admin:"ADMINISTRATION", action:"Ouvrir", dossier:"administratif", aide:"Gestion administrative"}
     })[type] || {titre:"Publication", admin:"ADMINISTRATION", action:"Publier", dossier:"caserne", aide:"Créer une publication"};
 }
 
@@ -7542,28 +7542,39 @@ function blocReponsePublicationCaserne(p, contexte, libelle, retour) {
     </div>`;
 }
 
+function blocReponsePublicationPasseeCaserne(p, contexte, libelle) {
+    const reponses = Array.isArray(p.reponses) ? p.reponses : [];
+    const presents = reponses.filter(r => r.contexte === contexte && r.reponse === "present");
+    return `<div class="caserne-zone-reponse caserne-zone-reponse-passee">
+        <strong class="caserne-reponse-contexte">${echapperHTML(libelle)}</strong>
+        <div class="caserne-liste-presents"><strong>Présents${presents.length ? ` · ${presents.length}` : ""}</strong>${presents.length ? `<div>${presents.map(r => `<span>${echapperHTML([r.user_prenom,r.user_nom].filter(Boolean).join(" ") || "Utilisateur")}</span>`).join("")}</div>` : `<small>Aucune réponse « Présent » enregistrée.</small>`}</div>
+    </div>`;
+}
+
 function cartePublicationCaserne(p, options = {}) {
     const titre = p.titre || obtenirConfigurationPublicationCaserne(p.type_publication).titre;
     const photos = Array.isArray(p.photos) ? p.photos : [];
     const retour = options.retour || "actualites";
+    const estPasse = options.passe === true;
     const reponses = Array.isArray(p.reponses) ? p.reponses : [];
     const maReponse = reponses.find(r => r.contexte === "evenement" && String(r.user_id) === String(utilisateurConnecte?.id || ""));
-    const classeReponse = maReponse?.reponse === "present" ? " caserne-actu-present" : "";
+    const classeReponse = !estPasse && maReponse?.reponse === "present" ? " caserne-actu-present" : "";
+    const classePasse = estPasse ? " caserne-actu-passee" : "";
     const sousType = p.type_publication === "amical" && p.sous_type ? `<span class="caserne-badge-soustype">${echapperHTML(({evenement:"Événement",reunion:"Réunion",autre:"Autre"})[p.sous_type] || p.sous_type)}</span>` : "";
     const visibilite = p.type_publication === "amical" && p.visibilite === "membre" ? `<span class="caserne-badge-visibilite">Membres de l'Amical</span>` : "";
 
-    return `<article class="caserne-actu-card${classeReponse}">
+    return `<article class="caserne-actu-card${classeReponse}${classePasse}">
         <div class="caserne-actu-meta"><span>${echapperHTML(obtenirLibelleTypeCaserne(p.type_publication))}</span>${p.date_evenement ? `<time>${echapperHTML(formaterDateHeureCaserne(p.date_evenement))}</time>` : ""}</div>
         <div class="caserne-badges-publication">${sousType}${visibilite}</div>
         <h2>${echapperHTML(titre)}</h2>
         ${p.description ? `<p>${echapperHTML(p.description).replaceAll("\n","<br>")}</p>` : ""}
         ${photos.length ? `<div class="caserne-photos">${photos.map(ph => `<button type="button" onclick='ouvrirPhotoCaserne(${JSON.stringify(ph.photo_url)})'><img src="${echapperHTML(ph.photo_url || "")}" alt="Photo de la publication"></button>`).join("")}</div>` : ""}
-        ${p.demande_reponse ? blocReponsePublicationCaserne(p,"evenement","Réponse pour l'événement",retour) : ""}
-        ${p.date_preparation ? `<div class="caserne-preparation-bloc"><strong>Préparation</strong><span>${echapperHTML(formaterDateHeureCaserne(p.date_preparation))}</span>${p.demande_reponse_preparation ? blocReponsePublicationCaserne(p,"preparation","Réponse pour la préparation",retour) : ""}</div>` : ""}
-        <div class="caserne-calendrier-actions">
+        ${p.demande_reponse ? (estPasse ? blocReponsePublicationPasseeCaserne(p,"evenement","Réponses pour l’événement") : blocReponsePublicationCaserne(p,"evenement","Réponse pour l'événement",retour)) : ""}
+        ${p.date_preparation ? `<div class="caserne-preparation-bloc"><strong>Préparation</strong><span>${echapperHTML(formaterDateHeureCaserne(p.date_preparation))}</span>${p.demande_reponse_preparation ? (estPasse ? blocReponsePublicationPasseeCaserne(p,"preparation","Réponses pour la préparation") : blocReponsePublicationCaserne(p,"preparation","Réponse pour la préparation",retour)) : ""}</div>` : ""}
+        ${!estPasse ? `<div class="caserne-calendrier-actions">
             ${boutonCalendrierCaserne(titre, p.date_evenement, p.description || "", 60, "Ajouter l'événement au calendrier")}
             ${p.date_preparation ? boutonCalendrierCaserne(`${titre} · Préparation`, p.date_preparation, p.description || "", 60, "Ajouter la préparation au calendrier") : ""}
-        </div>
+        </div>` : ""}
         ${options.admin ? `<div class="caserne-actions-admin"><button type="button" onclick="modifierPublicationCaserne('${p.id}','${p.type_publication}')">Modifier</button><button type="button" onclick="supprimerPublicationCaserne('${p.id}','${p.type_publication}')">Supprimer</button></div>` : ""}
     </article>`;
 }
@@ -8045,37 +8056,144 @@ function cartePlanningEntretienActualitesCaserne(entretien) {
     </article>`;
 }
 
+async function nettoyerEvenementsCaserneAnciens() {
+    const supabase = obtenirClientSupabase();
+    if (!supabase || !navigator.onLine) return;
+    try {
+        const {error} = await supabase.rpc("nettoyer_evenements_caserne_anciens");
+        if (error) console.warn("Nettoyage automatique des anciens événements Caserne :", error);
+    } catch (erreur) {
+        console.warn("Nettoyage automatique Caserne indisponible :", erreur);
+    }
+}
+
+function carteEntretienPasseActualitesCaserne(entretien, dateReference) {
+    const creneauxPasses = (entretien.creneaux || [])
+        .filter(c => c.date_heure && new Date(c.date_heure).getTime() <= Date.now())
+        .sort((a,b) => new Date(b.date_heure).getTime() - new Date(a.date_heure).getTime());
+    const groupes = grouperCreneauxParDateCaserne([...creneauxPasses].sort((a,b) => new Date(a.date_heure).getTime() - new Date(b.date_heure).getTime()));
+    return `<article class="caserne-actu-card caserne-actu-entretien-detail caserne-actu-passee">
+        <div class="caserne-actu-meta"><span>Entretien individuel</span>${dateReference ? `<time>${echapperHTML(formaterDateHeureCaserne(dateReference))}</time>` : ""}</div>
+        <div class="caserne-entretien-card-entete">
+            <div><h2>${echapperHTML(entretien.titre || "Entretien individuel")}</h2></div>
+            ${entretien.duree_minutes ? `<span>${Number(entretien.duree_minutes)} min</span>` : ""}
+        </div>
+        ${entretien.description ? `<p>${echapperHTML(entretien.description).replaceAll("\n","<br>")}</p>` : ""}
+        <div class="caserne-entretien-creneaux caserne-entretien-creneaux-actualites">
+            ${groupes.length ? groupes.map(([date, lignes]) => {
+                const d = new Date(date + "T12:00:00");
+                const libelle = d.toLocaleDateString("fr-FR", {weekday:"long", day:"2-digit", month:"long", year:"numeric"});
+                return `<div class="caserne-entretien-jour"><strong>${echapperHTML(libelle)}</strong><div>${lignes.map(c => {
+                    const heure = new Date(c.date_heure).toLocaleTimeString("fr-FR", {hour:"2-digit", minute:"2-digit"});
+                    return `<div class="caserne-creneau-passe"><span>${echapperHTML(heure)}</span></div>`;
+                }).join("")}</div></div>`;
+            }).join("") : `<div class="caserne-entretien-sans-creneau">Aucun créneau enregistré.</div>`}
+        </div>
+    </article>`;
+}
+
 async function afficherActualitesCaserne() {
+    await nettoyerEvenementsCaserneAnciens();
+
     let publications = await chargerPublicationsCaserne();
+    /* L'onglet Administratif est désormais un centre de gestion, pas un type d'événement. */
+    publications = publications.filter(p => p.type_publication !== "administratif");
     publications = await chargerDetailsPublicationsCaserne(publications);
     window.__publicationsCaserneParId = Object.fromEntries(publications.map(p => [p.id,p]));
+
     const peutVoirEntretiens = utilisateurAPermission("acces_entretien_individuel") || utilisateurAPermission("acces_entretien_individuel_admin") || utilisateurEstSPVAdmin();
     const entretiens = peutVoirEntretiens ? await chargerEntretiensCaserne() : [];
     const maintenant = Date.now();
-    const prochaines = publications.filter(p => !p.date_evenement || new Date(p.date_evenement).getTime() >= maintenant - 86400000);
-    const elements = [
-        ...prochaines.map(p => ({type:"publication", date:p.date_evenement ? new Date(p.date_evenement).getTime() : Number.MAX_SAFE_INTEGER, valeur:p}))
-    ];
 
-    (entretiens || []).forEach(entretien => {
-        const creneauxFuturs = (entretien.creneaux || [])
-            .filter(c => c.date_heure && new Date(c.date_heure).getTime() >= maintenant - 86400000)
-            .sort((a,b) => new Date(a.date_heure).getTime() - new Date(b.date_heure).getTime());
-        if (!creneauxFuturs.length) return;
-        const maReservation = creneauxFuturs.find(c => c.ma_reservation === true);
-        elements.push({
-            type:"entretien",
-            date:new Date((maReservation || creneauxFuturs[0]).date_heure).getTime(),
-            valeur:{...entretien, creneaux:creneauxFuturs}
-        });
+    const sansDate = [];
+    const aVenir = [];
+    const passes = [];
+
+    publications.forEach(p => {
+        if (!p.date_evenement) {
+            sansDate.push({type:"publication", date:null, valeur:p});
+            return;
+        }
+        const date = new Date(p.date_evenement).getTime();
+        if (Number.isNaN(date)) {
+            sansDate.push({type:"publication", date:null, valeur:p});
+        } else if (date >= maintenant) {
+            aVenir.push({type:"publication", date, valeur:p});
+        } else {
+            passes.push({type:"publication", date, valeur:p});
+        }
     });
 
-    elements.sort((a,b) => a.date - b.date);
+    (entretiens || []).forEach(entretien => {
+        const tousLesCreneaux = (entretien.creneaux || [])
+            .filter(c => c.date_heure && !Number.isNaN(new Date(c.date_heure).getTime()))
+            .sort((a,b) => new Date(a.date_heure).getTime() - new Date(b.date_heure).getTime());
+        if (!tousLesCreneaux.length) return;
+
+        const creneauxFuturs = tousLesCreneaux.filter(c => new Date(c.date_heure).getTime() >= maintenant);
+        if (creneauxFuturs.length) {
+            const maReservation = creneauxFuturs.find(c => c.ma_reservation === true);
+            aVenir.push({
+                type:"entretien",
+                date:new Date((maReservation || creneauxFuturs[0]).date_heure).getTime(),
+                valeur:{...entretien, creneaux:creneauxFuturs}
+            });
+        } else {
+            const dernier = tousLesCreneaux[tousLesCreneaux.length - 1];
+            passes.push({
+                type:"entretien_passe",
+                date:new Date(dernier.date_heure).getTime(),
+                valeur:{...entretien, creneaux:tousLesCreneaux},
+                dateReference:dernier.date_heure
+            });
+        }
+    });
+
+    /* Sans date en premier. Les prochains événements vont du plus proche au plus lointain. */
+    sansDate.sort((a,b) => new Date(b.valeur.created_at || 0).getTime() - new Date(a.valeur.created_at || 0).getTime());
+    aVenir.sort((a,b) => a.date - b.date);
+    /* Sous la séparation : le passé le plus récent en premier, puis de plus en plus ancien. */
+    passes.sort((a,b) => b.date - a.date);
+
+    const futursHTML = [...sansDate, ...aVenir].map(e => e.type === "entretien"
+        ? cartePlanningEntretienActualitesCaserne(e.valeur)
+        : cartePublicationCaserne(e.valeur,{retour:"actualites"})
+    ).join("");
+
+    const passesHTML = passes.map(e => e.type === "entretien_passe"
+        ? carteEntretienPasseActualitesCaserne(e.valeur, e.dateReference)
+        : cartePublicationCaserne(e.valeur,{retour:"actualites",passe:true})
+    ).join("");
+
     document.getElementById("app").innerHTML = `
         <main class="caserne-shell">
-            <header class="caserne-top"><small>ESPACE CASERNE</small><h1>Actualités</h1><p>Les prochains rendez-vous de la caserne</p></header>
+            <header class="caserne-top"><small>ESPACE CASERNE</small><h1>Actualités</h1><p>Informations et événements de la caserne</p></header>
             <section class="caserne-fil">
-                ${elements.length ? elements.map(e => e.type === "entretien" ? cartePlanningEntretienActualitesCaserne(e.valeur) : cartePublicationCaserne(e.valeur,{retour:"actualites"})).join("") : '<div class="caserne-vide"><strong>Rien de prévu pour le moment</strong><p>Les prochains événements apparaîtront ici.</p></div>'}
+                ${futursHTML || (!passesHTML ? '<div class="caserne-vide"><strong>Rien de prévu pour le moment</strong><p>Les prochains événements apparaîtront ici.</p></div>' : '')}
+                ${passesHTML ? `<div class="caserne-separateur-passe"><span>Événements passés</span></div>${passesHTML}` : ""}
+            </section>
+        </main>${navigationCaserne("caserne")}`;
+    actualiserInterfaceBureau();
+}
+
+function afficherAdministratifCaserne() {
+    const peutUtilisateurs = utilisateurEstSPVAdmin() && utilisateurAPermission("acces_gestion_utilisateurs");
+    const peutNotifications = utilisateurAPermission("acces_notifications") || utilisateurEstSPVAdmin();
+    const peutPharmacie = utilisateurAPermission("acces_administration");
+    const peutArchives = utilisateurAPermission("acces_archives");
+
+    const outils = [
+        peutUtilisateurs ? `<button type="button" onclick="afficherGestionUtilisateurs()"><strong>Gestion des utilisateurs</strong><span>Comptes, rôles et permissions</span></button>` : "",
+        peutNotifications ? `<button type="button" onclick="afficherNotificationsAdministration()"><strong>Notifications</strong><span>Créer et envoyer une notification</span></button>` : "",
+        peutPharmacie ? `<button type="button" onclick="ouvrirAdministration()"><strong>Administration pharmacie</strong><span>Matériel, catégories, réapprovisionnement et historique</span></button>` : "",
+        peutArchives ? `<button type="button" onclick="afficherArchivesHistorique()"><strong>Archives</strong><span>Consulter les historiques archivés</span></button>` : ""
+    ].filter(Boolean);
+
+    document.getElementById("app").innerHTML = `
+        <main class="caserne-shell caserne-administratif-page">
+            <header class="caserne-top"><small>ESPACE CASERNE</small><h1>Administratif</h1><p>Gestion de l'application et de la caserne</p></header>
+            <section class="caserne-admin-centre">
+                ${outils.length ? outils.join("") : `<div class="caserne-vide"><strong>Aucun outil administratif autorisé</strong><p>Les outils apparaissent selon les permissions de votre rôle.</p></div>`}
             </section>
         </main>${navigationCaserne("caserne")}`;
     actualiserInterfaceBureau();
@@ -8085,6 +8203,11 @@ async function afficherRubriqueCaserne(type) {
     const rubrique = obtenirRubriquesCaserne().find(r => r[0] === type);
     if (!rubrique || !utilisateurPeutVoirRubriqueCaserne(rubrique)) { alert("Accès non autorisé."); return; }
     const estAdmin = utilisateurEstSPVAdmin() || utilisateurAPermission(rubrique[3]);
+
+    if (type === "administratif") {
+        afficherAdministratifCaserne();
+        return;
+    }
 
     if (type === "entretien_individuel") {
         const entretiens = await chargerEntretiensCaserne();
@@ -8134,6 +8257,9 @@ function initialiserStyleEspaceCaserne() {
         .caserne-admin-bloc{margin:0 0 22px;background:#3f1718;color:#fff;border-radius:20px;padding:18px;box-shadow:0 8px 22px rgba(60,20,20,.16)}.caserne-admin-titre small{font-size:10px;font-weight:800;letter-spacing:1.7px;opacity:.68}.caserne-admin-titre h2{margin:5px 0 16px;font-size:23px}.caserne-formulaire-sport{display:grid;gap:12px}.caserne-formulaire-sport label{display:grid;gap:6px;font-size:12px;font-weight:800}.caserne-formulaire-sport input[type=text],.caserne-formulaire-sport input[type=datetime-local],.caserne-formulaire-sport input[type=file],.caserne-formulaire-sport textarea{width:100%;box-sizing:border-box;border:1px solid rgba(255,255,255,.18);background:#fff;color:#2b1716;border-radius:12px;padding:12px;font:inherit}.caserne-formulaire-sport textarea{resize:vertical}.caserne-switch-ligne{display:flex!important;align-items:center;gap:10px!important;background:rgba(255,255,255,.09);padding:11px;border-radius:12px}.caserne-switch-ligne input{width:20px;height:20px}.caserne-aide-photo{opacity:.65;margin-top:-7px}.caserne-bouton-admin-principal{border:0;border-radius:12px;background:#f2d7d1;color:#5b1b1d;padding:13px 16px;font-weight:900;font-size:14px}.caserne-bouton-admin-principal:disabled{opacity:.55}.caserne-photos{display:flex;gap:8px;overflow-x:auto;margin-top:14px;padding-bottom:3px}.caserne-photos button{flex:0 0 128px;height:100px;border:0;padding:0;border-radius:12px;overflow:hidden;background:#eadbd7}.caserne-photos img{width:100%;height:100%;object-fit:cover;display:block}.caserne-photo-overlay{position:fixed;inset:0;z-index:20000;background:rgba(18,8,8,.94);display:flex;align-items:center;justify-content:center;padding:55px 12px 20px}.caserne-photo-overlay img{max-width:100%;max-height:100%;object-fit:contain;touch-action:pinch-zoom}.caserne-photo-fermer{position:absolute;right:14px;top:14px;width:44px;height:44px;border-radius:50%;border:1px solid rgba(255,255,255,.25);background:rgba(255,255,255,.12);color:#fff;font-size:30px;line-height:1}.caserne-zone-reponse{margin-top:16px;border-top:1px solid #ead9d4;padding-top:14px}.caserne-boutons-reponse{display:grid;grid-template-columns:1fr 1fr;gap:9px}.caserne-boutons-reponse button{border:1px solid #d4b7b3;background:#fff;border-radius:11px;padding:11px;font-weight:800;color:#672426}.caserne-boutons-reponse button.selectionne.present{background:#7d2425;color:#fff;border-color:#7d2425}.caserne-boutons-reponse button.selectionne.absent{background:#ded4d1;color:#4c3c39;border-color:#c7b8b4}.caserne-liste-presents{margin-top:13px}.caserne-liste-presents>strong{display:block;font-size:12px;color:#7d2425;margin-bottom:7px}.caserne-liste-presents>div{display:flex;gap:6px;flex-wrap:wrap}.caserne-liste-presents span{display:inline-block;background:#f3e4e0;border-radius:999px;padding:6px 9px;font-size:12px;font-weight:700}.caserne-liste-presents small{color:#7d6b67}.caserne-actu-present{background:#f8dfda}.caserne-actions-admin{display:flex;justify-content:flex-end;margin-top:12px}.caserne-actions-admin button{border:0;background:#4a181a;color:#fff;border-radius:9px;padding:8px 11px;font-weight:800;font-size:11px}
         .caserne-entretien-onglets-admin{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:0 0 16px}.caserne-entretien-onglets-admin button{border:1px solid rgba(255,255,255,.18);border-radius:10px;padding:10px;background:rgba(255,255,255,.06);color:#fff;font-weight:800}.caserne-entretien-onglets-admin button.actif{background:#f2d7d1;color:#5b1b1d;border-color:#f2d7d1}.caserne-formulaire-entretien input[type=number]{width:100%;box-sizing:border-box;border:1px solid rgba(255,255,255,.18);background:#fff;color:#2b1716;border-radius:12px;padding:12px;font:inherit}.caserne-entretien-dates-titre{display:grid;gap:3px;margin-top:3px}.caserne-entretien-dates-titre small{opacity:.68}.caserne-entretien-date-groupe{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);border-radius:14px;padding:12px;display:grid;gap:10px}.caserne-entretien-date-entete{display:flex;gap:10px;align-items:end}.caserne-entretien-date-entete label{flex:1}.caserne-entretien-date-entete input,.caserne-entretien-heure-ligne input{width:100%;box-sizing:border-box;border:0;border-radius:10px;padding:10px;background:#fff;color:#2b1716;font:inherit}.caserne-entretien-retirer,.caserne-entretien-ajouter-heure,.caserne-entretien-ajouter-date{border:1px solid rgba(255,255,255,.24);border-radius:9px;padding:9px 11px;background:transparent;color:#fff;font-weight:800}.caserne-entretien-retirer{font-size:11px}.caserne-entretien-ajouter-heure{text-align:left}.caserne-entretien-ajouter-date{width:100%;padding:11px}.caserne-entretien-heures{display:grid;gap:7px}.caserne-entretien-heure-ligne{display:grid;grid-template-columns:1fr 42px;gap:7px}.caserne-entretien-heure-ligne button{border:0;border-radius:9px;background:#702326;color:#fff;font-size:22px}.caserne-entretien-card{background:#fff;border:1px solid #ead9d4;border-radius:18px;padding:18px;box-shadow:0 6px 18px rgba(80,40,30,.06)}.caserne-entretien-card-entete{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}.caserne-entretien-card-entete small{font-size:10px;font-weight:900;letter-spacing:1.2px;color:#7d2425}.caserne-entretien-card-entete h2{font-size:20px;margin:5px 0 0}.caserne-entretien-card-entete>span{background:#f2e4e0;border-radius:999px;padding:6px 9px;font-size:11px;font-weight:800;white-space:nowrap}.caserne-entretien-card>p{color:#5b4945;line-height:1.5}.caserne-entretien-mon-rdv{margin:14px 0;background:#5b1719;color:#fff;border-radius:13px;padding:13px;display:grid;gap:4px}.caserne-entretien-mon-rdv strong{font-size:11px;text-transform:uppercase;letter-spacing:.8px;opacity:.72}.caserne-entretien-mon-rdv span{font-size:16px;font-weight:900}.caserne-entretien-mon-rdv button{margin-top:6px;border:1px solid rgba(255,255,255,.3);background:transparent;color:#fff;border-radius:8px;padding:8px;font-weight:800}.caserne-entretien-creneaux{display:grid;gap:14px;margin-top:14px}.caserne-entretien-jour>strong{display:block;text-transform:capitalize;margin-bottom:8px;font-size:13px;color:#6b2426}.caserne-entretien-jour>div{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}.caserne-entretien-jour button{border:1px solid #d9c1bc;background:#fff;border-radius:11px;padding:9px 5px;display:grid;gap:2px;color:#4b2926}.caserne-entretien-jour button span{font-weight:900}.caserne-entretien-jour button small{font-size:9px}.caserne-entretien-jour button.selectionne{background:#7d2425;color:#fff;border-color:#7d2425}.caserne-entretien-jour button.complet{background:#eee8e6;color:#998984;border-color:#e0d6d3}.caserne-entretien-sans-creneau{padding:13px;border-radius:11px;background:#f5ece9;color:#765f5b;font-size:13px}.caserne-entretien-reponses-liste{display:grid;gap:8px}.caserne-entretien-reponses-liste article{background:rgba(255,255,255,.09);border-radius:11px;padding:11px;display:grid;gap:3px}.caserne-entretien-reponses-liste time{font-size:11px;opacity:.7}.caserne-entretien-reponses-liste strong{font-size:16px}.caserne-entretien-reponses-liste span{font-size:12px;opacity:.78}.caserne-entretien-chargement{padding:14px;border-radius:11px;background:rgba(255,255,255,.07);opacity:.8}.caserne-actu-entretien{cursor:pointer}.caserne-entretien-actu-badge{margin-top:14px;display:inline-block;background:#f3e3df;color:#6b2426;border:1px solid #e4cbc5;border-radius:999px;padding:7px 10px;font-size:11px;font-weight:900}.caserne-actu-rendezvous{background:#651c1f!important;color:#fff;border-color:#651c1f}.caserne-actu-rendezvous .caserne-actu-meta span,.caserne-actu-rendezvous .caserne-actu-meta time,.caserne-actu-rendezvous p{color:#fff}.caserne-rdv-badge{margin-top:14px;display:inline-block;background:rgba(255,255,255,.13);border:1px solid rgba(255,255,255,.2);border-radius:999px;padding:7px 10px;font-size:11px;font-weight:900}.caserne-calendrier-actions{display:grid;gap:8px;margin-top:14px}.caserne-bouton-calendrier{width:100%;border:1px solid #d7b9b4;background:#fff;color:#6b2426;border-radius:11px;padding:11px 12px;font-weight:900;font-size:12px}.caserne-actu-rendezvous .caserne-bouton-calendrier,.caserne-entretien-mon-rdv .caserne-bouton-calendrier{background:#fff;color:#651c1f;border-color:#fff}.caserne-entretien-mon-rdv .caserne-entretien-annuler{margin-top:0}.caserne-actu-entretien-detail .caserne-entretien-card-entete{margin-bottom:10px}.caserne-actu-entretien-detail .caserne-entretien-card-entete h2{margin:0}.caserne-actu-entretien-detail .caserne-entretien-creneaux{margin-top:15px}.caserne-actu-rendezvous .caserne-entretien-jour>strong{color:#fff}.caserne-actu-rendezvous .caserne-entretien-card-entete>span{background:rgba(255,255,255,.14);color:#fff}.caserne-actu-rendezvous .caserne-entretien-actu-badge{background:rgba(255,255,255,.12);color:#fff;border-color:rgba(255,255,255,.2)}
         .caserne-formulaire-publication select{width:100%;box-sizing:border-box;border:1px solid #d9c7c2;border-radius:12px;background:#fff;padding:12px;font-size:15px;color:#2b1716}.caserne-badges-publication{display:flex;flex-wrap:wrap;gap:7px;margin:6px 0 9px}.caserne-badge-soustype,.caserne-badge-visibilite{display:inline-flex;border-radius:999px;padding:6px 9px;font-size:11px;font-weight:900;background:#f5e3df;color:#7d2425}.caserne-badge-visibilite{background:#7d2425;color:#fff}.caserne-reponse-contexte{display:block;margin-bottom:9px;color:#6f2325}.caserne-preparation-bloc{margin-top:14px;padding:14px;border-radius:14px;background:#f7eeee;border:1px solid #ead1cc;display:grid;gap:8px}.caserne-preparation-bloc>strong{color:#7d2425}.caserne-actions-admin{display:flex;gap:8px;flex-wrap:wrap}.caserne-actions-admin button{flex:1;min-width:120px}.caserne-actu-present .caserne-preparation-bloc{background:rgba(255,255,255,.16);border-color:rgba(255,255,255,.25)}.caserne-actu-present .caserne-preparation-bloc>strong,.caserne-actu-present .caserne-reponse-contexte{color:inherit}
+        .caserne-separateur-passe{display:flex;align-items:center;gap:12px;margin:24px 2px 4px;color:#786f6c;font-size:12px;font-weight:900;text-transform:uppercase;letter-spacing:1px}.caserne-separateur-passe::before,.caserne-separateur-passe::after{content:"";height:1px;background:#c9c0bd;flex:1}.caserne-separateur-passe span{white-space:nowrap}
+        .caserne-actu-passee{background:#dedbd9!important;border-color:#cbc6c3!important;color:#5d5957!important;box-shadow:none!important}.caserne-actu-passee .caserne-actu-meta span,.caserne-actu-passee .caserne-actu-meta time,.caserne-actu-passee h2,.caserne-actu-passee p,.caserne-actu-passee .caserne-reponse-contexte,.caserne-actu-passee .caserne-liste-presents>strong,.caserne-actu-passee .caserne-entretien-jour>strong{color:#5d5957!important}.caserne-actu-passee .caserne-liste-presents span,.caserne-actu-passee .caserne-badge-soustype,.caserne-actu-passee .caserne-badge-visibilite,.caserne-actu-passee .caserne-entretien-card-entete>span{background:#c9c5c2!important;color:#55514f!important}.caserne-actu-passee .caserne-preparation-bloc,.caserne-actu-passee .caserne-zone-reponse{background:rgba(255,255,255,.22)!important;border-color:#c7c2bf!important}.caserne-creneau-passe{border:1px solid #c2bdb9;background:#d2cfcc;border-radius:10px;padding:9px 5px;text-align:center;color:#5d5957}.caserne-creneau-passe span{font-weight:900}.caserne-zone-reponse-passee .caserne-liste-presents{margin-top:0}
+        .caserne-admin-centre{display:grid;grid-template-columns:1fr 1fr;gap:12px}.caserne-admin-centre>button{border:1px solid #dcc7c2;background:#fff;border-radius:18px;padding:19px;text-align:left;min-height:108px;display:flex;flex-direction:column;justify-content:space-between;gap:12px;color:#2b1716;box-shadow:0 6px 18px rgba(80,40,30,.06)}.caserne-admin-centre>button strong{font-size:17px}.caserne-admin-centre>button span{font-size:12px;line-height:1.4;color:#765f5b}.caserne-administratif-page .caserne-vide{grid-column:1/-1}@media(max-width:560px){.caserne-admin-centre{grid-template-columns:1fr}}
         .caserne-nav-bas{position:fixed;z-index:5000;left:50%;bottom:12px;transform:translateX(-50%);width:min(calc(100% - 24px),620px);height:68px;background:#fff;border:1px solid #eadbd7;border-radius:22px;box-shadow:0 12px 34px rgba(50,20,20,.18);display:grid;grid-template-columns:repeat(4,1fr);padding:5px 54px 5px 6px}
         .caserne-nav-bas>button:not(.caserne-menu-bulle){border:0;background:transparent;color:#7d6b67;font-size:10px;font-weight:700;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px}.caserne-nav-bas>button span{font-size:21px;line-height:1}.caserne-nav-bas>button.actif{color:#8a2527}.caserne-menu-bulle{position:absolute;right:8px;top:8px;width:50px;height:50px;border-radius:50%;border:0;background:#7d2425;color:#fff;box-shadow:0 5px 15px rgba(80,20,20,.25)}.caserne-menu-bulle span{font-size:20px!important}
         @media(min-width:1000px){body:has(.caserne-shell) .sidebar-pc{display:none!important}body:has(.caserne-shell) #app{margin-left:0!important}.caserne-shell{padding-top:20px}.caserne-top{border-radius:28px;margin:0 0 24px}.caserne-nav-bas{bottom:22px}}
@@ -17844,6 +17970,7 @@ window.afficherPortailPrincipal =
 
 
 window.afficherActualitesCaserne = afficherActualitesCaserne;
+window.afficherAdministratifCaserne = afficherAdministratifCaserne;
 window.afficherRubriqueCaserne = afficherRubriqueCaserne;
 window.ouvrirMenuCaserne = ouvrirMenuCaserne;
 window.ouvrirPhotoCaserne = ouvrirPhotoCaserne;
