@@ -668,7 +668,7 @@ const DOMAINE_EMAIL_INTERNE =
     "inventaire-caserne.local";
 
 const VERSION_APPLICATION =
-    "2.9.29";
+    "2.9.30";
 
 const CLE_PROFIL_UTILISATEUR_CACHE =
     "profil_utilisateur_connecte_v1";
@@ -7532,16 +7532,19 @@ async function creerSeanceSportCaserne() {
 
     let publicationId = null;
     try {
-        const {data, error} = await supabase.from("caserne_publications").insert({
-            type_publication:"sport",
-            titre,
-            description,
-            date_evenement:dateEvenement,
-            demande_reponse:demandeReponse,
-            visibilite:"public"
-        }).select("id").single();
+        const {data, error} = await supabase.rpc("creer_publication_caserne", {
+            p_type_publication:"sport",
+            p_titre:titre,
+            p_description:description,
+            p_sous_type:null,
+            p_visibilite:"public",
+            p_date_evenement:dateEvenement,
+            p_date_preparation:null,
+            p_demande_reponse:demandeReponse,
+            p_demande_reponse_preparation:false
+        });
         if (error) throw error;
-        publicationId = data.id;
+        publicationId = data;
 
         if (fichiers.length) {
             const photos = await televerserPhotosCaserne(publicationId, fichiers, "sport");
