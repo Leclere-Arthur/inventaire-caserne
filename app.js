@@ -668,7 +668,7 @@ const DOMAINE_EMAIL_INTERNE =
     "inventaire-caserne.local";
 
 const VERSION_APPLICATION =
-    "2.9.37";
+    "2.9.38";
 
 const CLE_PROFIL_UTILISATEUR_CACHE =
     "profil_utilisateur_connecte_v1";
@@ -2032,6 +2032,7 @@ async function chargerProfilUtilisateurDepuisSupabase(
         data;
 
     sauvegarderProfilUtilisateurCache();
+    setTimeout(() => synchroniserAbonnementPushUtilisateurConnecte(), 0);
 
     return data;
 
@@ -4311,6 +4312,8 @@ async function enregistrerAbonnementPushSupabase(
                     auth: auth,
                     user_agent:
                         navigator.userAgent || "",
+                    user_id:
+                        utilisateurConnecte?.id || profilUtilisateurConnecte?.id || null,
                     actif: true,
                     updated_at:
                         new Date().toISOString()
@@ -4327,6 +4330,17 @@ async function enregistrerAbonnementPushSupabase(
 
 }
 
+
+async function synchroniserAbonnementPushUtilisateurConnecte() {
+    try {
+        if (!navigator.onLine || !notificationsWebPushDisponibles() || !utilisateurConnecte?.id) return;
+        const abonnement = await obtenirAbonnementPushActuel();
+        if (!abonnement) return;
+        await enregistrerAbonnementPushSupabase(abonnement);
+    } catch (erreur) {
+        console.warn("Association notification/utilisateur impossible :", erreur);
+    }
+}
 
 async function activerNotificationsPush() {
 
@@ -7522,7 +7536,7 @@ function boutonCalendrierCaserne(titre, date, description = "", dureeMinutes = 6
 async function chargerPublicationsCaserne(type) {
     const supabase = obtenirClientSupabase();
     if (!supabase || !navigator.onLine) return [];
-    let q = supabase.from("caserne_publications").select("id,type_publication,titre,description,sous_type,visibilite,date_evenement,date_preparation,demande_reponse,demande_reponse_preparation,created_at").order("date_evenement", {ascending:true, nullsFirst:false});
+    let q = supabase.from("caserne_publications").select("id,type_publication,titre,description,sous_type,visibilite,date_evenement,date_preparation,demande_reponse,demande_reponse_preparation,notification_auto,notification_delai_minutes,created_at").order("date_evenement", {ascending:true, nullsFirst:false});
     if (type) q = q.eq("type_publication", type);
     const {data,error}=await q;
     if (error) { console.warn("Publications Caserne :", error); return []; }
@@ -7629,10 +7643,11 @@ function cartePublicationCaserne(p, options = {}) {
     const classePasse = estPasse ? " caserne-actu-passee" : "";
     const sousType = p.type_publication === "amical" && p.sous_type ? `<span class="caserne-badge-soustype">${echapperHTML(({evenement:"Événement",reunion:"Réunion",autre:"Autre"})[p.sous_type] || p.sous_type)}</span>` : "";
     const visibilite = p.type_publication === "amical" && p.visibilite === "membre" ? `<span class="caserne-badge-visibilite">Membres de l'Amical</span>` : "";
+    const rappelAuto = !estPasse && p.notification_auto && p.date_evenement ? `<span class="caserne-badge-visibilite">Rappel ${echapperHTML(libelleDelaiNotificationCaserne(p.notification_delai_minutes))} avant</span>` : "";
 
     return `<article class="caserne-actu-card${classeReponse}${classePasse}">
         <div class="caserne-actu-meta"><span>${echapperHTML(obtenirLibelleTypeCaserne(p.type_publication))}</span>${p.date_evenement ? `<time>${echapperHTML(formaterDateHeureCaserne(p.date_evenement))}</time>` : ""}</div>
-        <div class="caserne-badges-publication">${sousType}${visibilite}</div>
+        <div class="caserne-badges-publication">${sousType}${visibilite}${rappelAuto}</div>
         <h2>${echapperHTML(titre)}</h2>
         ${p.description ? `<p>${echapperHTML(p.description).replaceAll("\n","<br>")}</p>` : ""}
         ${photos.length ? `<div class="caserne-photos">${photos.map(ph => `<button type="button" onclick='ouvrirPhotoCaserne(${JSON.stringify(ph.photo_url)})'><img src="${echapperHTML(ph.photo_url || "")}" alt="Photo de la publication"></button>`).join("")}</div>` : ""}
@@ -7674,12 +7689,28 @@ function formulaireAdminPublicationCaserne(type) {
             ${estAmical ? `<label>Type<select id="caserne-publication-sous-type"><option value="evenement">Événement</option><option value="reunion">Réunion</option><option value="autre">Autre</option></select></label><label>Visibilité<select id="caserne-publication-visibilite"><option value="public">Tout le personnel autorisé</option><option value="membre">Membres de l'Amical</option></select></label>` : ""}
             <label>Date et heure${type === "administratif" || type === "casernement" ? " (facultatif)" : ""}<input id="caserne-publication-date" type="datetime-local"></label>
             <label class="caserne-switch-ligne"><input id="caserne-publication-reponse" type="checkbox"><span>Demander une réponse Présent / Absent</span></label>
+            <label class="caserne-switch-ligne"><input id="caserne-publication-notification-auto" type="checkbox" onchange="gererOptionNotificationAutoCaserne(this)"><span>Envoyer une notification automatique aux personnes présentes</span></label>
+            <label id="caserne-publication-notification-delai-ligne" style="display:none">Délai avant l'événement<select id="caserne-publication-notification-delai"><option value="15">15 minutes avant</option><option value="30">30 minutes avant</option><option value="60" selected>1 heure avant</option><option value="120">2 heures avant</option><option value="360">6 heures avant</option><option value="720">12 heures avant</option><option value="1440">1 jour avant</option><option value="2880">2 jours avant</option><option value="10080">7 jours avant</option></select><small>Le rappel est envoyé uniquement aux utilisateurs ayant répondu « Présent ».</small></label>
             ${estAmical ? `<label>Date et heure de préparation (facultatif)<input id="caserne-publication-preparation" type="datetime-local"></label><label class="caserne-switch-ligne"><input id="caserne-publication-reponse-preparation" type="checkbox"><span>Demander une réponse Présent / Absent pour la préparation</span></label>` : ""}
             <label>Photos<input id="caserne-publication-photos" type="file" accept="image/*" multiple></label>
             <small class="caserne-aide-photo">Les photos sont facultatives. Tu peux en sélectionner plusieurs.</small>
             <button type="button" class="caserne-bouton-admin-principal" onclick="creerPublicationModuleCaserne('${type}')">${echapperHTML(cfg.action)}</button>
         </div>
     </section>`;
+}
+
+function gererOptionNotificationAutoCaserne(checkbox) {
+    const ligne = document.getElementById("caserne-publication-notification-delai-ligne");
+    const reponse = document.getElementById("caserne-publication-reponse");
+    if (ligne) ligne.style.display = checkbox?.checked ? "flex" : "none";
+    if (checkbox?.checked && reponse) reponse.checked = true;
+}
+
+function libelleDelaiNotificationCaserne(minutes) {
+    const valeur = Math.max(1, Number(minutes) || 60);
+    if (valeur % 1440 === 0) { const j = valeur / 1440; return `${j} jour${j > 1 ? "s" : ""}`; }
+    if (valeur % 60 === 0) { const h = valeur / 60; return `${h} heure${h > 1 ? "s" : ""}`; }
+    return `${valeur} minutes`;
 }
 
 function formulaireAdminSportCaserne() {
@@ -7713,13 +7744,19 @@ async function creerPublicationModuleCaserne(type) {
     const description = document.getElementById("caserne-publication-description")?.value?.trim() || null;
     const dateValeur = document.getElementById("caserne-publication-date")?.value || "";
     const prepValeur = type === "amical" ? (document.getElementById("caserne-publication-preparation")?.value || "") : "";
-    const demandeReponse = !!document.getElementById("caserne-publication-reponse")?.checked;
+    const notificationAuto = !!document.getElementById("caserne-publication-notification-auto")?.checked;
+    const notificationDelaiMinutes = Math.max(1, Number(document.getElementById("caserne-publication-notification-delai")?.value || 60));
+    const demandeReponse = notificationAuto || !!document.getElementById("caserne-publication-reponse")?.checked;
     const demandeReponsePreparation = type === "amical" && !!prepValeur && !!document.getElementById("caserne-publication-reponse-preparation")?.checked;
     const sousType = type === "amical" ? (document.getElementById("caserne-publication-sous-type")?.value || "evenement") : null;
     const visibilite = type === "amical" ? (document.getElementById("caserne-publication-visibilite")?.value || "public") : "public";
     const fichiers = Array.from(document.getElementById("caserne-publication-photos")?.files || []);
     const dateEvenement = dateValeur ? new Date(dateValeur).toISOString() : null;
     const datePreparation = prepValeur ? new Date(prepValeur).toISOString() : null;
+    if (notificationAuto && !dateEvenement) {
+        alert("Renseigne une date et une heure pour utiliser la notification automatique.");
+        return;
+    }
     const bouton = document.querySelector(".caserne-admin-publication .caserne-bouton-admin-principal");
     if (bouton) { bouton.disabled = true; bouton.textContent = "Publication…"; }
     let publicationId = null;
@@ -7737,6 +7774,12 @@ async function creerPublicationModuleCaserne(type) {
         });
         if (error) throw error;
         publicationId = data;
+        const {error: rappelError} = await supabase.rpc("configurer_rappel_publication_caserne", {
+            p_publication_id: publicationId,
+            p_notification_auto: notificationAuto,
+            p_notification_delai_minutes: notificationDelaiMinutes
+        });
+        if (rappelError) throw rappelError;
         if (fichiers.length) {
             const photos = await televerserPhotosCaserne(publicationId, fichiers, cfg.dossier);
             if (photos.length) {
@@ -7783,7 +7826,17 @@ async function modifierPublicationCaserne(publicationId, type) {
     }
     const dateEvenement = dateTexte ? new Date(dateTexte).toISOString() : null;
     const datePreparation = prepTexte ? new Date(prepTexte).toISOString() : null;
-    const demandeReponse = confirm("Demander une réponse Présent / Absent pour l'événement ?");
+    let notificationAuto = false;
+    let notificationDelaiMinutes = Math.max(1, Number(p.notification_delai_minutes) || 60);
+    if (dateEvenement) {
+        notificationAuto = confirm("Activer une notification automatique pour les personnes ayant répondu Présent ?");
+        if (notificationAuto) {
+            const saisieDelai = prompt("Combien de minutes avant l'événement ? Exemples : 60 = 1 heure, 1440 = 1 jour", String(notificationDelaiMinutes));
+            if (saisieDelai === null) return;
+            notificationDelaiMinutes = Math.max(1, Number(saisieDelai) || 60);
+        }
+    }
+    const demandeReponse = notificationAuto || confirm("Demander une réponse Présent / Absent pour l'événement ?");
     const demandeReponsePreparation = type === "amical" && !!datePreparation ? confirm("Demander une réponse Présent / Absent pour la préparation ?") : false;
     const supabase = obtenirClientSupabase();
     if (!supabase || !navigator.onLine) { alert("Une connexion Internet est nécessaire."); return; }
@@ -7799,6 +7852,12 @@ async function modifierPublicationCaserne(publicationId, type) {
         p_demande_reponse_preparation:demandeReponsePreparation
     });
     if (error) { alert("Modification impossible : " + (error.message || "erreur inconnue")); return; }
+    const {error: rappelError} = await supabase.rpc("configurer_rappel_publication_caserne", {
+        p_publication_id: publicationId,
+        p_notification_auto: notificationAuto,
+        p_notification_delai_minutes: notificationDelaiMinutes
+    });
+    if (rappelError) { alert("Publication modifiée, mais le rappel automatique n'a pas pu être enregistré : " + (rappelError.message || "erreur inconnue")); return; }
     alert("Publication modifiée.");
     await afficherRubriqueCaserne(type);
 }
