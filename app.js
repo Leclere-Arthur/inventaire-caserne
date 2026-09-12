@@ -7268,6 +7268,7 @@ function formaterDate(date) {
 function afficherPortailPrincipal() {
 
     initialiserStyleConnexion();
+    initialiserStyleEspaceCaserne();
 
     document.body.classList.remove(
         "mode-connexion"
@@ -7283,7 +7284,7 @@ function afficherPortailPrincipal() {
     const role = obtenirRoleUtilisateur();
 
     document.getElementById("app").innerHTML = `
-        <main class="page portail-cis-page">
+        <main class="page portail-cis-page navigation-fixe-page">
             <div class="utilisateur-entete">
                 <button
                     class="bouton-profil-accueil"
@@ -7315,6 +7316,7 @@ function afficherPortailPrincipal() {
                 </button>
             </section>
         </main>
+        ${navigationPrincipale("accueil", "accueil")}
     `;
 
     actualiserInterfaceBureau();
@@ -7352,15 +7354,31 @@ function utilisateurPeutVoirRubriqueCaserne(rubrique) {
     return utilisateurAPermission(rubrique[2]) || utilisateurAPermission(rubrique[3]);
 }
 
-function navigationCaserne(active) {
+function navigationPrincipale(active, theme = "caserne") {
+    const classeTheme = theme === "pharmacie"
+        ? "nav-theme-pharmacie"
+        : theme === "accueil"
+            ? "nav-theme-accueil"
+            : "nav-theme-caserne";
+
+    const actionMenu = theme === "caserne"
+        ? "ouvrirMenuCaserne()"
+        : theme === "pharmacie"
+            ? "afficherAccueil()"
+            : "afficherPortailPrincipal()";
+
     return `
-        <nav class="caserne-nav-bas">
+        <nav class="caserne-nav-bas ${classeTheme}">
             <button onclick="afficherPortailPrincipal()" class="${active === "accueil" ? "actif" : ""}"><span>⌂</span>Accueil</button>
             <button onclick="afficherEspaceCaserne()" class="${active === "caserne" ? "actif" : ""}"><span>▣</span>Caserne</button>
             <button onclick="afficherAccueil()" class="${active === "pharmacie" ? "actif" : ""}"><span>✚</span>Pharmacie</button>
             <button onclick="afficherProfilUtilisateur()" class="${active === "profil" ? "actif" : ""}"><span>○</span>Profil</button>
-            <button onclick="ouvrirMenuCaserne()" class="caserne-menu-bulle" aria-label="Menu"><span>☰</span></button>
+            <button onclick="${actionMenu}" class="caserne-menu-bulle" aria-label="Menu"><span>☰</span></button>
         </nav>`;
+}
+
+function navigationCaserne(active) {
+    return navigationPrincipale(active, "caserne");
 }
 
 function ouvrirMenuCaserne() {
@@ -8279,6 +8297,9 @@ function initialiserStyleEspaceCaserne() {
         .caserne-admin-centre{display:grid;grid-template-columns:1fr 1fr;gap:12px}.caserne-admin-centre>button{border:1px solid #dcc7c2;background:#fff;border-radius:18px;padding:19px;text-align:left;min-height:108px;display:flex;flex-direction:column;justify-content:space-between;gap:12px;color:#2b1716;box-shadow:0 6px 18px rgba(80,40,30,.06)}.caserne-admin-centre>button strong{font-size:17px}.caserne-admin-centre>button span{font-size:12px;line-height:1.4;color:#765f5b}.caserne-administratif-page .caserne-vide{grid-column:1/-1}@media(max-width:560px){.caserne-admin-centre{grid-template-columns:1fr}}
         .caserne-nav-bas{position:fixed;z-index:5000;left:50%;bottom:12px;transform:translateX(-50%);width:min(calc(100% - 24px),620px);height:68px;background:#fff;border:1px solid #eadbd7;border-radius:22px;box-shadow:0 12px 34px rgba(50,20,20,.18);display:grid;grid-template-columns:repeat(4,1fr);padding:5px 54px 5px 6px}
         .caserne-nav-bas>button:not(.caserne-menu-bulle){border:0;background:transparent;color:#7d6b67;font-size:10px;font-weight:700;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px}.caserne-nav-bas>button span{font-size:21px;line-height:1}.caserne-nav-bas>button.actif{color:#8a2527}.caserne-menu-bulle{position:absolute;right:8px;top:8px;width:50px;height:50px;border-radius:50%;border:0;background:#7d2425;color:#fff;box-shadow:0 5px 15px rgba(80,20,20,.25)}.caserne-menu-bulle span{font-size:20px!important}
+        .navigation-fixe-page{padding-bottom:110px!important}
+        .caserne-nav-bas.nav-theme-pharmacie>button.actif{color:#237448}.caserne-nav-bas.nav-theme-pharmacie .caserne-menu-bulle{background:#237448;box-shadow:0 5px 15px rgba(20,85,52,.24)}
+        .caserne-nav-bas.nav-theme-accueil>button.actif{color:#171717}.caserne-nav-bas.nav-theme-accueil .caserne-menu-bulle{background:#171717;box-shadow:0 5px 15px rgba(0,0,0,.22)}
         @media(min-width:1000px){body:has(.caserne-shell) .sidebar-pc{display:none!important}body:has(.caserne-shell) #app{margin-left:0!important}.caserne-shell{padding-top:20px}.caserne-top{border-radius:28px;margin:0 0 24px}.caserne-nav-bas{bottom:22px}}
     `;
     document.head.appendChild(style);
@@ -8528,6 +8549,7 @@ function connecterBoutonsAccueil() {
 function afficherAccueil() {
 
     initialiserStyleConnexion();
+    initialiserStyleEspaceCaserne();
 
     document.body.classList.remove(
         "mode-connexion"
@@ -8697,7 +8719,7 @@ function afficherAccueil() {
         "app"
     ).innerHTML = `
 
-        <main class="page">
+        <main class="page navigation-fixe-page">
 
             <div class="utilisateur-entete">
 
@@ -8732,6 +8754,8 @@ function afficherAccueil() {
             </section>
 
         </main>
+
+        ${navigationPrincipale("pharmacie", "pharmacie")}
 
     `;
 
