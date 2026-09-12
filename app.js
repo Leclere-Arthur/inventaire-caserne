@@ -668,7 +668,7 @@ const DOMAINE_EMAIL_INTERNE =
     "inventaire-caserne.local";
 
 const VERSION_APPLICATION =
-    "2.9.28";
+    "2.9.29";
 
 const CLE_PROFIL_UTILISATEUR_CACHE =
     "profil_utilisateur_connecte_v1";
@@ -7393,25 +7393,194 @@ async function chargerPublicationsCaserne(type) {
     return Array.isArray(data) ? data : [];
 }
 
-function cartePublicationCaserne(p) {
-    const titre = p.titre || ({sport:"Séance de sport",manoeuvre:"Manœuvre",casernement:"Casernement",reunion:"Réunion",amical:"Amical",comite_centre:"Comité de centre",administratif:"Administratif"}[p.type_publication] || "Actualité");
-    return `<article class="caserne-actu-card">
-        <div class="caserne-actu-meta"><span>${echapperHTML(String(p.type_publication || "").replaceAll("_"," "))}</span><time>${echapperHTML(formaterDateHeureCaserne(p.date_evenement))}</time></div>
+function obtenirLibelleTypeCaserne(type) {
+    return ({
+        sport:"Sport",
+        manoeuvre:"Manœuvre",
+        casernement:"Casernement",
+        reunion:"Réunion",
+        amical:"Amical",
+        comite_centre:"Comité de centre",
+        administratif:"Administratif"
+    })[type] || "Actualité";
+}
+
+async function chargerDetailsPublicationsCaserne(publications) {
+    const liste = Array.isArray(publications) ? publications : [];
+    if (!liste.length) return liste;
+    const supabase = obtenirClientSupabase();
+    if (!supabase || !navigator.onLine) return liste;
+    const ids = liste.map(p => p.id).filter(Boolean);
+    if (!ids.length) return liste;
+
+    const [{data: photos, error: erreurPhotos}, {data: reponses, error: erreurReponses}] = await Promise.all([
+        supabase.from("caserne_publication_photos").select("id,publication_id,photo_url,ordre").in("publication_id", ids).order("ordre", {ascending:true}),
+        supabase.from("caserne_reponses").select("id,publication_id,user_id,user_prenom,user_nom,contexte,reponse").in("publication_id", ids)
+    ]);
+    if (erreurPhotos) console.warn("Photos Caserne :", erreurPhotos);
+    if (erreurReponses) console.warn("Réponses Caserne :", erreurReponses);
+
+    return liste.map(p => ({
+        ...p,
+        photos: (photos || []).filter(x => x.publication_id === p.id),
+        reponses: (reponses || []).filter(x => x.publication_id === p.id)
+    }));
+}
+
+function ouvrirPhotoCaserne(url) {
+    if (!url) return;
+    const ancien = document.getElementById("caserne-photo-plein-ecran");
+    if (ancien) ancien.remove();
+    const overlay = document.createElement("div");
+    overlay.id = "caserne-photo-plein-ecran";
+    overlay.className = "caserne-photo-overlay";
+    overlay.innerHTML = `<button type="button" class="caserne-photo-fermer" aria-label="Fermer">×</button><img src="${echapperHTML(url)}" alt="Photo" />`;
+    overlay.querySelector(".caserne-photo-fermer").onclick = () => overlay.remove();
+    overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+    document.body.appendChild(overlay);
+}
+
+function cartePublicationCaserne(p, options = {}) {
+    const titre = p.titre || (p.type_publication === "sport" ? "Séance de sport" : obtenirLibelleTypeCaserne(p.type_publication));
+    const photos = Array.isArray(p.photos) ? p.photos : [];
+    const reponses = Array.isArray(p.reponses) ? p.reponses : [];
+    const presents = reponses.filter(r => r.contexte === "evenement" && r.reponse === "present");
+    const maReponse = reponses.find(r => r.contexte === "evenement" && String(r.user_id) === String(utilisateurConnecte?.id || ""));
+    const present = maReponse?.reponse === "present";
+    const absent = maReponse?.reponse === "absent";
+    const classeReponse = present ? " caserne-actu-present" : "";
+
+    return `<article class="caserne-actu-card${classeReponse}">
+        <div class="caserne-actu-meta"><span>${echapperHTML(obtenirLibelleTypeCaserne(p.type_publication))}</span><time>${echapperHTML(formaterDateHeureCaserne(p.date_evenement))}</time></div>
         <h2>${echapperHTML(titre)}</h2>
-        ${p.description ? `<p>${echapperHTML(p.description)}</p>` : ""}
-        ${p.demande_reponse ? '<div class="caserne-reponse-attente">Réponse attendue : Présent / Absent</div>' : ""}
+        ${p.description ? `<p>${echapperHTML(p.description).replaceAll("\n","<br>")}</p>` : ""}
+        ${photos.length ? `<div class="caserne-photos">${photos.map(ph => `<button type="button" onclick='ouvrirPhotoCaserne(${JSON.stringify(ph.photo_url)})'><img src="${echapperHTML(ph.photo_url || "")}" alt="Photo de la publication"></button>`).join("")}</div>` : ""}
+        ${p.demande_reponse ? `<div class="caserne-zone-reponse">
+            <div class="caserne-boutons-reponse">
+                <button type="button" class="${present ? "selectionne present" : ""}" onclick="repondrePublicationCaserne('${p.id}','present')">Présent</button>
+                <button type="button" class="${absent ? "selectionne absent" : ""}" onclick="repondrePublicationCaserne('${p.id}','absent')">Absent</button>
+            </div>
+            <div class="caserne-liste-presents"><strong>Présents${presents.length ? ` · ${presents.length}` : ""}</strong>${presents.length ? `<div>${presents.map(r => `<span>${echapperHTML([r.user_prenom,r.user_nom].filter(Boolean).join(" ") || "Utilisateur")}</span>`).join("")}</div>` : `<small>Aucune réponse « Présent » pour le moment.</small>`}</div>
+        </div>` : ""}
+        ${options.admin ? `<div class="caserne-actions-admin"><button type="button" onclick="supprimerPublicationCaserne('${p.id}','sport')">Supprimer</button></div>` : ""}
     </article>`;
 }
 
+async function repondrePublicationCaserne(publicationId, reponse) {
+    const supabase = obtenirClientSupabase();
+    if (!supabase || !navigator.onLine) { alert("Une connexion Internet est nécessaire pour enregistrer la réponse."); return; }
+    if (!utilisateurConnecte?.id) { alert("Session utilisateur introuvable."); return; }
+    const payload = {
+        publication_id: publicationId,
+        user_id: utilisateurConnecte.id,
+        user_prenom: profilUtilisateurConnecte?.prenom || null,
+        user_nom: profilUtilisateurConnecte?.nom || null,
+        contexte: "evenement",
+        reponse
+    };
+    const {error} = await supabase.from("caserne_reponses").upsert(payload, {onConflict:"publication_id,user_id,contexte"});
+    if (error) { console.error(error); alert("Impossible d'enregistrer la réponse : " + (error.message || "erreur inconnue")); return; }
+    await afficherRubriqueCaserne("sport");
+}
+
+function formulaireAdminSportCaserne() {
+    return `<section class="caserne-admin-bloc">
+        <div class="caserne-admin-titre"><div><small>ADMINISTRATION SPORT</small><h2>Créer une séance</h2></div></div>
+        <div class="caserne-formulaire-sport">
+            <label>Titre<input id="caserne-sport-titre" type="text" placeholder="Ex. Circuit training"></label>
+            <label>Description<textarea id="caserne-sport-description" rows="4" placeholder="Informations sur la séance"></textarea></label>
+            <label>Date et heure<input id="caserne-sport-date" type="datetime-local"></label>
+            <label class="caserne-switch-ligne"><input id="caserne-sport-reponse" type="checkbox"><span>Demander une réponse Présent / Absent</span></label>
+            <label>Photos<input id="caserne-sport-photos" type="file" accept="image/*" multiple></label>
+            <small class="caserne-aide-photo">Tu peux sélectionner plusieurs photos.</small>
+            <button type="button" class="caserne-bouton-admin-principal" onclick="creerSeanceSportCaserne()">Publier la séance</button>
+        </div>
+    </section>`;
+}
+
+async function televerserPhotosCaserne(publicationId, fichiers, dossier = "sport") {
+    const supabase = obtenirClientSupabase();
+    if (!supabase || !Array.isArray(fichiers) || !fichiers.length) return [];
+    const urls = [];
+    for (let i=0; i<fichiers.length; i++) {
+        const fichier = fichiers[i];
+        const extension = String(fichier.name || "photo.jpg").split(".").pop().replace(/[^a-zA-Z0-9]/g, "") || "jpg";
+        const nom = `${Date.now()}-${i}-${Math.random().toString(36).slice(2)}.${extension}`;
+        const chemin = `${dossier}/${publicationId}/${nom}`;
+        const {error: uploadError} = await supabase.storage.from("caserne").upload(chemin, fichier, {cacheControl:"3600", upsert:false});
+        if (uploadError) throw uploadError;
+        const {data} = supabase.storage.from("caserne").getPublicUrl(chemin);
+        if (data?.publicUrl) urls.push({photo_url:data.publicUrl, ordre:i});
+    }
+    return urls;
+}
+
+async function creerSeanceSportCaserne() {
+    if (!utilisateurEstSPVAdmin() && !utilisateurAPermission("acces_sport_admin")) { alert("Accès non autorisé."); return; }
+    const supabase = obtenirClientSupabase();
+    if (!supabase || !navigator.onLine) { alert("Une connexion Internet est nécessaire pour publier une séance."); return; }
+
+    const titre = document.getElementById("caserne-sport-titre")?.value?.trim() || null;
+    const description = document.getElementById("caserne-sport-description")?.value?.trim() || null;
+    const dateValeur = document.getElementById("caserne-sport-date")?.value || "";
+    const demandeReponse = !!document.getElementById("caserne-sport-reponse")?.checked;
+    const fichiers = Array.from(document.getElementById("caserne-sport-photos")?.files || []);
+    const dateEvenement = dateValeur ? new Date(dateValeur).toISOString() : null;
+
+    const bouton = document.querySelector(".caserne-bouton-admin-principal");
+    if (bouton) { bouton.disabled = true; bouton.textContent = "Publication…"; }
+
+    let publicationId = null;
+    try {
+        const {data, error} = await supabase.from("caserne_publications").insert({
+            type_publication:"sport",
+            titre,
+            description,
+            date_evenement:dateEvenement,
+            demande_reponse:demandeReponse,
+            visibilite:"public"
+        }).select("id").single();
+        if (error) throw error;
+        publicationId = data.id;
+
+        if (fichiers.length) {
+            const photos = await televerserPhotosCaserne(publicationId, fichiers, "sport");
+            if (photos.length) {
+                const {error: photoError} = await supabase.from("caserne_publication_photos").insert(photos.map(ph => ({...ph, publication_id:publicationId})));
+                if (photoError) throw photoError;
+            }
+        }
+        alert("Séance de sport publiée.");
+        await afficherRubriqueCaserne("sport");
+    } catch (erreur) {
+        console.error(erreur);
+        if (publicationId) {
+            try { await supabase.from("caserne_publications").delete().eq("id", publicationId); } catch (_) {}
+        }
+        alert("Impossible de publier la séance : " + (erreur?.message || "erreur inconnue"));
+        if (bouton) { bouton.disabled = false; bouton.textContent = "Publier la séance"; }
+    }
+}
+
+async function supprimerPublicationCaserne(publicationId, typeRetour) {
+    if (!confirm("Supprimer cette publication ?")) return;
+    const supabase = obtenirClientSupabase();
+    if (!supabase || !navigator.onLine) { alert("Une connexion Internet est nécessaire."); return; }
+    const {error} = await supabase.from("caserne_publications").delete().eq("id", publicationId);
+    if (error) { alert("Suppression impossible : " + (error.message || "erreur inconnue")); return; }
+    await afficherRubriqueCaserne(typeRetour || "sport");
+}
+
 async function afficherActualitesCaserne() {
-    const publications = await chargerPublicationsCaserne();
+    let publications = await chargerPublicationsCaserne();
+    publications = await chargerDetailsPublicationsCaserne(publications);
     const maintenant = Date.now();
     const prochaines = publications.filter(p => !p.date_evenement || new Date(p.date_evenement).getTime() >= maintenant - 86400000);
     document.getElementById("app").innerHTML = `
         <main class="caserne-shell">
             <header class="caserne-top"><small>ESPACE CASERNE</small><h1>Actualités</h1><p>Les prochains rendez-vous de la caserne</p></header>
             <section class="caserne-fil">
-                ${prochaines.length ? prochaines.map(cartePublicationCaserne).join("") : '<div class="caserne-vide"><strong>Rien de prévu pour le moment</strong><p>Les prochains événements apparaîtront ici.</p></div>'}
+                ${prochaines.length ? prochaines.map(p => cartePublicationCaserne(p)).join("") : '<div class="caserne-vide"><strong>Rien de prévu pour le moment</strong><p>Les prochains événements apparaîtront ici.</p></div>'}
             </section>
         </main>${navigationCaserne("caserne")}`;
     actualiserInterfaceBureau();
@@ -7421,22 +7590,25 @@ async function afficherRubriqueCaserne(type) {
     const rubrique = obtenirRubriquesCaserne().find(r => r[0] === type);
     if (!rubrique || !utilisateurPeutVoirRubriqueCaserne(rubrique)) { alert("Accès non autorisé."); return; }
     const estAdmin = utilisateurEstSPVAdmin() || utilisateurAPermission(rubrique[3]);
-    const publications = type === "entretien_individuel" ? [] : await chargerPublicationsCaserne(type);
+    let publications = type === "entretien_individuel" ? [] : await chargerPublicationsCaserne(type);
+    publications = await chargerDetailsPublicationsCaserne(publications);
+    const adminSport = type === "sport" && estAdmin ? formulaireAdminSportCaserne() : "";
     document.getElementById("app").innerHTML = `
         <main class="caserne-shell ${estAdmin ? "caserne-avec-admin" : ""}">
-            <header class="caserne-top"><small>ESPACE CASERNE</small><h1>${echapperHTML(rubrique[1])}</h1><p>${estAdmin ? "Vue publique · accès administration disponible" : "Informations et événements"}</p></header>
-            ${estAdmin ? '<section class="caserne-admin-acces"><strong>Administration</strong><span>Les outils de création et de gestion de cette rubrique seront disponibles dans l’étape suivante.</span></section>' : ""}
+            <header class="caserne-top"><small>ESPACE CASERNE</small><h1>${echapperHTML(rubrique[1])}</h1><p>${estAdmin ? "Vue publique · administration" : "Informations et événements"}</p></header>
+            ${adminSport}
+            ${estAdmin && type !== "sport" ? '<section class="caserne-admin-acces"><strong>Administration</strong><span>Cette rubrique sera activée dans une prochaine étape.</span></section>' : ""}
             <section class="caserne-fil">
-                ${type === "entretien_individuel" ? '<div class="caserne-vide"><strong>Entretiens individuels</strong><p>Les créneaux et réservations seront affichés ici.</p></div>' : (publications.length ? publications.map(cartePublicationCaserne).join("") : '<div class="caserne-vide"><strong>Aucune publication</strong><p>Cette rubrique est prête à recevoir ses contenus.</p></div>')}
+                ${type === "entretien_individuel" ? '<div class="caserne-vide"><strong>Entretiens individuels</strong><p>Les créneaux et réservations seront affichés ici.</p></div>' : (publications.length ? publications.map(p => cartePublicationCaserne(p, {admin:type === "sport" && estAdmin})).join("") : '<div class="caserne-vide"><strong>Aucune publication</strong><p>Cette rubrique est prête à recevoir ses contenus.</p></div>')}
             </section>
         </main>${navigationCaserne("caserne")}`;
     actualiserInterfaceBureau();
 }
 
 function initialiserStyleEspaceCaserne() {
-    if (document.getElementById("style-espace-caserne-v69")) return;
+    if (document.getElementById("style-espace-caserne-v70")) return;
     const style=document.createElement("style");
-    style.id="style-espace-caserne-v69";
+    style.id="style-espace-caserne-v70";
     style.textContent=`
         body:has(.caserne-shell){background:#f4ebe8!important;padding-bottom:92px!important}
         .caserne-shell{max-width:820px;margin:0 auto;padding:0 18px 110px;font-family:Arial,sans-serif;color:#2b1716}
@@ -7448,6 +7620,7 @@ function initialiserStyleEspaceCaserne() {
         .caserne-vide{background:#fff;border:1px dashed #cfaeaa;border-radius:18px;padding:28px 20px;text-align:center}.caserne-vide strong{font-size:18px}.caserne-vide p{color:#75615e;margin-bottom:0}
         .caserne-menu-grille{display:grid;grid-template-columns:1fr 1fr;gap:12px}.caserne-menu-grille button{border:0;border-radius:18px;background:#fff;padding:20px 16px;text-align:left;box-shadow:0 5px 18px rgba(80,40,30,.07);min-height:105px;display:flex;flex-direction:column;justify-content:space-between;color:#2b1716}.caserne-menu-grille button strong{font-size:17px}.caserne-menu-grille button span{font-size:12px;color:#8c3434;font-weight:700}
         .caserne-admin-acces{margin:0 0 16px;background:#e7c2a5;border-left:5px solid #9b5d2e;border-radius:14px;padding:15px 16px;display:flex;flex-direction:column;gap:4px}.caserne-admin-acces strong{color:#5f3215}.caserne-admin-acces span{font-size:13px;color:#654c3c}
+        .caserne-admin-bloc{margin:0 0 22px;background:#3f1718;color:#fff;border-radius:20px;padding:18px;box-shadow:0 8px 22px rgba(60,20,20,.16)}.caserne-admin-titre small{font-size:10px;font-weight:800;letter-spacing:1.7px;opacity:.68}.caserne-admin-titre h2{margin:5px 0 16px;font-size:23px}.caserne-formulaire-sport{display:grid;gap:12px}.caserne-formulaire-sport label{display:grid;gap:6px;font-size:12px;font-weight:800}.caserne-formulaire-sport input[type=text],.caserne-formulaire-sport input[type=datetime-local],.caserne-formulaire-sport input[type=file],.caserne-formulaire-sport textarea{width:100%;box-sizing:border-box;border:1px solid rgba(255,255,255,.18);background:#fff;color:#2b1716;border-radius:12px;padding:12px;font:inherit}.caserne-formulaire-sport textarea{resize:vertical}.caserne-switch-ligne{display:flex!important;align-items:center;gap:10px!important;background:rgba(255,255,255,.09);padding:11px;border-radius:12px}.caserne-switch-ligne input{width:20px;height:20px}.caserne-aide-photo{opacity:.65;margin-top:-7px}.caserne-bouton-admin-principal{border:0;border-radius:12px;background:#f2d7d1;color:#5b1b1d;padding:13px 16px;font-weight:900;font-size:14px}.caserne-bouton-admin-principal:disabled{opacity:.55}.caserne-photos{display:flex;gap:8px;overflow-x:auto;margin-top:14px;padding-bottom:3px}.caserne-photos button{flex:0 0 128px;height:100px;border:0;padding:0;border-radius:12px;overflow:hidden;background:#eadbd7}.caserne-photos img{width:100%;height:100%;object-fit:cover;display:block}.caserne-photo-overlay{position:fixed;inset:0;z-index:20000;background:rgba(18,8,8,.94);display:flex;align-items:center;justify-content:center;padding:55px 12px 20px}.caserne-photo-overlay img{max-width:100%;max-height:100%;object-fit:contain;touch-action:pinch-zoom}.caserne-photo-fermer{position:absolute;right:14px;top:14px;width:44px;height:44px;border-radius:50%;border:1px solid rgba(255,255,255,.25);background:rgba(255,255,255,.12);color:#fff;font-size:30px;line-height:1}.caserne-zone-reponse{margin-top:16px;border-top:1px solid #ead9d4;padding-top:14px}.caserne-boutons-reponse{display:grid;grid-template-columns:1fr 1fr;gap:9px}.caserne-boutons-reponse button{border:1px solid #d4b7b3;background:#fff;border-radius:11px;padding:11px;font-weight:800;color:#672426}.caserne-boutons-reponse button.selectionne.present{background:#7d2425;color:#fff;border-color:#7d2425}.caserne-boutons-reponse button.selectionne.absent{background:#ded4d1;color:#4c3c39;border-color:#c7b8b4}.caserne-liste-presents{margin-top:13px}.caserne-liste-presents>strong{display:block;font-size:12px;color:#7d2425;margin-bottom:7px}.caserne-liste-presents>div{display:flex;gap:6px;flex-wrap:wrap}.caserne-liste-presents span{display:inline-block;background:#f3e4e0;border-radius:999px;padding:6px 9px;font-size:12px;font-weight:700}.caserne-liste-presents small{color:#7d6b67}.caserne-actu-present{background:#f8dfda}.caserne-actions-admin{display:flex;justify-content:flex-end;margin-top:12px}.caserne-actions-admin button{border:0;background:#4a181a;color:#fff;border-radius:9px;padding:8px 11px;font-weight:800;font-size:11px}
         .caserne-nav-bas{position:fixed;z-index:5000;left:50%;bottom:12px;transform:translateX(-50%);width:min(calc(100% - 24px),620px);height:68px;background:#fff;border:1px solid #eadbd7;border-radius:22px;box-shadow:0 12px 34px rgba(50,20,20,.18);display:grid;grid-template-columns:repeat(4,1fr);padding:5px 54px 5px 6px}
         .caserne-nav-bas>button:not(.caserne-menu-bulle){border:0;background:transparent;color:#7d6b67;font-size:10px;font-weight:700;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px}.caserne-nav-bas>button span{font-size:21px;line-height:1}.caserne-nav-bas>button.actif{color:#8a2527}.caserne-menu-bulle{position:absolute;right:8px;top:8px;width:50px;height:50px;border-radius:50%;border:0;background:#7d2425;color:#fff;box-shadow:0 5px 15px rgba(80,20,20,.25)}.caserne-menu-bulle span{font-size:20px!important}
         @media(min-width:1000px){body:has(.caserne-shell) .sidebar-pc{display:none!important}body:has(.caserne-shell) #app{margin-left:0!important}.caserne-shell{padding-top:20px}.caserne-top{border-radius:28px;margin:0 0 24px}.caserne-nav-bas{bottom:22px}}
@@ -17160,6 +17333,10 @@ window.afficherPortailPrincipal =
 window.afficherActualitesCaserne = afficherActualitesCaserne;
 window.afficherRubriqueCaserne = afficherRubriqueCaserne;
 window.ouvrirMenuCaserne = ouvrirMenuCaserne;
+window.ouvrirPhotoCaserne = ouvrirPhotoCaserne;
+window.repondrePublicationCaserne = repondrePublicationCaserne;
+window.creerSeanceSportCaserne = creerSeanceSportCaserne;
+window.supprimerPublicationCaserne = supprimerPublicationCaserne;
 window.afficherEspaceCaserne =
     afficherEspaceCaserne;
 
