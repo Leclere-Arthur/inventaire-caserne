@@ -668,7 +668,7 @@ const DOMAINE_EMAIL_INTERNE =
     "inventaire-caserne.local";
 
 const VERSION_APPLICATION =
-    "2.9.36";
+    "2.9.37";
 
 const CLE_PROFIL_UTILISATEUR_CACHE =
     "profil_utilisateur_connecte_v1";
@@ -676,6 +676,55 @@ const CLE_PROFIL_UTILISATEUR_CACHE =
 let utilisateurConnecte = null;
 let profilUtilisateurConnecte = null;
 let connexionApplicationEnCours = false;
+
+/*
+ * Retour du profil : on mémorise exactement la page affichée avant
+ * d'ouvrir le profil afin que « Retour » revienne au bon endroit
+ * (Caserne, Pharmacie, Accueil, rubrique, etc.).
+ */
+let etatPageAvantProfil = null;
+
+function ouvrirProfilDepuisPageCourante() {
+    const app = document.getElementById("app");
+
+    etatPageAvantProfil = {
+        html: app ? app.innerHTML : "",
+        scrollX: window.scrollX || 0,
+        scrollY: window.scrollY || 0,
+        bodyClassName: document.body.className || ""
+    };
+
+    afficherProfilUtilisateur();
+}
+
+function retournerDepuisProfil() {
+    const etat = etatPageAvantProfil;
+    etatPageAvantProfil = null;
+
+    if (!etat || !etat.html) {
+        afficherPortailPrincipal();
+        return;
+    }
+
+    document.body.className = etat.bodyClassName || "";
+
+    const app = document.getElementById("app");
+    if (!app) {
+        afficherPortailPrincipal();
+        return;
+    }
+
+    app.innerHTML = etat.html;
+    actualiserInterfaceBureau();
+
+    requestAnimationFrame(() => {
+        window.scrollTo({
+            left: etat.scrollX || 0,
+            top: etat.scrollY || 0,
+            behavior: "auto"
+        });
+    });
+}
 
 /*
  * Notifications Web Push
@@ -3178,7 +3227,7 @@ async function afficherProfilUtilisateur() {
             <button
                 class="retour-button"
                 type="button"
-                onclick="afficherAccueil()"
+                onclick="retournerDepuisProfil()"
             >
                 ← Retour
             </button>
@@ -7289,7 +7338,7 @@ function afficherPortailPrincipal() {
                 <button
                     class="bouton-profil-accueil"
                     type="button"
-                    onclick="afficherProfilUtilisateur()"
+                    onclick="ouvrirProfilDepuisPageCourante()"
                 >
                     <strong>${echapperHTML(obtenirNomUtilisateurAffiche())}</strong>
                     <span>${echapperHTML(role?.nom || "")}</span>
@@ -7372,7 +7421,7 @@ function navigationPrincipale(active, theme = "caserne") {
             <button onclick="afficherPortailPrincipal()" class="${active === "accueil" ? "actif" : ""}"><span>⌂</span>Accueil</button>
             <button onclick="afficherEspaceCaserne()" class="${active === "caserne" ? "actif" : ""}"><span>▣</span>Caserne</button>
             <button onclick="afficherAccueil()" class="${active === "pharmacie" ? "actif" : ""}"><span>✚</span>Pharmacie</button>
-            <button onclick="afficherProfilUtilisateur()" class="${active === "profil" ? "actif" : ""}"><span>○</span>Profil</button>
+            <button onclick="ouvrirProfilDepuisPageCourante()" class="${active === "profil" ? "actif" : ""}"><span>○</span>Profil</button>
             <button onclick="${actionMenu}" class="caserne-menu-bulle" aria-label="Menu"><span>☰</span></button>
         </nav>`;
 }
@@ -8185,24 +8234,35 @@ async function afficherActualitesCaserne() {
     ).join("");
 
     document.getElementById("app").innerHTML = `
-        ${passesHTML ? `<section class="caserne-passes-au-dessus">${passesHTML}<div class="caserne-separateur-passe"><span>Événements passés</span></div></section><div id="caserne-ancre-actuels" aria-hidden="true"></div>` : ""}
         <main class="caserne-shell caserne-shell-actualites">
             <header class="caserne-top"><small>ESPACE CASERNE</small><h1>Actualités</h1><p>Informations et événements de la caserne</p></header>
             <section class="caserne-fil caserne-fil-actuel">
+                ${passesHTML ? `<section class="caserne-passes-au-dessus">${passesHTML}<div class="caserne-separateur-passe"><span>Événements passés</span></div></section>` : ""}
+                ${passesHTML ? `<div id="caserne-ancre-actuels" aria-hidden="true"></div>` : ""}
                 ${futursHTML || '<div class="caserne-vide"><strong>Rien de prévu pour le moment</strong><p>Les prochains événements apparaîtront ici.</p></div>'}
             </section>
         </main>${navigationCaserne("caserne")}`;
     actualiserInterfaceBureau();
 
-    /* Quand on arrive sur Actualités, on se place directement sur le fil actuel.
-       Les événements passés restent volontairement au-dessus et ne sont visibles
-       que si l'utilisateur remonte la page. */
+    /* À l'ouverture, le premier événement actuel/futur est affiché directement.
+       Les événements passés font maintenant partie de la MÊME liste, juste au-dessus.
+       Ils ne se révèlent que si l'utilisateur remonte volontairement le fil.
+       L'en-tête Actualités reste visible pendant ce mouvement. */
     if (passesHTML) {
         const ancreActuels = document.getElementById("caserne-ancre-actuels");
+        const enteteActualites = document.querySelector(".caserne-shell-actualites .caserne-top");
+
         if (ancreActuels) {
+            const placerSurActuels = () => {
+                const hauteurEntete = enteteActualites ? enteteActualites.offsetHeight : 0;
+                const positionAncre = ancreActuels.getBoundingClientRect().top + window.scrollY;
+                const cible = Math.max(0, positionAncre - hauteurEntete - 12);
+                window.scrollTo({top:cible, behavior:"auto"});
+            };
+
             requestAnimationFrame(() => {
-                window.scrollTo({top: ancreActuels.offsetTop, behavior:"auto"});
-                requestAnimationFrame(() => window.scrollTo({top: ancreActuels.offsetTop, behavior:"auto"}));
+                placerSurActuels();
+                requestAnimationFrame(placerSurActuels);
             });
         }
     } else {
@@ -8292,7 +8352,7 @@ function initialiserStyleEspaceCaserne() {
         .caserne-admin-bloc{margin:0 0 22px;background:#3f1718;color:#fff;border-radius:20px;padding:18px;box-shadow:0 8px 22px rgba(60,20,20,.16)}.caserne-admin-titre small{font-size:10px;font-weight:800;letter-spacing:1.7px;opacity:.68}.caserne-admin-titre h2{margin:5px 0 16px;font-size:23px}.caserne-formulaire-sport{display:grid;gap:12px}.caserne-formulaire-sport label{display:grid;gap:6px;font-size:12px;font-weight:800}.caserne-formulaire-sport input[type=text],.caserne-formulaire-sport input[type=datetime-local],.caserne-formulaire-sport input[type=file],.caserne-formulaire-sport textarea{width:100%;box-sizing:border-box;border:1px solid rgba(255,255,255,.18);background:#fff;color:#2b1716;border-radius:12px;padding:12px;font:inherit}.caserne-formulaire-sport textarea{resize:vertical}.caserne-switch-ligne{display:flex!important;align-items:center;gap:10px!important;background:rgba(255,255,255,.09);padding:11px;border-radius:12px}.caserne-switch-ligne input{width:20px;height:20px}.caserne-aide-photo{opacity:.65;margin-top:-7px}.caserne-bouton-admin-principal{border:0;border-radius:12px;background:#f2d7d1;color:#5b1b1d;padding:13px 16px;font-weight:900;font-size:14px}.caserne-bouton-admin-principal:disabled{opacity:.55}.caserne-photos{display:flex;gap:8px;overflow-x:auto;margin-top:14px;padding-bottom:3px}.caserne-photos button{flex:0 0 128px;height:100px;border:0;padding:0;border-radius:12px;overflow:hidden;background:#eadbd7}.caserne-photos img{width:100%;height:100%;object-fit:cover;display:block}.caserne-photo-overlay{position:fixed;inset:0;z-index:20000;background:rgba(18,8,8,.94);display:flex;align-items:center;justify-content:center;padding:55px 12px 20px}.caserne-photo-overlay img{max-width:100%;max-height:100%;object-fit:contain;touch-action:pinch-zoom}.caserne-photo-fermer{position:absolute;right:14px;top:14px;width:44px;height:44px;border-radius:50%;border:1px solid rgba(255,255,255,.25);background:rgba(255,255,255,.12);color:#fff;font-size:30px;line-height:1}.caserne-zone-reponse{margin-top:16px;border-top:1px solid #ead9d4;padding-top:14px}.caserne-boutons-reponse{display:grid;grid-template-columns:1fr 1fr;gap:9px}.caserne-boutons-reponse button{border:1px solid #d4b7b3;background:#fff;border-radius:11px;padding:11px;font-weight:800;color:#672426}.caserne-boutons-reponse button.selectionne.present{background:#7d2425;color:#fff;border-color:#7d2425}.caserne-boutons-reponse button.selectionne.absent{background:#ded4d1;color:#4c3c39;border-color:#c7b8b4}.caserne-liste-presents{margin-top:13px}.caserne-liste-presents>strong{display:block;font-size:12px;color:#7d2425;margin-bottom:7px}.caserne-liste-presents>div{display:flex;gap:6px;flex-wrap:wrap}.caserne-liste-presents span{display:inline-block;background:#f3e4e0;border-radius:999px;padding:6px 9px;font-size:12px;font-weight:700}.caserne-liste-presents small{color:#7d6b67}.caserne-actu-present{background:#f8dfda}.caserne-actions-admin{display:flex;justify-content:flex-end;margin-top:12px}.caserne-actions-admin button{border:0;background:#4a181a;color:#fff;border-radius:9px;padding:8px 11px;font-weight:800;font-size:11px}
         .caserne-entretien-onglets-admin{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:0 0 16px}.caserne-entretien-onglets-admin button{border:1px solid rgba(255,255,255,.18);border-radius:10px;padding:10px;background:rgba(255,255,255,.06);color:#fff;font-weight:800}.caserne-entretien-onglets-admin button.actif{background:#f2d7d1;color:#5b1b1d;border-color:#f2d7d1}.caserne-formulaire-entretien input[type=number]{width:100%;box-sizing:border-box;border:1px solid rgba(255,255,255,.18);background:#fff;color:#2b1716;border-radius:12px;padding:12px;font:inherit}.caserne-entretien-dates-titre{display:grid;gap:3px;margin-top:3px}.caserne-entretien-dates-titre small{opacity:.68}.caserne-entretien-date-groupe{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);border-radius:14px;padding:12px;display:grid;gap:10px}.caserne-entretien-date-entete{display:flex;gap:10px;align-items:end}.caserne-entretien-date-entete label{flex:1}.caserne-entretien-date-entete input,.caserne-entretien-heure-ligne input{width:100%;box-sizing:border-box;border:0;border-radius:10px;padding:10px;background:#fff;color:#2b1716;font:inherit}.caserne-entretien-retirer,.caserne-entretien-ajouter-heure,.caserne-entretien-ajouter-date{border:1px solid rgba(255,255,255,.24);border-radius:9px;padding:9px 11px;background:transparent;color:#fff;font-weight:800}.caserne-entretien-retirer{font-size:11px}.caserne-entretien-ajouter-heure{text-align:left}.caserne-entretien-ajouter-date{width:100%;padding:11px}.caserne-entretien-heures{display:grid;gap:7px}.caserne-entretien-heure-ligne{display:grid;grid-template-columns:1fr 42px;gap:7px}.caserne-entretien-heure-ligne button{border:0;border-radius:9px;background:#702326;color:#fff;font-size:22px}.caserne-entretien-card{background:#fff;border:1px solid #ead9d4;border-radius:18px;padding:18px;box-shadow:0 6px 18px rgba(80,40,30,.06)}.caserne-entretien-card-entete{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}.caserne-entretien-card-entete small{font-size:10px;font-weight:900;letter-spacing:1.2px;color:#7d2425}.caserne-entretien-card-entete h2{font-size:20px;margin:5px 0 0}.caserne-entretien-card-entete>span{background:#f2e4e0;border-radius:999px;padding:6px 9px;font-size:11px;font-weight:800;white-space:nowrap}.caserne-entretien-card>p{color:#5b4945;line-height:1.5}.caserne-entretien-mon-rdv{margin:14px 0;background:#5b1719;color:#fff;border-radius:13px;padding:13px;display:grid;gap:4px}.caserne-entretien-mon-rdv strong{font-size:11px;text-transform:uppercase;letter-spacing:.8px;opacity:.72}.caserne-entretien-mon-rdv span{font-size:16px;font-weight:900}.caserne-entretien-mon-rdv button{margin-top:6px;border:1px solid rgba(255,255,255,.3);background:transparent;color:#fff;border-radius:8px;padding:8px;font-weight:800}.caserne-entretien-creneaux{display:grid;gap:14px;margin-top:14px}.caserne-entretien-jour>strong{display:block;text-transform:capitalize;margin-bottom:8px;font-size:13px;color:#6b2426}.caserne-entretien-jour>div{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}.caserne-entretien-jour button{border:1px solid #d9c1bc;background:#fff;border-radius:11px;padding:9px 5px;display:grid;gap:2px;color:#4b2926}.caserne-entretien-jour button span{font-weight:900}.caserne-entretien-jour button small{font-size:9px}.caserne-entretien-jour button.selectionne{background:#7d2425;color:#fff;border-color:#7d2425}.caserne-entretien-jour button.complet{background:#eee8e6;color:#998984;border-color:#e0d6d3}.caserne-entretien-sans-creneau{padding:13px;border-radius:11px;background:#f5ece9;color:#765f5b;font-size:13px}.caserne-entretien-reponses-liste{display:grid;gap:8px}.caserne-entretien-reponses-liste article{background:rgba(255,255,255,.09);border-radius:11px;padding:11px;display:grid;gap:3px}.caserne-entretien-reponses-liste time{font-size:11px;opacity:.7}.caserne-entretien-reponses-liste strong{font-size:16px}.caserne-entretien-reponses-liste span{font-size:12px;opacity:.78}.caserne-entretien-chargement{padding:14px;border-radius:11px;background:rgba(255,255,255,.07);opacity:.8}.caserne-actu-entretien{cursor:pointer}.caserne-entretien-actu-badge{margin-top:14px;display:inline-block;background:#f3e3df;color:#6b2426;border:1px solid #e4cbc5;border-radius:999px;padding:7px 10px;font-size:11px;font-weight:900}.caserne-actu-rendezvous{background:#651c1f!important;color:#fff;border-color:#651c1f}.caserne-actu-rendezvous .caserne-actu-meta span,.caserne-actu-rendezvous .caserne-actu-meta time,.caserne-actu-rendezvous p{color:#fff}.caserne-rdv-badge{margin-top:14px;display:inline-block;background:rgba(255,255,255,.13);border:1px solid rgba(255,255,255,.2);border-radius:999px;padding:7px 10px;font-size:11px;font-weight:900}.caserne-calendrier-actions{display:grid;gap:8px;margin-top:14px}.caserne-bouton-calendrier{width:100%;border:1px solid #d7b9b4;background:#fff;color:#6b2426;border-radius:11px;padding:11px 12px;font-weight:900;font-size:12px}.caserne-actu-rendezvous .caserne-bouton-calendrier,.caserne-entretien-mon-rdv .caserne-bouton-calendrier{background:#fff;color:#651c1f;border-color:#fff}.caserne-entretien-mon-rdv .caserne-entretien-annuler{margin-top:0}.caserne-actu-entretien-detail .caserne-entretien-card-entete{margin-bottom:10px}.caserne-actu-entretien-detail .caserne-entretien-card-entete h2{margin:0}.caserne-actu-entretien-detail .caserne-entretien-creneaux{margin-top:15px}.caserne-actu-rendezvous .caserne-entretien-jour>strong{color:#fff}.caserne-actu-rendezvous .caserne-entretien-card-entete>span{background:rgba(255,255,255,.14);color:#fff}.caserne-actu-rendezvous .caserne-entretien-actu-badge{background:rgba(255,255,255,.12);color:#fff;border-color:rgba(255,255,255,.2)}
         .caserne-formulaire-publication select{width:100%;box-sizing:border-box;border:1px solid #d9c7c2;border-radius:12px;background:#fff;padding:12px;font-size:15px;color:#2b1716}.caserne-badges-publication{display:flex;flex-wrap:wrap;gap:7px;margin:6px 0 9px}.caserne-badge-soustype,.caserne-badge-visibilite{display:inline-flex;border-radius:999px;padding:6px 9px;font-size:11px;font-weight:900;background:#f5e3df;color:#7d2425}.caserne-badge-visibilite{background:#7d2425;color:#fff}.caserne-reponse-contexte{display:block;margin-bottom:9px;color:#6f2325}.caserne-preparation-bloc{margin-top:14px;padding:14px;border-radius:14px;background:#f7eeee;border:1px solid #ead1cc;display:grid;gap:8px}.caserne-preparation-bloc>strong{color:#7d2425}.caserne-actions-admin{display:flex;gap:8px;flex-wrap:wrap}.caserne-actions-admin button{flex:1;min-width:120px}.caserne-actu-present .caserne-preparation-bloc{background:rgba(255,255,255,.16);border-color:rgba(255,255,255,.25)}.caserne-actu-present .caserne-preparation-bloc>strong,.caserne-actu-present .caserne-reponse-contexte{color:inherit}
-        .caserne-separateur-passe{display:flex;align-items:center;gap:12px;margin:24px 2px 4px;color:#786f6c;font-size:12px;font-weight:900;text-transform:uppercase;letter-spacing:1px}.caserne-separateur-passe::before,.caserne-separateur-passe::after{content:"";height:1px;background:#c9c0bd;flex:1}.caserne-separateur-passe span{white-space:nowrap}.caserne-passes-au-dessus{display:grid;gap:14px;padding:18px 18px 6px;background:#f4ebe7}.caserne-passes-au-dessus .caserne-separateur-passe{margin:8px 2px 0}.caserne-shell-actualites{min-height:100vh}.caserne-fil-actuel{min-height:55vh}
+        .caserne-separateur-passe{display:flex;align-items:center;gap:12px;margin:24px 2px 4px;color:#786f6c;font-size:12px;font-weight:900;text-transform:uppercase;letter-spacing:1px}.caserne-separateur-passe::before,.caserne-separateur-passe::after{content:"";height:1px;background:#c9c0bd;flex:1}.caserne-separateur-passe span{white-space:nowrap}.caserne-passes-au-dessus{display:grid;gap:14px;padding:0;background:transparent}.caserne-passes-au-dessus .caserne-separateur-passe{margin:8px 2px 0}.caserne-shell-actualites{min-height:100vh}.caserne-shell-actualites .caserne-top{position:sticky;top:0;z-index:40}.caserne-fil-actuel{min-height:55vh}
         .caserne-actu-passee{background:#dedbd9!important;border-color:#cbc6c3!important;color:#5d5957!important;box-shadow:none!important}.caserne-actu-passee .caserne-actu-meta span,.caserne-actu-passee .caserne-actu-meta time,.caserne-actu-passee h2,.caserne-actu-passee p,.caserne-actu-passee .caserne-reponse-contexte,.caserne-actu-passee .caserne-liste-presents>strong,.caserne-actu-passee .caserne-entretien-jour>strong{color:#5d5957!important}.caserne-actu-passee .caserne-liste-presents span,.caserne-actu-passee .caserne-badge-soustype,.caserne-actu-passee .caserne-badge-visibilite,.caserne-actu-passee .caserne-entretien-card-entete>span{background:#c9c5c2!important;color:#55514f!important}.caserne-actu-passee .caserne-preparation-bloc,.caserne-actu-passee .caserne-zone-reponse{background:rgba(255,255,255,.22)!important;border-color:#c7c2bf!important}.caserne-creneau-passe{border:1px solid #c2bdb9;background:#d2cfcc;border-radius:10px;padding:9px 5px;text-align:center;color:#5d5957}.caserne-creneau-passe span{font-weight:900}.caserne-zone-reponse-passee .caserne-liste-presents{margin-top:0}
         .caserne-admin-centre{display:grid;grid-template-columns:1fr 1fr;gap:12px}.caserne-admin-centre>button{border:1px solid #dcc7c2;background:#fff;border-radius:18px;padding:19px;text-align:left;min-height:108px;display:flex;flex-direction:column;justify-content:space-between;gap:12px;color:#2b1716;box-shadow:0 6px 18px rgba(80,40,30,.06)}.caserne-admin-centre>button strong{font-size:17px}.caserne-admin-centre>button span{font-size:12px;line-height:1.4;color:#765f5b}.caserne-administratif-page .caserne-vide{grid-column:1/-1}@media(max-width:560px){.caserne-admin-centre{grid-template-columns:1fr}}
         .caserne-nav-bas{position:fixed;z-index:5000;left:50%;bottom:12px;transform:translateX(-50%);width:min(calc(100% - 24px),620px);height:68px;background:#fff;border:1px solid #eadbd7;border-radius:22px;box-shadow:0 12px 34px rgba(50,20,20,.18);display:grid;grid-template-columns:repeat(4,1fr);padding:5px 54px 5px 6px}
@@ -19406,7 +19466,7 @@ function actualiserInterfaceBureau() {
             <button
                 type="button"
                 class="bureau-profil ${actif === "profil" ? "actif" : ""}"
-                onclick="afficherProfilUtilisateur()"
+                onclick="ouvrirProfilDepuisPageCourante()"
             >
                 <strong>
                     ${echapperHTML(
