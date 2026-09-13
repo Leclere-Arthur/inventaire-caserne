@@ -668,7 +668,7 @@ const DOMAINE_EMAIL_INTERNE =
     "inventaire-caserne.local";
 
 const VERSION_APPLICATION =
-    "2.9.38";
+    "2.9.39";
 
 const CLE_PROFIL_UTILISATEUR_CACHE =
     "profil_utilisateur_connecte_v1";
@@ -684,6 +684,108 @@ let connexionApplicationEnCours = false;
  */
 let etatPageAvantProfil = null;
 
+/* =========================================================
+   HISTORIQUE DE NAVIGATION INTERNE
+   Tous les boutons « Retour » reviennent désormais à la page
+   réellement consultée juste avant, quel que soit l'espace.
+   ========================================================= */
+const historiqueNavigationApplication = [];
+let etatNavigationCourante = null;
+let restaurationNavigationEnCours = false;
+let observateurHistoriqueNavigationInstalle = false;
+
+function obtenirSignaturePageApplication() {
+    const app = document.getElementById("app");
+    if (!app) return "";
+    const principal = app.querySelector("main");
+    const titre = String(app.querySelector("h1,h2")?.textContent || "").trim();
+    const classes = String(principal?.className || "").trim();
+    return `${classes}::${titre}`;
+}
+
+function capturerEtatPageApplication() {
+    const app = document.getElementById("app");
+    if (!app) return null;
+    return {
+        html: app.innerHTML,
+        scrollX: window.scrollX || 0,
+        scrollY: window.scrollY || 0,
+        bodyClassName: document.body.className || "",
+        signature: obtenirSignaturePageApplication()
+    };
+}
+
+function memoriserTransitionNavigation() {
+    if (restaurationNavigationEnCours) return;
+    const nouvelEtat = capturerEtatPageApplication();
+    if (!nouvelEtat || !nouvelEtat.signature) return;
+
+    if (!etatNavigationCourante) {
+        etatNavigationCourante = nouvelEtat;
+        return;
+    }
+
+    if (nouvelEtat.signature !== etatNavigationCourante.signature) {
+        historiqueNavigationApplication.push(etatNavigationCourante);
+        if (historiqueNavigationApplication.length > 40) historiqueNavigationApplication.shift();
+        etatNavigationCourante = nouvelEtat;
+    } else {
+        etatNavigationCourante = nouvelEtat;
+    }
+}
+
+function installerHistoriqueNavigationApplication() {
+    if (observateurHistoriqueNavigationInstalle) return;
+    observateurHistoriqueNavigationInstalle = true;
+    const app = document.getElementById("app");
+    if (!app) return;
+
+    etatNavigationCourante = capturerEtatPageApplication();
+    const obs = new MutationObserver(() => {
+        requestAnimationFrame(memoriserTransitionNavigation);
+    });
+    obs.observe(app, { childList: true, subtree: false });
+
+    document.addEventListener("click", (event) => {
+        const bouton = event.target?.closest?.(".retour-button, .reappro-retour, [data-retour-page]");
+        if (!bouton) return;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        retourPagePrecedente();
+    }, true);
+}
+
+function retourPagePrecedente() {
+    const precedent = historiqueNavigationApplication.pop();
+    if (!precedent || !precedent.html) {
+        afficherPortailPrincipal();
+        return;
+    }
+
+    restaurationNavigationEnCours = true;
+    document.body.className = precedent.bodyClassName || "";
+    const app = document.getElementById("app");
+    if (!app) {
+        restaurationNavigationEnCours = false;
+        afficherPortailPrincipal();
+        return;
+    }
+
+    app.innerHTML = precedent.html;
+    etatNavigationCourante = precedent;
+    actualiserInterfaceBureau();
+    synchroniserApparencePWACaserne();
+
+    requestAnimationFrame(() => {
+        window.scrollTo({
+            left: precedent.scrollX || 0,
+            top: precedent.scrollY || 0,
+            behavior: "auto"
+        });
+        setTimeout(() => { restaurationNavigationEnCours = false; }, 0);
+    });
+}
+
 function ouvrirProfilDepuisPageCourante() {
     const app = document.getElementById("app");
 
@@ -698,32 +800,8 @@ function ouvrirProfilDepuisPageCourante() {
 }
 
 function retournerDepuisProfil() {
-    const etat = etatPageAvantProfil;
     etatPageAvantProfil = null;
-
-    if (!etat || !etat.html) {
-        afficherPortailPrincipal();
-        return;
-    }
-
-    document.body.className = etat.bodyClassName || "";
-
-    const app = document.getElementById("app");
-    if (!app) {
-        afficherPortailPrincipal();
-        return;
-    }
-
-    app.innerHTML = etat.html;
-    actualiserInterfaceBureau();
-
-    requestAnimationFrame(() => {
-        window.scrollTo({
-            left: etat.scrollX || 0,
-            top: etat.scrollY || 0,
-            behavior: "auto"
-        });
-    });
+    retourPagePrecedente();
 }
 
 /*
@@ -7386,6 +7464,24 @@ function afficherPortailPrincipal() {
 }
 
 
+async function synchroniserCaserneAvantNavigation() {
+    /*
+     * Même logique que dans l'espace Pharmacie : à chaque changement
+     * d'onglet, on synchronise d'abord les données locales puis les
+     * chargeurs Caserne interrogent Supabase juste après.
+     */
+    if (!navigator.onLine) return;
+    try {
+        await synchroniserAvantNavigation();
+        const supabase = obtenirClientSupabase();
+        if (supabase) {
+            await supabase.auth.getSession();
+        }
+    } catch (erreur) {
+        console.warn("Synchronisation Caserne avant navigation :", erreur);
+    }
+}
+
 async function afficherEspaceCaserne() {
 
     if (!utilisateurAPermission("acces_espace_caserne") && !utilisateurEstSPVAdmin()) {
@@ -7395,7 +7491,8 @@ async function afficherEspaceCaserne() {
     }
 
     initialiserStyleEspaceCaserne();
-    await afficherActualitesCaserne();
+    await synchroniserCaserneAvantNavigation();
+    await afficherActualitesCaserne(true);
 }
 
 function obtenirRubriquesCaserne() {
@@ -8218,7 +8315,8 @@ function carteEntretienPasseActualitesCaserne(entretien, dateReference) {
     </article>`;
 }
 
-async function afficherActualitesCaserne() {
+async function afficherActualitesCaserne(synchronisationDejaFaite = false) {
+    if (!synchronisationDejaFaite) await synchroniserCaserneAvantNavigation();
     await nettoyerEvenementsCaserneAnciens();
 
     let publications = await chargerPublicationsCaserne();
@@ -8355,6 +8453,7 @@ function afficherAdministratifCaserne() {
 async function afficherRubriqueCaserne(type) {
     const rubrique = obtenirRubriquesCaserne().find(r => r[0] === type);
     if (!rubrique || !utilisateurPeutVoirRubriqueCaserne(rubrique)) { alert("Accès non autorisé."); return; }
+    await synchroniserCaserneAvantNavigation();
     const estAdmin = utilisateurEstSPVAdmin() || utilisateurAPermission(rubrique[3]);
 
     if (type === "administratif") {
@@ -18195,6 +18294,7 @@ window.afficherPortailPrincipal =
 window.afficherActualitesCaserne = afficherActualitesCaserne;
 window.afficherAdministratifCaserne = afficherAdministratifCaserne;
 window.afficherRubriqueCaserne = afficherRubriqueCaserne;
+window.retourPagePrecedente = retourPagePrecedente;
 window.ouvrirMenuCaserne = ouvrirMenuCaserne;
 window.ouvrirPhotoCaserne = ouvrirPhotoCaserne;
 window.repondrePublicationCaserne = repondrePublicationCaserne;
@@ -19294,6 +19394,134 @@ function initialiserInterfaceBureau() {
                 color: var(--pc-secondaire) !important;
             }
 
+            /* =====================================================
+               ESPACE CASERNE SUR PC
+               Interface dédiée bordeaux, large et structurée.
+               ===================================================== */
+            body:not(.mode-connexion):has(.caserne-shell) {
+                background:
+                    radial-gradient(circle at 88% 8%, rgba(143,47,49,.14), transparent 28%),
+                    linear-gradient(135deg, #160f10 0%, #211416 100%) !important;
+            }
+
+            body:not(.mode-connexion):has(.caserne-shell) #app {
+                background: transparent !important;
+            }
+
+            body:not(.mode-connexion) .caserne-shell {
+                width: auto !important;
+                max-width: none !important;
+                min-height: 100vh !important;
+                margin: 0 !important;
+                padding: 34px 42px 70px !important;
+                box-sizing: border-box;
+                background: transparent !important;
+                color: #f7eeee !important;
+            }
+
+            body:not(.mode-connexion) .caserne-top {
+                margin: 0 0 24px !important;
+                padding: 24px 28px !important;
+                border: 1px solid rgba(255,255,255,.08);
+                border-radius: 16px !important;
+                background: linear-gradient(135deg, #6c2022, #8a2b2d) !important;
+                box-shadow: 0 16px 34px rgba(0,0,0,.20) !important;
+            }
+
+            body:not(.mode-connexion) .caserne-top h1 {
+                margin: 7px 0 8px !important;
+                font-size: 34px !important;
+            }
+
+            body:not(.mode-connexion) .caserne-top p {
+                font-size: 13px;
+            }
+
+            body:not(.mode-connexion) .caserne-fil {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                gap: 16px !important;
+            }
+
+            body:not(.mode-connexion) .caserne-shell-actualites .caserne-fil,
+            body:not(.mode-connexion) .caserne-entretiens-fil {
+                grid-template-columns: minmax(0, 1fr);
+                max-width: 1180px;
+            }
+
+            body:not(.mode-connexion) .caserne-actu-card,
+            body:not(.mode-connexion) .caserne-entretien-card,
+            body:not(.mode-connexion) .caserne-vide {
+                border-radius: 12px !important;
+                box-shadow: none !important;
+            }
+
+            body:not(.mode-connexion) .caserne-admin-bloc {
+                max-width: 1180px;
+                border: 1px solid rgba(255,255,255,.10) !important;
+                border-radius: 14px !important;
+                background: linear-gradient(180deg, #351719, #2a1113) !important;
+                box-shadow: none !important;
+            }
+
+            body:not(.mode-connexion) .caserne-menu-grille,
+            body:not(.mode-connexion) .caserne-admin-centre {
+                max-width: 1180px;
+                display: grid;
+                grid-template-columns: repeat(3, minmax(220px, 1fr));
+                gap: 14px;
+            }
+
+            body:not(.mode-connexion) .caserne-menu-grille button,
+            body:not(.mode-connexion) .caserne-admin-centre button {
+                min-height: 92px;
+                border-radius: 12px !important;
+            }
+
+            body:not(.mode-connexion) .caserne-nav-bas {
+                display: none !important;
+            }
+
+            #navigation-bureau.theme-caserne {
+                background: linear-gradient(180deg, #441416 0%, #241012 100%);
+                border-right-color: rgba(255,220,220,.10);
+            }
+
+            #navigation-bureau.theme-caserne .bureau-nav-separateur {
+                color: #c99191;
+            }
+
+            #navigation-bureau.theme-caserne .bureau-nav-bouton {
+                color: #ead2d2;
+            }
+
+            #navigation-bureau.theme-caserne .bureau-nav-bouton:hover {
+                background: #5a1c1f;
+                border-color: #74272a;
+                color: #fff;
+            }
+
+            #navigation-bureau.theme-caserne .bureau-nav-bouton.actif {
+                background: #742326;
+                border-color: #96383b;
+                color: #fff;
+                box-shadow: inset 3px 0 0 #ffd7d7;
+            }
+
+            #navigation-bureau.theme-caserne .bureau-nav-sous-bouton {
+                min-height: 35px;
+                margin-left: 12px;
+                padding-top: 6px;
+                padding-bottom: 6px;
+                font-size: 12px;
+                font-weight: 650;
+            }
+
+            #navigation-bureau.theme-caserne .bureau-nav {
+                overflow-y: auto;
+                padding-right: 2px;
+                scrollbar-width: thin;
+            }
+
             @media (max-width: 1220px) {
                 body:not(.mode-connexion) .menu-principal,
                 body:not(.mode-connexion) .menu-administration {
@@ -19336,6 +19564,8 @@ function initialiserInterfaceBureau() {
         );
     }
 
+    installerHistoriqueNavigationApplication();
+
     window.addEventListener(
         "resize",
         actualiserInterfaceBureau
@@ -19356,6 +19586,20 @@ function obtenirRubriqueBureauActive() {
         )
             .trim()
             .toLowerCase();
+
+    if (document.querySelector("#app .caserne-shell")) {
+        if (titre.includes("actualités")) return "caserne-actualites";
+        if (titre === "sport" || titre.includes("séance de sport")) return "caserne-sport";
+        if (titre.includes("manœuvre")) return "caserne-manoeuvre";
+        if (titre.includes("casernement")) return "caserne-casernement";
+        if (titre.includes("réunion")) return "caserne-reunion";
+        if (titre.includes("amical")) return "caserne-amical";
+        if (titre.includes("comité de centre")) return "caserne-comite_centre";
+        if (titre.includes("administratif")) return "caserne-administratif";
+        if (titre.includes("entretien individuel")) return "caserne-entretien_individuel";
+        if (titre === "menu") return "caserne-menu";
+        return "caserne-actualites";
+    }
 
     if (titre.includes("réapprovisionnement")) return "reappro";
     if (titre.includes("inventaire")) return "inventaire";
@@ -19439,6 +19683,52 @@ function actualiserInterfaceBureau() {
                 </button>
             `;
         };
+
+    const modeCaserne = Boolean(document.querySelector("#app .caserne-shell"));
+    navigation.classList.toggle("theme-caserne", modeCaserne);
+
+    if (modeCaserne) {
+        const rubriques = obtenirRubriquesCaserne().filter(utilisateurPeutVoirRubriqueCaserne);
+        const boutonRubrique = (id, libelle) => bouton(
+            `caserne-${id}`,
+            libelle,
+            `afficherRubriqueCaserne('${id}')`,
+            true,
+            "bureau-nav-sous-bouton"
+        );
+
+        const groupe = (titreGroupe, ids) => {
+            const contenu = ids
+                .map(id => rubriques.find(r => r[0] === id))
+                .filter(Boolean)
+                .map(r => boutonRubrique(r[0], r[1]))
+                .join("");
+            return contenu ? `<div class="bureau-nav-separateur">${echapperHTML(titreGroupe)}</div>${contenu}` : "";
+        };
+
+        navigation.innerHTML = `
+            <div class="bureau-marque">
+                <img class="bureau-logo" src="./logo-version-pc.png" alt="Logo">
+            </div>
+            <nav class="bureau-nav" aria-label="Navigation Espace Caserne">
+                ${bouton("accueil-general", "Accueil général", "afficherPortailPrincipal()")}
+                ${bouton("caserne-actualites", "Actualités", "afficherActualitesCaserne()")}
+                ${groupe("Activités", ["sport","manoeuvre","casernement"])}
+                ${groupe("Vie de la caserne", ["reunion","amical","comite_centre"])}
+                ${groupe("Personnel", ["entretien_individuel"])}
+                ${groupe("Gestion", ["administratif"])}
+                <div class="bureau-nav-separateur">Autres espaces</div>
+                ${bouton("pharmacie", "Espace Pharmacie", "afficherAccueil()")}
+            </nav>
+            <div class="bureau-utilisateur">
+                <button type="button" class="bureau-profil ${actif === "profil" ? "actif" : ""}" onclick="ouvrirProfilDepuisPageCourante()">
+                    <strong>${echapperHTML(obtenirNomUtilisateurAffiche())}</strong>
+                    <small>${echapperHTML(role?.nom || "")}</small>
+                </button>
+            </div>
+        `;
+        return;
+    }
 
     navigation.innerHTML = `
         <div class="bureau-marque">
