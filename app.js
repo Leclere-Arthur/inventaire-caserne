@@ -668,7 +668,7 @@ const DOMAINE_EMAIL_INTERNE =
     "inventaire-caserne.local";
 
 const VERSION_APPLICATION =
-    "2.9.39";
+    "2.9.40";
 
 const CLE_PROFIL_UTILISATEUR_CACHE =
     "profil_utilisateur_connecte_v1";
@@ -8521,7 +8521,7 @@ function initialiserStyleEspaceCaserne() {
         .navigation-fixe-page{padding-bottom:110px!important}
         .caserne-nav-bas.nav-theme-pharmacie>button.actif{color:#237448}.caserne-nav-bas.nav-theme-pharmacie .caserne-menu-bulle{background:#237448;box-shadow:0 5px 15px rgba(20,85,52,.24)}
         .caserne-nav-bas.nav-theme-accueil>button.actif{color:#171717}.caserne-nav-bas.nav-theme-accueil .caserne-menu-bulle{background:#171717;box-shadow:0 5px 15px rgba(0,0,0,.22)}
-        @media(min-width:1000px){body:has(.caserne-shell) .sidebar-pc{display:none!important}body:has(.caserne-shell) #app{margin-left:0!important}.caserne-shell{padding-top:20px}.caserne-top{border-radius:28px;margin:0 0 24px}.caserne-nav-bas{bottom:22px}}
+        @media(min-width:1000px){body:has(.caserne-shell) .sidebar-pc{display:none!important}.caserne-shell{padding-top:20px}.caserne-top{border-radius:28px;margin:0 0 24px}.caserne-nav-bas{bottom:22px}}
     `;
     document.head.appendChild(style);
 }
@@ -19518,8 +19518,36 @@ function initialiserInterfaceBureau() {
 
             #navigation-bureau.theme-caserne .bureau-nav {
                 overflow-y: auto;
+                overflow-x: hidden;
                 padding-right: 2px;
                 scrollbar-width: thin;
+            }
+
+            #navigation-bureau.theme-caserne .bureau-nav-sous-bouton {
+                width: calc(100% - 12px);
+            }
+
+            body:not(.mode-connexion) #app > .caserne-shell {
+                width: auto !important;
+                max-width: none !important;
+                min-height: 100vh;
+                margin: 0 !important;
+                padding: 34px 42px 58px !important;
+                box-sizing: border-box;
+                background: #f4ebe8 !important;
+            }
+
+            body:not(.mode-connexion) #app > .caserne-shell .caserne-top {
+                margin: 0 0 24px !important;
+                padding: 28px 32px !important;
+                border-radius: 18px !important;
+            }
+
+            body:not(.mode-connexion) #app > .caserne-shell .caserne-fil,
+            body:not(.mode-connexion) #app > .caserne-shell .caserne-passes-au-dessus,
+            body:not(.mode-connexion) #app > .caserne-shell .caserne-fil-actuel {
+                width: 100%;
+                max-width: 1180px;
             }
 
             @media (max-width: 1220px) {
@@ -19685,7 +19713,30 @@ function actualiserInterfaceBureau() {
         };
 
     const modeCaserne = Boolean(document.querySelector("#app .caserne-shell"));
+    const modePortail = Boolean(document.querySelector("#app .portail-cis-page"));
     navigation.classList.toggle("theme-caserne", modeCaserne);
+
+    if (modePortail) {
+        navigation.classList.remove("theme-caserne");
+        navigation.innerHTML = `
+            <div class="bureau-marque">
+                <img class="bureau-logo" src="./logo-version-pc.png" alt="Logo">
+            </div>
+            <nav class="bureau-nav" aria-label="Navigation générale">
+                ${bouton("accueil-general", "Accueil général", "afficherPortailPrincipal()", true)}
+                <div class="bureau-nav-separateur">Espaces</div>
+                ${bouton("caserne-actualites", "Espace Caserne", "afficherEspaceCaserne()", utilisateurAPermission("acces_espace_caserne") || utilisateurEstSPVAdmin())}
+                ${bouton("pharmacie", "Espace Pharmacie", "afficherAccueil()", true)}
+            </nav>
+            <div class="bureau-utilisateur">
+                <button type="button" class="bureau-profil" onclick="ouvrirProfilDepuisPageCourante()">
+                    <strong>${echapperHTML(obtenirNomUtilisateurAffiche())}</strong>
+                    <small>${echapperHTML(role?.nom || "")}</small>
+                </button>
+            </div>
+        `;
+        return;
+    }
 
     if (modeCaserne) {
         const rubriques = obtenirRubriquesCaserne().filter(utilisateurPeutVoirRubriqueCaserne);
@@ -19747,8 +19798,16 @@ function actualiserInterfaceBureau() {
         >
 
             ${bouton(
+                "accueil-general",
+                "Accueil général",
+                "afficherPortailPrincipal()"
+            )}
+
+            <div class="bureau-nav-separateur">Espace Pharmacie</div>
+
+            ${bouton(
                 "accueil",
-                "Accueil",
+                "Accueil Pharmacie",
                 "afficherAccueil()"
             )}
 
