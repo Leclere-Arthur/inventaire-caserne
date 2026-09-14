@@ -1122,7 +1122,7 @@ function afficherBandeauMiseAJourApplication() {
             </strong>
 
             <small>
-                La mise à jour ne supprime pas vos données.
+                La mise à jour ne supprime pas tes données.
             </small>
         </div>
 
@@ -2135,7 +2135,7 @@ function verifierPermissionOuRetourAccueil(
 
     alert(
         message ||
-        "⛔ Vous n'avez pas accès à cette rubrique."
+        "⛔ Tu n'as pas accès à cette rubrique."
     );
 
     afficherAccueil();
@@ -3215,7 +3215,7 @@ async function deconnecterApplication() {
 
     if (
         !await afficherConfirmationCIS(
-            "Voulez-vous vous déconnecter ?"
+            "Veux-tu te déconnecter ?"
         )
     ) {
         return;
@@ -5805,7 +5805,7 @@ function initialiserBandeauConnexion() {
             "bandeau-hors-connexion";
 
         bandeau.textContent =
-            "Vous êtes actuellement hors connexion internet";
+            "Tu es actuellement hors connexion internet";
 
         document.body.appendChild(
             bandeau
@@ -7747,7 +7747,7 @@ async function synchroniserCaserneAvantNavigation() {
 async function afficherEspaceCaserne() {
 
     if (!utilisateurAPermission("acces_espace_caserne") && !utilisateurEstSPVAdmin()) {
-        alert("Vous n'avez pas accès à l'Espace Caserne.");
+        alert("Tu n'as pas accès à l'Espace Caserne.");
         afficherPortailPrincipal();
         return;
     }
@@ -7878,7 +7878,7 @@ function ouvrirMenuPharmacie() {
             </header>
             <button type="button" class="caserne-retour-actualites" onclick="afficherAccueil()">← Retour à la pharmacie</button>
             <section class="caserne-menu-liste-simple">
-                ${onglets.map(carteMenuNavigationSimple).join("") || '<div class="caserne-vide"><strong>Aucun onglet disponible</strong><p>Votre rôle ne donne accès à aucun outil pharmacie.</p></div>'}
+                ${onglets.map(carteMenuNavigationSimple).join("") || '<div class="caserne-vide"><strong>Aucun onglet disponible</strong><p>Ton rôle ne donne accès à aucun outil pharmacie.</p></div>'}
             </section>
         </main>
         ${navigationPrincipale("pharmacie", "pharmacie")}`;
@@ -7954,7 +7954,7 @@ function obtenirPresentationRubriqueCaserne(type) {
         amical: {icone:"🤝", aide:"Actualités et événements de l’Amicale"},
         comite_centre: {icone:"📋", aide:"Informations du comité de centre"},
         administratif: {icone:"⚙️", aide:"Outils administratifs autorisés"},
-        entretien_individuel: {icone:"🗓️", aide:"Choisir ou consulter votre rendez-vous"}
+        entretien_individuel: {icone:"🗓️", aide:"Choisir ou consulter ton rendez-vous"}
     })[type] || {icone:"•", aide:"Ouvrir cette rubrique"};
 }
 
@@ -7980,7 +7980,7 @@ function ouvrirMenuCaserne() {
                         <span class="caserne-menu-texte"><strong>${echapperHTML(r[1])}</strong><small>${echapperHTML(presentation.aide)}</small></span>
                         <span class="caserne-menu-fleche" aria-hidden="true">›</span>
                     </button>`;
-                }).join("") || '<div class="caserne-vide"><strong>Aucune rubrique disponible</strong><p>Votre rôle ne donne accès à aucune rubrique pour le moment.</p></div>'}
+                }).join("") || '<div class="caserne-vide"><strong>Aucune rubrique disponible</strong><p>Ton rôle ne donne accès à aucune rubrique pour le moment.</p></div>'}
             </section>
         </main>${navigationCaserne("caserne")}`;
     actualiserInterfaceBureau();
@@ -8144,8 +8144,8 @@ function blocReponsePublicationCaserne(p, contexte, libelle, retour) {
     const presents = reponses.filter(r => r.contexte === contexte && r.reponse === "present");
     const present = maReponse?.reponse === "present";
     const absent = maReponse?.reponse === "absent";
-    const question = contexte === "preparation" ? "Serez-vous présent à la préparation ?" : "Serez-vous présent ?";
-    const etat = present ? "Votre réponse : présent" : absent ? "Votre réponse : absent" : "Choisissez votre réponse";
+    const question = contexte === "preparation" ? "Seras-tu présent à la préparation ?" : "Seras-tu présent ?";
+    const etat = present ? "Ta réponse : présent" : absent ? "Ta réponse : absent" : "Choisis ta réponse";
     return `<div class="caserne-zone-reponse caserne-zone-reponse-simple">
         <strong class="caserne-question-reponse">${echapperHTML(question)}</strong>
         <small class="caserne-etat-reponse">${echapperHTML(etat)}</small>
@@ -8694,7 +8694,7 @@ function carteRendezVousEntretienActualitesCaserne(rdv) {
         <div class="caserne-actu-meta"><span>Entretien individuel</span><time>${echapperHTML(formaterDateHeureCaserne(rdv.date_heure))}</time></div>
         <h2>${echapperHTML(rdv.titre || "Entretien individuel")}</h2>
         ${rdv.description ? `<p>${echapperHTML(rdv.description).replaceAll("\n","<br>")}</p>` : ""}
-        <div class="caserne-rdv-badge">Rendez-vous prévu avec vous</div>
+        <div class="caserne-rdv-badge">Rendez-vous prévu avec toi</div>
         <div class="caserne-calendrier-actions">${boutonCalendrierCaserne(rdv.titre || "Entretien individuel", rdv.date_heure, rdv.description || "", rdv.duree_minutes || 60, "Ajouter mon rendez-vous au calendrier")}</div>
     </article>`;
 }
@@ -8841,7 +8841,7 @@ async function afficherActualitesCaserne(synchronisationDejaFaite = false) {
 
             <div class="caserne-titre-section"><strong>À venir</strong><span>${aVenir.length + sansDate.length ? `${aVenir.length + sansDate.length} élément${aVenir.length + sansDate.length > 1 ? "s" : ""}` : ""}</span></div>
             <section class="caserne-fil caserne-fil-actuel">
-                ${futursHTML || '<div class="caserne-vide"><strong>Rien de prévu pour le moment</strong><p>Vous n’avez aucune action à faire.</p></div>'}
+                ${futursHTML || '<div class="caserne-vide"><strong>Rien de prévu pour le moment</strong><p>Tu n’as aucune action à faire.</p></div>'}
             </section>
 
             ${passesHTML ? `<details class="caserne-anciens-evenements"><summary>Voir les événements passés</summary><section class="caserne-fil">${passesHTML}</section></details>` : ""}
@@ -8867,7 +8867,7 @@ function afficherAdministratifCaserne() {
         <main class="caserne-shell caserne-administratif-page">
             <header class="caserne-top"><small>ESPACE CASERNE</small><h1>Administratif</h1><p>Gestion de l'application et de la caserne</p></header>
             <section class="caserne-admin-centre">
-                ${outils.length ? outils.join("") : `<div class="caserne-vide"><strong>Aucun outil administratif autorisé</strong><p>Les outils apparaissent selon les permissions de votre rôle.</p></div>`}
+                ${outils.length ? outils.join("") : `<div class="caserne-vide"><strong>Aucun outil administratif autorisé</strong><p>Les outils apparaissent selon les permissions de ton rôle.</p></div>`}
             </section>
         </main>${navigationCaserne("caserne")}`;
     actualiserInterfaceBureau();
@@ -8888,10 +8888,10 @@ async function afficherRubriqueCaserne(type) {
         const entretiens = await chargerEntretiensCaserne();
         document.getElementById("app").innerHTML = `
             <main class="caserne-shell ${estAdmin ? "caserne-avec-admin" : "caserne-public-simple"}">
-                <header class="caserne-top ${estAdmin ? "" : "caserne-top-simple"}"><small>ESPACE CASERNE</small><h1>${echapperHTML(rubrique[1])}</h1><p>${estAdmin ? "Planification · réponses · créneaux" : "Choisissez votre rendez-vous en appuyant sur un créneau disponible."}</p></header>
+                <header class="caserne-top ${estAdmin ? "" : "caserne-top-simple"}"><small>ESPACE CASERNE</small><h1>${echapperHTML(rubrique[1])}</h1><p>${estAdmin ? "Planification · réponses · créneaux" : "Choisis ton rendez-vous en appuyant sur un créneau disponible."}</p></header>
                 ${estAdmin ? formulaireAdminEntretienCaserne() : `<button type="button" class="caserne-retour-actualites" onclick="afficherActualitesCaserne()">← Retour aux informations</button>`}
                 <section class="caserne-fil caserne-entretiens-fil">
-                    ${entretiens.length ? entretiens.map(e => carteEntretienCaserne(e, estAdmin)).join("") : '<div class="caserne-vide"><strong>Aucun entretien planifié</strong><p>Vous n’avez rien à faire pour le moment.</p></div>'}
+                    ${entretiens.length ? entretiens.map(e => carteEntretienCaserne(e, estAdmin)).join("") : '<div class="caserne-vide"><strong>Aucun entretien planifié</strong><p>Tu n’as rien à faire pour le moment.</p></div>'}
                 </section>
             </main>${navigationCaserne("caserne")}`;
         actualiserInterfaceBureau();
@@ -8910,7 +8910,7 @@ async function afficherRubriqueCaserne(type) {
             <header class="caserne-top ${estAdmin ? "" : "caserne-top-simple"}"><small>ESPACE CASERNE</small><h1>${echapperHTML(rubrique[1])}</h1><p>${estAdmin ? "Vue publique · administration" : echapperHTML(presentation.aide)}</p></header>
             ${estAdmin ? formulaireAdmin : `<button type="button" class="caserne-retour-actualites" onclick="afficherActualitesCaserne()">← Retour aux informations</button>`}
             <section class="caserne-fil">
-                ${publications.length ? publications.map(p => cartePublicationCaserne(p, {admin:estAdmin,retour:type})).join("") : '<div class="caserne-vide"><strong>Aucune information pour le moment</strong><p>Vous n’avez rien à faire dans cette rubrique.</p></div>'}
+                ${publications.length ? publications.map(p => cartePublicationCaserne(p, {admin:estAdmin,retour:type})).join("") : '<div class="caserne-vide"><strong>Aucune information pour le moment</strong><p>Tu n’as rien à faire dans cette rubrique.</p></div>'}
             </section>
         </main>${navigationCaserne("caserne")}`;
     actualiserInterfaceBureau();
@@ -11431,7 +11431,7 @@ async function validerRetourIntervention() {
     if (!date) {
 
         alert(
-            "Veuillez renseigner la date."
+            "Renseigne la date."
         );
 
         return;
@@ -11442,7 +11442,7 @@ async function validerRetourIntervention() {
     if (!numero) {
 
         alert(
-            "Veuillez renseigner le numéro d'intervention."
+            "Renseigne le numéro d'intervention."
         );
 
         return;
@@ -11461,7 +11461,7 @@ async function validerRetourIntervention() {
     ) {
 
         alert(
-            "Veuillez sélectionner au moins un matériel."
+            "Sélectionne au moins un matériel."
         );
 
         return;
@@ -13011,7 +13011,7 @@ async function afficherReapprovisionnementArchive(
     if (
         !verifierPermissionOuRetourAccueil(
             "acces_reapprovisionnement",
-            "Vous n'avez pas accès au réapprovisionnement."
+            "Tu n'as pas accès au réapprovisionnement."
         )
     ) {
         return;
@@ -13213,7 +13213,7 @@ async function afficherReapprovisionnementAdministration() {
     if (
         !verifierPermissionOuRetourAccueil(
             "acces_reapprovisionnement",
-            "Vous n'avez pas accès au réapprovisionnement."
+            "Tu n'as pas accès au réapprovisionnement."
         )
     ) {
         return;
@@ -13330,7 +13330,7 @@ async function validerReapprovisionnementAdministration() {
     if (
         !verifierPermissionOuRetourAccueil(
             "acces_reapprovisionnement",
-            "Vous n'avez pas accès au réapprovisionnement."
+            "Tu n'as pas accès au réapprovisionnement."
         )
     ) {
         return;
@@ -13871,7 +13871,7 @@ async function validerReapprovisionnementArchive(
     if (
         !verifierPermissionOuRetourAccueil(
             "acces_reapprovisionnement",
-            "Vous n'avez pas accès au réapprovisionnement."
+            "Tu n'as pas accès au réapprovisionnement."
         )
     ) {
         return;
@@ -15118,7 +15118,7 @@ async function supprimerRetourIntervention(interventionId) {
     if (!admin && (!auteur || ageInterventionMs(intervention) > 60 * 60 * 1000)) {
         return alert("La suppression de ce retour n'est plus autorisée.");
     }
-    const motDePasse = await afficherSaisieCIS("Saisissez le mot de passe de votre compte pour confirmer la suppression :", "", "password");
+    const motDePasse = await afficherSaisieCIS("Saisis le mot de passe de ton compte pour confirmer la suppression :", "", "password");
     if (motDePasse === null) return;
     if (!navigator.onLine) return alert("Une connexion Internet est nécessaire pour supprimer un retour d'intervention.");
     if (!await verifierMotDePasseUtilisateurConnecte(motDePasse)) return alert("Mot de passe incorrect.");
@@ -15313,7 +15313,7 @@ async function enregistrerModificationRetourIntervention(interventionId) {
         .map(champ => ({ materiel_id: champ.dataset.materielId, quantite: Math.floor(Number(champ.value || 0)) }))
         .filter(x => x.quantite > 0);
 
-    if (!consommations.length) return alert("Veuillez conserver au moins un matériel utilisé.");
+    if (!consommations.length) return alert("Conserve au moins un matériel utilisé.");
     if (!await afficherConfirmationCIS("Enregistrer les modifications du matériel utilisé ?")) return;
 
     const supabase = obtenirClientSupabase();
@@ -16850,7 +16850,7 @@ function afficherNotificationsAdministration() {
                     id="notification-admin-message"
                     rows="7"
                     maxlength="500"
-                    placeholder="Écrivez ici le message que vous souhaitez envoyer..."
+                    placeholder="Écris ici le message que tu souhaites envoyer..."
                 ></textarea>
 
 
@@ -16909,7 +16909,7 @@ async function envoyerNotificationAdministration() {
     if (!message) {
 
         alert(
-            "Veuillez écrire un message."
+            "Écris un message."
         );
 
         return;
@@ -17748,7 +17748,7 @@ function enregistrerMateriel() {
     if (!nom) {
 
         alert(
-            "Veuillez indiquer le nom du matériel."
+            "Indique le nom du matériel."
         );
 
         return;
@@ -17762,7 +17762,7 @@ function enregistrerMateriel() {
     ) {
 
         alert(
-            "Veuillez sélectionner au moins une catégorie."
+            "Sélectionne au moins une catégorie."
         );
 
         return;
@@ -18352,7 +18352,7 @@ async function supprimerCategorie(
 
     if (
         !await afficherConfirmationCIS(
-            "Voulez-vous supprimer « " +
+            "Veux-tu supprimer « " +
             nom +
             " » ?"
         )
@@ -18484,7 +18484,7 @@ async function supprimerMateriel(
 
     if (
         !await afficherConfirmationCIS(
-            "Voulez-vous supprimer « " +
+            "Veux-tu supprimer « " +
             materiel.nom +
             " » ?"
         )
