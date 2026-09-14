@@ -668,7 +668,7 @@ const DOMAINE_EMAIL_INTERNE =
     "inventaire-caserne.local";
 
 const VERSION_APPLICATION =
-    "2.9.40";
+    "2.9.41";
 
 const CLE_PROFIL_UTILISATEUR_CACHE =
     "profil_utilisateur_connecte_v1";
@@ -930,7 +930,7 @@ let minuteurVerificationMiseAJour =
  * Elle permet de détecter une nouvelle version même si seul app.js change.
  */
 const VERSION_APPLICATION_JS =
-    "2026-09-14-2218";
+    "2026-09-14-2234";
 
 async function verifierNouvelleVersionAppJs() {
 
@@ -1021,7 +1021,7 @@ function initialiserStyleMiseAJourApplication() {
             right: 14px;
             bottom:
                 calc(
-                    14px +
+                    96px +
                     env(safe-area-inset-bottom, 0px)
                 );
             z-index: 200000;
@@ -1764,49 +1764,14 @@ function mettreAJourEtatBoutonMiseAJourProfil(
 
 async function initialiserSystemeMiseAJourApplication() {
 
-    if (!("serviceWorker" in navigator)) {
-        return;
-    }
-
     initialiserStyleMiseAJourApplication();
 
-    navigator.serviceWorker.addEventListener(
-        "controllerchange",
-        function () {
-
-            if (rechargementApresMiseAJourEnCours) {
-
-                rechargementApresMiseAJourEnCours = false;
-
-                /*
-                 * replace() évite de laisser l'ancienne page dans
-                 * l'historique de navigation.
-                 */
-                const url =
-                    new URL(
-                        window.location.href
-                    );
-
-                url.searchParams.set(
-                    "_maj",
-                    Date.now()
-                );
-
-                window.location.replace(
-                    url.toString()
-                );
-            }
-
-        }
-    );
-
-    const inscription =
-        await obtenirInscriptionServiceWorkerApplication();
-
-    if (!inscription) {
-        return;
-    }
-
+    /*
+     * IMPORTANT : la vérification directe de app.js fonctionne même
+     * si le Service Worker n'est pas disponible ou rencontre un problème.
+     * C'est ce qui permet d'afficher le bouton de mise à jour après une
+     * simple modification de app.js sur GitHub.
+     */
     async function verifierMaintenant() {
 
         if (
@@ -1822,21 +1787,22 @@ async function initialiserSystemeMiseAJourApplication() {
         );
     }
 
-    /*
-     * Vérification peu après le lancement.
-     */
+    /* Premier contrôle rapidement après l'ouverture. */
     setTimeout(
         function () {
             void verifierMaintenant();
         },
-        800
+        1200
     );
 
-    /*
-     * IMPORTANT POUR LES PWA :
-     * une application laissée en arrière-plan est suspendue par iOS.
-     * Dès qu'elle revient à l'écran, on relance immédiatement le contrôle.
-     */
+    /* Puis nouveau contrôle quelques secondes plus tard, utile sur iPhone. */
+    setTimeout(
+        function () {
+            void verifierMaintenant();
+        },
+        8000
+    );
+
     document.addEventListener(
         "visibilitychange",
         function () {
@@ -1867,25 +1833,66 @@ async function initialiserSystemeMiseAJourApplication() {
         }
     );
 
-    /*
-     * Tant que l'application reste ouverte au premier plan,
-     * on vérifie aussi régulièrement sans avoir besoin de la quitter.
-     */
     if (minuteurVerificationMiseAJour) {
         clearInterval(
             minuteurVerificationMiseAJour
         );
     }
 
+    /* Vérification automatique toutes les 30 secondes au premier plan. */
     minuteurVerificationMiseAJour =
         setInterval(
             function () {
                 void verifierMaintenant();
             },
-            60000
+            30000
         );
 
+    /*
+     * Le Service Worker reste un deuxième moyen de détecter une mise à jour,
+     * mais son absence ne bloque plus la vérification directe de app.js.
+     */
+    if (!("serviceWorker" in navigator)) {
+        return;
+    }
+
+    navigator.serviceWorker.addEventListener(
+        "controllerchange",
+        function () {
+
+            if (rechargementApresMiseAJourEnCours) {
+
+                rechargementApresMiseAJourEnCours = false;
+
+                const url =
+                    new URL(
+                        window.location.href
+                    );
+
+                url.searchParams.set(
+                    "_maj",
+                    Date.now()
+                );
+
+                window.location.replace(
+                    url.toString()
+                );
+            }
+
+        }
+    );
+
+    const inscription =
+        await obtenirInscriptionServiceWorkerApplication();
+
+    if (inscription) {
+        surveillerInscriptionServiceWorker(
+            inscription
+        );
+    }
+
 }
+
 
 
 /* =========================================================
