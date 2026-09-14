@@ -8435,7 +8435,7 @@ async function exporterCommandeArchivePDF(archiveId) {
         }
 
         const jsPDF = await obtenirBibliothequesPDF();
-        const doc = new jsPDF({orientation:"landscape", unit:"mm", format:"a4"});
+        const doc = new jsPDF({orientation:"portrait", unit:"mm", format:"a4"});
         const c = couleurPDF();
         let y = ajouterEntetePDF(doc, "COMMANDE EFFECTUEE", `Synthese des consommations - ${formaterDate(archive.date)}`);
 
