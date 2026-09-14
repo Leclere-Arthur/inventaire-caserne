@@ -20536,6 +20536,358 @@ function initialiserInterfaceBureau() {
                 max-width: 1180px;
             }
 
+            /* =====================================================
+               DA PC SOBRE GLOBALE + CASERNE DEDIEE BUREAU
+               Mobile volontairement inchangé.
+               ===================================================== */
+
+            /* Portail général : même sobriété que la Pharmacie */
+            body:not(.mode-connexion) .portail-cis-page {
+                max-width: 1180px !important;
+            }
+
+            body:not(.mode-connexion) .portail-cis-espaces {
+                grid-template-columns: repeat(2, minmax(300px, 1fr)) !important;
+                gap: 14px !important;
+                max-width: 960px;
+            }
+
+            body:not(.mode-connexion) .portail-cis-carte {
+                min-height: 104px !important;
+                padding: 20px 22px !important;
+                border: 1px solid var(--pc-bordure) !important;
+                border-radius: 10px !important;
+                background: linear-gradient(180deg, #151f28, #121a22) !important;
+                color: var(--pc-texte) !important;
+                box-shadow: none !important;
+                position: relative;
+                overflow: hidden;
+            }
+
+            body:not(.mode-connexion) .portail-cis-carte::before {
+                content: "";
+                position: absolute;
+                inset: 0 auto 0 0;
+                width: 4px;
+                background: #5c6974;
+            }
+
+            body:not(.mode-connexion) .portail-cis-caserne::before { background: #8b4447; }
+            body:not(.mode-connexion) .portail-cis-pharmacie::before { background: #2b7a58; }
+
+            body:not(.mode-connexion) .portail-cis-carte:hover {
+                background: #1a2630 !important;
+                border-color: var(--pc-bordure-claire) !important;
+                transform: translateY(-1px);
+            }
+
+            body:not(.mode-connexion) .portail-cis-titre {
+                font-size: 15px !important;
+                letter-spacing: -.01em;
+            }
+
+            body:not(.mode-connexion) .portail-cis-fleche {
+                color: #7f8d98 !important;
+                font-size: 24px !important;
+            }
+
+            /* CASERNE : vrai thème PC, cohérent avec la Pharmacie */
+            html:has(body .caserne-shell),
+            body:not(.mode-connexion):has(.caserne-shell) {
+                background: #0d141b !important;
+            }
+
+            body:not(.mode-connexion):has(.caserne-shell) {
+                background:
+                    radial-gradient(circle at 90% 0%, rgba(56,76,92,.16), transparent 28%),
+                    linear-gradient(135deg, #0b1117 0%, #101820 100%) !important;
+                color: var(--pc-texte) !important;
+            }
+
+            body:not(.mode-connexion):has(.caserne-shell) #app,
+            body:not(.mode-connexion):has(.caserne-shell) #app > .caserne-shell {
+                background: transparent !important;
+            }
+
+            #navigation-bureau.theme-caserne {
+                background: linear-gradient(180deg, #111820 0%, #161f29 100%) !important;
+                border-right-color: rgba(255,255,255,.07) !important;
+            }
+
+            #navigation-bureau.theme-caserne .bureau-nav-separateur {
+                color: #65727d !important;
+            }
+
+            #navigation-bureau.theme-caserne .bureau-nav-bouton {
+                color: #c8d0d7 !important;
+            }
+
+            #navigation-bureau.theme-caserne .bureau-nav-bouton:hover {
+                background: #1b2631 !important;
+                border-color: #293642 !important;
+                color: #fff !important;
+            }
+
+            #navigation-bureau.theme-caserne .bureau-nav-bouton.actif {
+                background: #29333f !important;
+                border-color: #36434f !important;
+                color: #fff !important;
+                box-shadow: inset 3px 0 0 #9caab5 !important;
+            }
+
+            body:not(.mode-connexion) #app > .caserne-shell {
+                padding: 32px 40px 64px !important;
+                color: var(--pc-texte) !important;
+            }
+
+            body:not(.mode-connexion) #app > .caserne-shell .caserne-top {
+                position: static !important;
+                max-width: 1180px;
+                margin: 0 0 18px !important;
+                padding: 22px 24px !important;
+                border: 1px solid var(--pc-bordure) !important;
+                border-radius: 10px !important;
+                background: linear-gradient(180deg, #151f28, #121a22) !important;
+                color: var(--pc-texte) !important;
+                box-shadow: none !important;
+            }
+
+            body:not(.mode-connexion) #app > .caserne-shell .caserne-top::before {
+                content: "ESPACE CASERNE";
+                display: block;
+                margin-bottom: 7px;
+                color: #7f8d98;
+                font-size: 10px;
+                font-weight: 850;
+                letter-spacing: .14em;
+            }
+
+            body:not(.mode-connexion) #app > .caserne-shell .caserne-top > small {
+                display: none !important;
+            }
+
+            body:not(.mode-connexion) #app > .caserne-shell .caserne-top h1 {
+                margin: 0 0 6px !important;
+                color: #f5f7f9 !important;
+                font-size: 28px !important;
+                line-height: 1.15 !important;
+                letter-spacing: -.025em;
+            }
+
+            body:not(.mode-connexion) #app > .caserne-shell .caserne-top p {
+                margin: 0 !important;
+                color: var(--pc-secondaire) !important;
+                font-size: 12px !important;
+            }
+
+            body:not(.mode-connexion) .caserne-raccourcis-publics {
+                grid-template-columns: repeat(3, minmax(200px, 1fr)) !important;
+                gap: 10px !important;
+                max-width: 1180px;
+                margin-bottom: 18px !important;
+            }
+
+            body:not(.mode-connexion) .caserne-raccourci,
+            body:not(.mode-connexion) .caserne-raccourci-secondaire,
+            body:not(.mode-connexion) .caserne-menu-liste-simple .caserne-menu-item,
+            body:not(.mode-connexion) .caserne-menu-liste-simple button {
+                min-height: 64px !important;
+                border: 1px solid var(--pc-bordure) !important;
+                border-radius: 9px !important;
+                background: linear-gradient(180deg, #151f28, #121a22) !important;
+                color: var(--pc-texte) !important;
+                box-shadow: none !important;
+            }
+
+            body:not(.mode-connexion) .caserne-raccourci:hover,
+            body:not(.mode-connexion) .caserne-menu-liste-simple button:hover {
+                background: #1a2630 !important;
+                border-color: var(--pc-bordure-claire) !important;
+            }
+
+            body:not(.mode-connexion) .caserne-raccourci span {
+                font-size: 18px !important;
+            }
+
+            body:not(.mode-connexion) .caserne-raccourci strong,
+            body:not(.mode-connexion) .caserne-menu-texte strong {
+                color: #f4f7f9 !important;
+                font-size: 13px !important;
+            }
+
+            body:not(.mode-connexion) .caserne-menu-texte small,
+            body:not(.mode-connexion) .caserne-menu-fleche {
+                color: var(--pc-secondaire) !important;
+            }
+
+            body:not(.mode-connexion) .caserne-fil,
+            body:not(.mode-connexion) .caserne-fil-actuel,
+            body:not(.mode-connexion) .caserne-passes-au-dessus,
+            body:not(.mode-connexion) .caserne-entretiens-fil {
+                width: 100% !important;
+                max-width: 1180px !important;
+            }
+
+            body:not(.mode-connexion) .caserne-shell:not(.caserne-shell-actualites) .caserne-fil {
+                grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+                align-items: start;
+            }
+
+            body:not(.mode-connexion) .caserne-shell-actualites .caserne-fil,
+            body:not(.mode-connexion) .caserne-shell-actualites .caserne-fil-actuel,
+            body:not(.mode-connexion) .caserne-entretiens-fil {
+                grid-template-columns: minmax(0, 1fr) !important;
+            }
+
+            body:not(.mode-connexion) .caserne-actu-card,
+            body:not(.mode-connexion) .caserne-entretien-card,
+            body:not(.mode-connexion) .caserne-vide {
+                border: 1px solid var(--pc-bordure) !important;
+                border-radius: 10px !important;
+                background: linear-gradient(180deg, #151f28, #121a22) !important;
+                color: var(--pc-texte) !important;
+                box-shadow: none !important;
+            }
+
+            body:not(.mode-connexion) .caserne-actu-card {
+                padding: 17px 18px !important;
+            }
+
+            body:not(.mode-connexion) .caserne-actu-card:hover,
+            body:not(.mode-connexion) .caserne-entretien-card:hover {
+                border-color: #34424f !important;
+            }
+
+            body:not(.mode-connexion) .caserne-actu-card h2,
+            body:not(.mode-connexion) .caserne-entretien-card h2,
+            body:not(.mode-connexion) .caserne-question-reponse,
+            body:not(.mode-connexion) .caserne-vide strong {
+                color: #f5f7f9 !important;
+            }
+
+            body:not(.mode-connexion) .caserne-actu-card p,
+            body:not(.mode-connexion) .caserne-entretien-card > p,
+            body:not(.mode-connexion) .caserne-vide p,
+            body:not(.mode-connexion) .caserne-etat-reponse,
+            body:not(.mode-connexion) .caserne-actu-meta time {
+                color: var(--pc-secondaire) !important;
+            }
+
+            body:not(.mode-connexion) .caserne-actu-meta {
+                padding-bottom: 10px;
+                border-bottom: 1px solid #26333f;
+            }
+
+            body:not(.mode-connexion) .caserne-actu-meta span,
+            body:not(.mode-connexion) .caserne-liste-presents > strong,
+            body:not(.mode-connexion) .caserne-entretien-card-entete small {
+                color: #c8d0d7 !important;
+            }
+
+            body:not(.mode-connexion) .caserne-zone-reponse,
+            body:not(.mode-connexion) .caserne-zone-reponse-simple {
+                border-color: #293642 !important;
+                background: #101820 !important;
+            }
+
+            body:not(.mode-connexion) .caserne-liste-presents span,
+            body:not(.mode-connexion) .caserne-entretien-card-entete > span {
+                background: #202c36 !important;
+                color: #dce3e8 !important;
+            }
+
+            body:not(.mode-connexion) .caserne-presents-details summary {
+                color: #c5d0d7 !important;
+            }
+
+            body:not(.mode-connexion) .caserne-separateur-passe {
+                color: #778590 !important;
+            }
+
+            body:not(.mode-connexion) .caserne-separateur-passe::before,
+            body:not(.mode-connexion) .caserne-separateur-passe::after {
+                background: #26333f !important;
+            }
+
+            body:not(.mode-connexion) .caserne-anciens-evenements {
+                border-top-color: #26333f !important;
+            }
+
+            body:not(.mode-connexion) .caserne-anciens-evenements > summary {
+                border: 1px solid var(--pc-bordure) !important;
+                border-radius: 8px !important;
+                background: #151f28 !important;
+                color: #c8d0d7 !important;
+            }
+
+            body:not(.mode-connexion) .caserne-admin-acces {
+                max-width: 1180px;
+                border: 1px solid #3a4854 !important;
+                border-left: 4px solid #71808c !important;
+                border-radius: 9px !important;
+                background: #151f28 !important;
+                color: var(--pc-texte) !important;
+            }
+
+            body:not(.mode-connexion) .caserne-admin-acces strong { color: #f5f7f9 !important; }
+            body:not(.mode-connexion) .caserne-admin-acces span { color: var(--pc-secondaire) !important; }
+
+            body:not(.mode-connexion) .caserne-admin-bloc {
+                border: 1px solid var(--pc-bordure) !important;
+                border-radius: 10px !important;
+                background: linear-gradient(180deg, #151f28, #121a22) !important;
+                color: var(--pc-texte) !important;
+                box-shadow: none !important;
+            }
+
+            body:not(.mode-connexion) .caserne-formulaire-sport input[type=text],
+            body:not(.mode-connexion) .caserne-formulaire-sport input[type=datetime-local],
+            body:not(.mode-connexion) .caserne-formulaire-sport input[type=date],
+            body:not(.mode-connexion) .caserne-formulaire-sport input[type=file],
+            body:not(.mode-connexion) .caserne-formulaire-sport textarea,
+            body:not(.mode-connexion) .caserne-formulaire-entretien input[type=number],
+            body:not(.mode-connexion) .caserne-entretien-date-entete input,
+            body:not(.mode-connexion) .caserne-entretien-heure-ligne input {
+                border: 1px solid #34414c !important;
+                border-radius: 7px !important;
+                background: #0f171e !important;
+                color: #f2f5f7 !important;
+            }
+
+            body:not(.mode-connexion) .caserne-switch-ligne,
+            body:not(.mode-connexion) .caserne-entretien-date-groupe {
+                border: 1px solid #293642 !important;
+                background: #101820 !important;
+            }
+
+            body:not(.mode-connexion) .caserne-bouton-admin-principal,
+            body:not(.mode-connexion) .caserne-entretien-ajouter-date,
+            body:not(.mode-connexion) .caserne-entretien-ajouter-heure,
+            body:not(.mode-connexion) .caserne-entretien-retirer,
+            body:not(.mode-connexion) .caserne-retour-actualites {
+                border: 1px solid #3a4854 !important;
+                border-radius: 7px !important;
+                background: #202c36 !important;
+                color: #fff !important;
+                box-shadow: none !important;
+            }
+
+            body:not(.mode-connexion) .caserne-actions-admin button {
+                border: 1px solid #3a4854 !important;
+                background: #202c36 !important;
+                color: #fff !important;
+            }
+
+            body:not(.mode-connexion) .caserne-entretien-mon-rdv {
+                border: 1px solid #31404c !important;
+                background: #17232c !important;
+                color: #fff !important;
+            }
+
+            body:not(.mode-connexion) .caserne-photo-overlay {
+                background: rgba(5,9,12,.96) !important;
+            }
+
             @media (max-width: 1220px) {
                 body:not(.mode-connexion) .menu-principal,
                 body:not(.mode-connexion) .menu-administration {
@@ -20544,6 +20896,10 @@ function initialiserInterfaceBureau() {
 
                 body:not(.mode-connexion) .permissions-role {
                     grid-template-columns: repeat(2, minmax(190px, 1fr));
+                }
+
+                body:not(.mode-connexion) .caserne-raccourcis-publics {
+                    grid-template-columns: repeat(2, minmax(200px, 1fr)) !important;
                 }
             }
         }
