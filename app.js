@@ -924,6 +924,76 @@ let derniereVerificationMiseAJour =
 let minuteurVerificationMiseAJour =
     null;
 
+/*
+ * VERSION DU FICHIER APP.JS
+ * Cette valeur change à chaque nouvelle version que je te prépare.
+ * Elle permet de détecter une nouvelle version même si seul app.js change.
+ */
+const VERSION_APPLICATION_JS =
+    "2026-09-14-2218";
+
+async function verifierNouvelleVersionAppJs() {
+
+    try {
+
+        const url =
+            new URL(
+                "./app.js",
+                window.location.href
+            );
+
+        url.searchParams.set(
+            "_verification_version",
+            Date.now()
+        );
+
+        const reponse =
+            await fetch(
+                url.toString(),
+                {
+                    cache: "no-store",
+                    headers: {
+                        "Cache-Control": "no-cache"
+                    }
+                }
+            );
+
+        if (!reponse.ok) {
+            return false;
+        }
+
+        const texte =
+            await reponse.text();
+
+        const correspondance =
+            texte.match(
+                /const\s+VERSION_APPLICATION_JS\s*=\s*[\r\n\s]*["']([^"']+)["']/
+            );
+
+        if (!correspondance) {
+            return false;
+        }
+
+        const versionEnLigne =
+            correspondance[1];
+
+        return (
+            versionEnLigne &&
+            versionEnLigne !==
+                VERSION_APPLICATION_JS
+        );
+
+    } catch (erreur) {
+
+        console.warn(
+            "Vérification directe app.js impossible :",
+            erreur
+        );
+
+        return false;
+    }
+}
+
 
 function initialiserStyleMiseAJourApplication() {
 
@@ -1240,6 +1310,19 @@ async function verifierMiseAJourApplication(
 
     try {
 
+        /*
+         * Contrôle direct de app.js sur le réseau.
+         * Contrairement au Service Worker, ceci détecte aussi une mise à jour
+         * lorsque seul app.js a changé sur GitHub.
+         */
+        const nouvelleVersionAppJs =
+            await verifierNouvelleVersionAppJs();
+
+        if (nouvelleVersionAppJs) {
+            signalerMiseAJourApplicationDisponible();
+            return true;
+        }
+
         const inscription =
             await obtenirInscriptionServiceWorkerApplication();
 
@@ -1421,6 +1504,50 @@ async function appliquerMiseAJourApplication() {
 
 
     try {
+
+        /*
+         * Si seul app.js a changé, il n'y a pas forcément de nouveau
+         * Service Worker en attente. On vide alors les caches de l'application
+         * et on recharge immédiatement la version publiée sur GitHub.
+         */
+        const nouvelleVersionAppJs =
+            await verifierNouvelleVersionAppJs();
+
+        if (nouvelleVersionAppJs) {
+
+            if ("caches" in window) {
+                const nomsCaches =
+                    await caches.keys();
+
+                await Promise.all(
+                    nomsCaches
+                        .filter(function (nom) {
+                            return nom.startsWith(
+                                "inventaire-caserne-"
+                            );
+                        })
+                        .map(function (nom) {
+                            return caches.delete(nom);
+                        })
+                );
+            }
+
+            const url =
+                new URL(
+                    window.location.href
+                );
+
+            url.searchParams.set(
+                "_maj",
+                Date.now()
+            );
+
+            window.location.replace(
+                url.toString()
+            );
+
+            return;
+        }
 
         const inscription =
             await obtenirInscriptionServiceWorkerApplication();
