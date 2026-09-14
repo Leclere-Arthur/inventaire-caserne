@@ -7786,8 +7786,8 @@ function navigationPrincipale(active, theme = "caserne") {
     const actionMenu = theme === "caserne"
         ? "ouvrirMenuCaserne()"
         : theme === "pharmacie"
-            ? "afficherAccueil()"
-            : "afficherPortailPrincipal()";
+            ? "ouvrirMenuPharmacie()"
+            : "ouvrirMenuPrincipal()";
 
     return `
         <nav class="caserne-nav-bas ${classeTheme}">
@@ -7801,6 +7801,142 @@ function navigationPrincipale(active, theme = "caserne") {
 
 function navigationCaserne(active) {
     return navigationPrincipale(active, "caserne");
+}
+
+function obtenirOngletsPharmacieAccessibles() {
+    const onglets = [];
+
+    if (utilisateurAPermission("acces_inventaire")) {
+        onglets.push({
+            libelle: "Inventaire",
+            aide: "Consulter le matériel disponible",
+            icone: "▦",
+            action: "afficherInventaire()"
+        });
+    }
+
+    if (utilisateurAPermission("acces_retour_intervention")) {
+        onglets.push({
+            libelle: "Retour d'intervention",
+            aide: "Déclarer le matériel utilisé",
+            icone: "↩",
+            action: "afficherRetourIntervention()"
+        });
+    }
+
+    if (utilisateurAPermission("acces_historique")) {
+        onglets.push({
+            libelle: "Historique",
+            aide: "Voir les mouvements et consommations",
+            icone: "≡",
+            action: "afficherHistorique()"
+        });
+    }
+
+    if (utilisateurAPermission("acces_administration")) {
+        onglets.push({
+            libelle: "Administration pharmacie",
+            aide: "Gérer le matériel et les réglages autorisés",
+            icone: "⚙",
+            action: "ouvrirAdministration()"
+        });
+    }
+
+    if (utilisateurEstSPVAdmin()) {
+        onglets.push({
+            libelle: "Administrateur appli",
+            aide: "Utilisateurs, rôles et notifications",
+            icone: "◇",
+            action: "afficherMenuAdministrateurAppli()"
+        });
+    }
+
+    return onglets;
+}
+
+function carteMenuNavigationSimple(onglet) {
+    return `<button type="button" onclick="${onglet.action}">
+        <span class="caserne-menu-icone" aria-hidden="true">${onglet.icone}</span>
+        <span class="caserne-menu-texte"><strong>${echapperHTML(onglet.libelle)}</strong><small>${echapperHTML(onglet.aide || "")}</small></span>
+        <span class="caserne-menu-fleche" aria-hidden="true">›</span>
+    </button>`;
+}
+
+function ouvrirMenuPharmacie() {
+    initialiserStyleEspaceCaserne();
+    const onglets = obtenirOngletsPharmacieAccessibles();
+
+    document.getElementById("app").innerHTML = `
+        <main class="page caserne-shell caserne-menu-page caserne-public-simple navigation-fixe-page menu-navigation-pharmacie">
+            <header class="caserne-top caserne-top-simple menu-top-pharmacie">
+                <small>ESPACE PHARMACIE</small>
+                <h1>Que voulez-vous faire ?</h1>
+                <p>Seuls les onglets auxquels vous avez accès sont affichés.</p>
+            </header>
+            <button type="button" class="caserne-retour-actualites" onclick="afficherAccueil()">← Retour à la pharmacie</button>
+            <section class="caserne-menu-liste-simple">
+                ${onglets.map(carteMenuNavigationSimple).join("") || '<div class="caserne-vide"><strong>Aucun onglet disponible</strong><p>Votre rôle ne donne accès à aucun outil pharmacie.</p></div>'}
+            </section>
+        </main>
+        ${navigationPrincipale("pharmacie", "pharmacie")}`;
+
+    actualiserInterfaceBureau();
+    window.scrollTo({top: 0, behavior: "auto"});
+}
+
+function ouvrirMenuPrincipal() {
+    initialiserStyleEspaceCaserne();
+
+    const caserne = [];
+    if (utilisateurAPermission("acces_espace_caserne") || utilisateurEstSPVAdmin()) {
+        caserne.push({
+            libelle: "Fil d'actualité Caserne",
+            aide: "Voir toutes les informations récentes",
+            icone: "▤",
+            action: "afficherEspaceCaserne()"
+        });
+
+        for (const rubrique of obtenirRubriquesCaserne().filter(utilisateurPeutVoirRubriqueCaserne)) {
+            const presentation = obtenirPresentationRubriqueCaserne(rubrique[0]);
+            caserne.push({
+                libelle: rubrique[1],
+                aide: presentation.aide,
+                icone: "•",
+                action: `afficherRubriqueCaserne('${rubrique[0]}')`
+            });
+        }
+    }
+
+    const pharmacie = obtenirOngletsPharmacieAccessibles();
+
+    document.getElementById("app").innerHTML = `
+        <main class="page caserne-shell caserne-menu-page caserne-public-simple navigation-fixe-page menu-navigation-principal">
+            <header class="caserne-top caserne-top-simple menu-top-principal">
+                <small>CIS LE CHESNE</small>
+                <h1>Tous vos accès</h1>
+                <p>Appuyez sur l'onglet que vous souhaitez ouvrir.</p>
+            </header>
+            <button type="button" class="caserne-retour-actualites" onclick="afficherPortailPrincipal()">← Retour à l'accueil</button>
+
+            ${caserne.length ? `
+                <div class="menu-navigation-section-titre">Caserne</div>
+                <section class="caserne-menu-liste-simple">${caserne.map(carteMenuNavigationSimple).join("")}</section>
+            ` : ""}
+
+            ${pharmacie.length ? `
+                <div class="menu-navigation-section-titre">Pharmacie</div>
+                <section class="caserne-menu-liste-simple">${pharmacie.map(carteMenuNavigationSimple).join("")}</section>
+            ` : ""}
+
+            <div class="menu-navigation-section-titre">Compte</div>
+            <section class="caserne-menu-liste-simple">
+                ${carteMenuNavigationSimple({libelle:"Mon profil", aide:"Compte et préférences de notifications", icone:"○", action:"ouvrirProfilDepuisPageCourante()"})}
+            </section>
+        </main>
+        ${navigationPrincipale("accueil", "accueil")}`;
+
+    actualiserInterfaceBureau();
+    window.scrollTo({top: 0, behavior: "auto"});
 }
 
 function obtenirPresentationRubriqueCaserne(type) {
@@ -8807,7 +8943,7 @@ function initialiserStyleEspaceCaserne() {
         .caserne-retour-actualites{width:100%;min-height:52px;margin:0 0 16px;border:1px solid #d7c5c0;background:#fff;color:#542326;border-radius:14px;padding:12px 16px;text-align:left;font-size:16px;font-weight:900;box-shadow:0 3px 10px rgba(70,20,20,.05)}
         .caserne-raccourcis-publics{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:0 0 22px}.caserne-raccourci{min-height:70px;border:0;border-radius:17px;background:#fff;color:#542326;padding:13px 14px;display:flex;align-items:center;gap:11px;text-align:left;box-shadow:0 5px 16px rgba(70,20,20,.08)}.caserne-raccourci span{font-size:25px}.caserne-raccourci strong{font-size:15px;line-height:1.2}.caserne-raccourci-secondaire{background:#efe0dc}
         .caserne-titre-section{display:flex;align-items:center;justify-content:space-between;margin:0 2px 10px}.caserne-titre-section strong{font-size:21px}.caserne-titre-section span{font-size:12px;color:#79635e;font-weight:800}
-        .caserne-menu-liste-simple{display:grid;gap:10px}.caserne-menu-liste-simple>button{width:100%;min-height:82px;border:1px solid #e0cfca;background:#fff;border-radius:17px;padding:13px 14px;display:grid;grid-template-columns:46px 1fr 24px;gap:10px;align-items:center;text-align:left;color:#2b1716;box-shadow:0 4px 13px rgba(80,40,30,.05)}.caserne-menu-icone{font-size:28px;text-align:center}.caserne-menu-texte{display:grid;gap:4px}.caserne-menu-texte strong{font-size:18px}.caserne-menu-texte small{font-size:13px;line-height:1.35;color:#71605b}.caserne-menu-fleche{font-size:32px;color:#8a3436;text-align:right}
+        .caserne-menu-liste-simple{display:grid;gap:10px}.caserne-menu-liste-simple>button{width:100%;min-height:82px;border:1px solid #e0cfca;background:#fff;border-radius:17px;padding:13px 14px;display:grid;grid-template-columns:46px 1fr 24px;gap:10px;align-items:center;text-align:left;color:#2b1716;box-shadow:0 4px 13px rgba(80,40,30,.05)}.caserne-menu-icone{font-size:28px;text-align:center}.caserne-menu-texte{display:grid;gap:4px}.caserne-menu-texte strong{font-size:18px}.caserne-menu-texte small{font-size:13px;line-height:1.35;color:#71605b}.caserne-menu-fleche{font-size:32px;color:#8a3436;text-align:right}.menu-navigation-section-titre{margin:22px 2px 9px;font-size:13px;font-weight:900;text-transform:uppercase;letter-spacing:1.1px;color:#6d5651}.menu-navigation-pharmacie .menu-top-pharmacie{background:linear-gradient(145deg,#1f6a45,#2e8a5c)}.menu-navigation-principal .menu-top-principal{background:linear-gradient(145deg,#242424,#3a3a3a)}.menu-navigation-pharmacie .caserne-menu-fleche{color:#237448}.menu-navigation-pharmacie .caserne-menu-liste-simple>button{border-color:#cee1d6}
         .caserne-public-simple .caserne-actu-card{padding:17px;border-radius:17px}.caserne-public-simple .caserne-actu-meta{display:grid;grid-template-columns:1fr;margin-bottom:10px;gap:4px}.caserne-public-simple .caserne-actu-meta span{font-size:12px}.caserne-public-simple .caserne-actu-meta time{text-align:left;color:#4e3b37;font-size:16px;font-weight:900}.caserne-public-simple .caserne-actu-card h2{font-size:22px;line-height:1.2;margin-bottom:10px}.caserne-public-simple .caserne-actu-card p{font-size:16px;line-height:1.55}
         /* Repères visuels très marqués dans le fil d'actualité : pas d'emoji, une couleur fixe par rubrique */
         .caserne-public-simple .caserne-actu-card[class*="caserne-type-"]{position:relative;overflow:hidden;border-left:9px solid var(--caserne-type-couleur,#7d2425);box-shadow:0 6px 18px rgba(80,40,30,.06);padding-top:18px}
