@@ -8070,6 +8070,459 @@ function boutonCalendrierCaserne(titre, date, description = "", dureeMinutes = 6
     return `<button type="button" class="caserne-bouton-calendrier" onclick="${echapperHTML(code)}">${echapperHTML(libelle)}</button>`;
 }
 
+
+/* =========================================================
+   EXPORTS PDF ADMINISTRATIFS
+   Evenements Caserne / Entretiens / Commandes Pharmacie
+   ========================================================= */
+
+let promesseBibliothequesPDF = null;
+
+function chargerScriptExternePDF(src, id) {
+    return new Promise(function(resolve, reject) {
+        if (id && document.getElementById(id)) {
+            resolve();
+            return;
+        }
+        const script = document.createElement("script");
+        if (id) script.id = id;
+        script.src = src;
+        script.async = true;
+        script.onload = function() { resolve(); };
+        script.onerror = function() { reject(new Error("Impossible de charger le module PDF.")); };
+        document.head.appendChild(script);
+    });
+}
+
+async function obtenirBibliothequesPDF() {
+    if (window.jspdf?.jsPDF && typeof window.jspdf.jsPDF === "function") {
+        const test = new window.jspdf.jsPDF();
+        if (typeof test.autoTable === "function") return window.jspdf.jsPDF;
+    }
+
+    if (!navigator.onLine) {
+        throw new Error("Une connexion Internet est nécessaire lors du premier export PDF.");
+    }
+
+    if (!promesseBibliothequesPDF) {
+        promesseBibliothequesPDF = (async function() {
+            if (!window.jspdf?.jsPDF) {
+                await chargerScriptExternePDF(
+                    "https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js",
+                    "cis-jspdf"
+                );
+            }
+            if (!window.jspdf?.jsPDF) throw new Error("Le moteur PDF n'a pas pu être chargé.");
+
+            const test = new window.jspdf.jsPDF();
+            if (typeof test.autoTable !== "function") {
+                await chargerScriptExternePDF(
+                    "https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.4/dist/jspdf.plugin.autotable.min.js",
+                    "cis-jspdf-autotable"
+                );
+            }
+            return window.jspdf.jsPDF;
+        })().catch(function(erreur) {
+            promesseBibliothequesPDF = null;
+            throw erreur;
+        });
+    }
+
+    return promesseBibliothequesPDF;
+}
+
+function texteCompatiblePDF(valeur) {
+    return String(valeur ?? "")
+        .replaceAll("œ", "oe")
+        .replaceAll("Œ", "OE")
+        .replace(/[’‘]/g, "'")
+        .replace(/[“”]/g, '"')
+        .replace(/[–—]/g, "-")
+        .replace(/…/g, "...")
+        .replace(/\u00a0/g, " ");
+}
+
+function nomFichierPDF(valeur) {
+    const base = texteCompatiblePDF(valeur || "document")
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^a-zA-Z0-9_-]+/g, "-")
+        .replace(/-+/g, "-")
+        .replace(/^-|-$/g, "")
+        .toLowerCase();
+    return (base || "document") + ".pdf";
+}
+
+function couleurPDF() {
+    return {
+        principal: [125, 36, 37],
+        sombre: [73, 22, 23],
+        clair: [247, 239, 237],
+        texte: [43, 23, 22],
+        gris: [108, 99, 96],
+        ligne: [225, 211, 207],
+        blanc: [255, 255, 255]
+    };
+}
+
+function ajouterEntetePDF(doc, titre, sousTitre = "") {
+    const c = couleurPDF();
+    const largeur = doc.internal.pageSize.getWidth();
+    doc.setFillColor(...c.principal);
+    doc.rect(0, 0, largeur, 31, "F");
+    doc.setTextColor(...c.blanc);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.text("CIS LE CHESNE", 14, 10);
+    doc.setFontSize(18);
+    doc.text(texteCompatiblePDF(titre), 14, 20);
+    if (sousTitre) {
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(8.5);
+        doc.text(texteCompatiblePDF(sousTitre), 14, 26);
+    }
+    return 39;
+}
+
+function ajouterPiedDePagePDF(doc) {
+    const pages = doc.getNumberOfPages();
+    const c = couleurPDF();
+    const dateEdition = new Date().toLocaleString("fr-FR", {
+        day: "2-digit", month: "2-digit", year: "numeric",
+        hour: "2-digit", minute: "2-digit"
+    });
+    for (let page = 1; page <= pages; page++) {
+        doc.setPage(page);
+        const largeur = doc.internal.pageSize.getWidth();
+        const hauteur = doc.internal.pageSize.getHeight();
+        doc.setDrawColor(...c.ligne);
+        doc.line(14, hauteur - 12, largeur - 14, hauteur - 12);
+        doc.setTextColor(...c.gris);
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(7.5);
+        doc.text("Document administratif - CIS Le Chesne", 14, hauteur - 7);
+        doc.text(texteCompatiblePDF(`Edite le ${dateEdition}`), largeur / 2, hauteur - 7, {align:"center"});
+        doc.text(`${page} / ${pages}`, largeur - 14, hauteur - 7, {align:"right"});
+    }
+}
+
+function afficherErreurExportPDF(erreur) {
+    console.error("Export PDF :", erreur);
+    alert("Impossible de creer le PDF : " + (erreur?.message || "erreur inconnue"));
+}
+
+async function exporterPublicationCasernePDF(publicationId) {
+    const publication = window.__publicationsCaserneParId?.[publicationId];
+    if (!publication) {
+        alert("Publication introuvable.");
+        return;
+    }
+
+    const rubrique = obtenirRubriquesCaserne().find(r => r[0] === publication.type_publication);
+    const estAdmin = utilisateurEstSPVAdmin() || (rubrique && utilisateurAPermission(rubrique[3]));
+    if (!estAdmin) {
+        alert("Export PDF reserve aux administrateurs.");
+        return;
+    }
+
+    try {
+        const jsPDF = await obtenirBibliothequesPDF();
+        const doc = new jsPDF({orientation:"portrait", unit:"mm", format:"a4"});
+        const c = couleurPDF();
+        const type = obtenirLibelleTypeCaserne(publication.type_publication);
+        const titre = publication.titre || obtenirConfigurationPublicationCaserne(publication.type_publication).titre;
+        let y = ajouterEntetePDF(doc, "FICHE EVENEMENT", `${type} - document de suivi`);
+
+        doc.setTextColor(...c.texte);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(16);
+        const titreLignes = doc.splitTextToSize(texteCompatiblePDF(titre), 180);
+        doc.text(titreLignes, 14, y);
+        y += titreLignes.length * 6 + 2;
+
+        const infos = [];
+        if (publication.date_evenement) infos.push(["Date de l'evenement", formaterDateHeureCaserne(publication.date_evenement)]);
+        infos.push(["Type", type]);
+        if (publication.sous_type) infos.push(["Sous-type", publication.sous_type]);
+        if (publication.description) infos.push(["Informations", publication.description]);
+
+        doc.autoTable({
+            startY: y,
+            body: infos.map(l => [texteCompatiblePDF(l[0]), texteCompatiblePDF(l[1])]),
+            theme: "plain",
+            margin: {left:14, right:14},
+            styles: {font:"helvetica", fontSize:9, cellPadding:2.4, textColor:c.texte, valign:"top"},
+            columnStyles: {0:{fontStyle:"bold", cellWidth:42, textColor:c.principal}, 1:{cellWidth:"auto"}},
+            didDrawCell: function(data) {
+                if (data.column.index === 0) {
+                    doc.setDrawColor(...c.ligne);
+                    doc.line(data.cell.x, data.cell.y + data.cell.height, data.cell.x + data.cell.width, data.cell.y + data.cell.height);
+                }
+            }
+        });
+        y = doc.lastAutoTable.finalY + 7;
+
+        const reponses = Array.isArray(publication.reponses) ? publication.reponses : [];
+        const listes = [
+            {
+                titre: "EVENEMENT",
+                date: publication.date_evenement,
+                contexte: "evenement",
+                actif: publication.demande_reponse || reponses.some(r => r.contexte === "evenement")
+            },
+            {
+                titre: "PREPARATION",
+                date: publication.date_preparation,
+                contexte: "preparation",
+                actif: !!publication.date_preparation
+            }
+        ].filter(x => x.actif);
+
+        for (const partie of listes) {
+            const presents = reponses
+                .filter(r => r.contexte === partie.contexte && r.reponse === "present")
+                .map(r => [r.user_prenom, r.user_nom].filter(Boolean).join(" ") || "Utilisateur")
+                .sort((a,b) => a.localeCompare(b, "fr", {sensitivity:"base"}));
+
+            if (y > 245) {
+                doc.addPage();
+                y = ajouterEntetePDF(doc, "FICHE EVENEMENT", texteCompatiblePDF(titre));
+            }
+
+            doc.setFillColor(...(partie.contexte === "preparation" ? c.sombre : c.principal));
+            doc.roundedRect(14, y, 182, 13, 2, 2, "F");
+            doc.setTextColor(...c.blanc);
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(11);
+            doc.text(texteCompatiblePDF(partie.titre), 19, y + 5.3);
+            doc.setFontSize(8.5);
+            const datePartie = partie.date ? formaterDateHeureCaserne(partie.date) : "Date non renseignee";
+            doc.text(texteCompatiblePDF(datePartie), 19, y + 10);
+            doc.text(`${presents.length} present${presents.length > 1 ? "s" : ""}`, 191, y + 7.5, {align:"right"});
+            y += 16;
+
+            const lignes = presents.length ? presents.map((nom, index) => [String(index + 1), texteCompatiblePDF(nom)]) : [["", "Aucune personne presente enregistree"]];
+            doc.autoTable({
+                startY: y,
+                head: [["#", "PERSONNES PRESENTES"]],
+                body: lignes,
+                theme: "grid",
+                margin: {left:14, right:14, bottom:20},
+                headStyles: {fillColor:c.clair, textColor:c.principal, fontStyle:"bold", lineColor:c.ligne, lineWidth:.2},
+                styles: {font:"helvetica", fontSize:9, textColor:c.texte, cellPadding:2.6, lineColor:c.ligne, lineWidth:.15},
+                columnStyles: {0:{cellWidth:12, halign:"center", textColor:c.gris}, 1:{cellWidth:"auto"}}
+            });
+            y = doc.lastAutoTable.finalY + 8;
+        }
+
+        ajouterPiedDePagePDF(doc);
+        doc.save(nomFichierPDF(`${type}-${titre}`));
+    } catch (erreur) {
+        afficherErreurExportPDF(erreur);
+    }
+}
+
+async function exporterEntretiensPDF() {
+    if (!utilisateurEstSPVAdmin() && !utilisateurAPermission("acces_entretien_individuel_admin")) {
+        alert("Export PDF reserve aux administrateurs.");
+        return;
+    }
+
+    try {
+        const reponses = await chargerReponsesEntretiensAdminCaserne();
+        const triees = [...reponses].filter(r => r.date_heure && !Number.isNaN(new Date(r.date_heure).getTime())).sort((a,b) => new Date(a.date_heure) - new Date(b.date_heure));
+        if (!triees.length) {
+            alert("Aucun rendez-vous a exporter.");
+            return;
+        }
+
+        const jsPDF = await obtenirBibliothequesPDF();
+        const doc = new jsPDF({orientation:"portrait", unit:"mm", format:"a4"});
+        const c = couleurPDF();
+        let y = ajouterEntetePDF(doc, "PLANNING DES ENTRETIENS", "Liste chronologique des rendez-vous reserves");
+
+        const groupes = new Map();
+        triees.forEach(function(r) {
+            const d = new Date(r.date_heure);
+            const cle = d.toLocaleDateString("fr-FR", {year:"numeric", month:"2-digit", day:"2-digit"});
+            if (!groupes.has(cle)) groupes.set(cle, []);
+            groupes.get(cle).push(r);
+        });
+
+        for (const [jour, lignes] of groupes.entries()) {
+            if (y > 248) {
+                doc.addPage();
+                y = ajouterEntetePDF(doc, "PLANNING DES ENTRETIENS", "Suite du planning");
+            }
+            const premier = new Date(lignes[0].date_heure);
+            const libelleJour = premier.toLocaleDateString("fr-FR", {weekday:"long", day:"2-digit", month:"long", year:"numeric"});
+            doc.setFillColor(...c.principal);
+            doc.roundedRect(14, y, 182, 10, 2, 2, "F");
+            doc.setTextColor(...c.blanc);
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(10.5);
+            doc.text(texteCompatiblePDF(libelleJour.toUpperCase()), 18, y + 6.5);
+            y += 13;
+
+            const body = lignes.map(function(r) {
+                const d = new Date(r.date_heure);
+                const heure = d.toLocaleTimeString("fr-FR", {hour:"2-digit", minute:"2-digit"});
+                const nom = [r.user_prenom, r.user_nom].filter(Boolean).join(" ") || "Utilisateur";
+                return [texteCompatiblePDF(heure), texteCompatiblePDF(nom), texteCompatiblePDF(r.titre || "Entretien individuel")];
+            });
+
+            doc.autoTable({
+                startY:y,
+                head:[["HEURE", "NOM / PRENOM", "ENTRETIEN"]],
+                body,
+                theme:"grid",
+                margin:{left:14, right:14, bottom:20},
+                headStyles:{fillColor:c.clair, textColor:c.principal, fontStyle:"bold", lineColor:c.ligne, lineWidth:.2},
+                styles:{font:"helvetica", fontSize:9, textColor:c.texte, cellPadding:2.7, lineColor:c.ligne, lineWidth:.15},
+                columnStyles:{0:{cellWidth:24, halign:"center", fontStyle:"bold"}, 1:{cellWidth:72}, 2:{cellWidth:"auto"}}
+            });
+            y = doc.lastAutoTable.finalY + 8;
+        }
+
+        ajouterPiedDePagePDF(doc);
+        doc.save(nomFichierPDF("planning-entretiens"));
+    } catch (erreur) {
+        afficherErreurExportPDF(erreur);
+    }
+}
+
+function utilisateurPeutExporterPharmaciePDF() {
+    return utilisateurEstSPVAdmin() || utilisateurAPermission("acces_administration");
+}
+
+async function exporterCommandeArchivePDF(archiveId) {
+    if (!utilisateurPeutExporterPharmaciePDF()) {
+        alert("Export PDF reserve aux administrateurs.");
+        return;
+    }
+
+    const archive = trouverArchiveHistorique(archiveId);
+    if (!archive) {
+        alert("Archive introuvable.");
+        return;
+    }
+
+    try {
+        const interventions = Array.isArray(archive.interventions) ? [...archive.interventions] : [];
+        interventions.sort(function(a,b) {
+            const dateA = Date.parse(a.date || a.createdAt || "") || 0;
+            const dateB = Date.parse(b.date || b.createdAt || "") || 0;
+            return dateA - dateB;
+        });
+
+        const materielsMap = new Map();
+        interventions.forEach(function(intervention) {
+            (Array.isArray(intervention.consommations) ? intervention.consommations : []).forEach(function(consommation) {
+                const cle = String(consommation.materielId || consommation.materiel || "");
+                if (!cle) return;
+                if (!materielsMap.has(cle)) {
+                    materielsMap.set(cle, {
+                        cle,
+                        nom: String(consommation.materiel || "Materiel")
+                    });
+                }
+            });
+        });
+        const materielsUtilises = [...materielsMap.values()].sort((a,b) => a.nom.localeCompare(b.nom, "fr", {sensitivity:"base"}));
+        if (!interventions.length) {
+            alert("Cette commande ne contient aucune intervention.");
+            return;
+        }
+
+        const jsPDF = await obtenirBibliothequesPDF();
+        const doc = new jsPDF({orientation:"landscape", unit:"mm", format:"a4"});
+        const c = couleurPDF();
+        let y = ajouterEntetePDF(doc, "COMMANDE EFFECTUEE", `Synthese des consommations - ${formaterDate(archive.date)}`);
+
+        let totalGeneral = 0;
+        const totauxMateriels = new Map(materielsUtilises.map(m => [m.cle, 0]));
+        const body = interventions.map(function(intervention) {
+            const quantites = new Map();
+            let totalIntervention = 0;
+            (Array.isArray(intervention.consommations) ? intervention.consommations : []).forEach(function(consommation) {
+                const cle = String(consommation.materielId || consommation.materiel || "");
+                const q = Math.max(0, Number(consommation.quantite || 0));
+                if (!cle || !q) return;
+                quantites.set(cle, (quantites.get(cle) || 0) + q);
+                totauxMateriels.set(cle, (totauxMateriels.get(cle) || 0) + q);
+                totalIntervention += q;
+                totalGeneral += q;
+            });
+            const numero = String(intervention.numeroIntervention || "").trim();
+            const date = intervention.date ? formaterDate(intervention.date) : "";
+            const entete = `${numero ? `N° ${numero}` : "Intervention"}${date ? `\n${date}` : ""}`;
+            return [
+                texteCompatiblePDF(entete),
+                ...materielsUtilises.map(m => {
+                    const q = quantites.get(m.cle) || 0;
+                    return q > 0 ? String(q) : "";
+                }),
+                totalIntervention > 0 ? String(totalIntervention) : ""
+            ];
+        });
+
+        const head = [[
+            "INTERVENTION",
+            ...materielsUtilises.map(m => texteCompatiblePDF(m.nom)),
+            "TOTAL"
+        ]];
+        const foot = [[
+            "TOTAL",
+            ...materielsUtilises.map(m => {
+                const q = totauxMateriels.get(m.cle) || 0;
+                return q > 0 ? String(q) : "";
+            }),
+            String(totalGeneral)
+        ]];
+
+        const stylesColonnes = {0:{cellWidth:36, halign:"left", fontStyle:"bold"}};
+        for (let i=1; i<=materielsUtilises.length; i++) stylesColonnes[i] = {cellWidth:18, halign:"center"};
+        stylesColonnes[materielsUtilises.length + 1] = {cellWidth:16, halign:"center", fontStyle:"bold"};
+
+        doc.autoTable({
+            startY:y,
+            head,
+            body,
+            foot,
+            theme:"grid",
+            margin:{left:10, right:10, bottom:18},
+            styles:{font:"helvetica", fontSize:7, textColor:c.texte, cellPadding:2, lineColor:c.ligne, lineWidth:.15, valign:"middle"},
+            headStyles:{fillColor:c.principal, textColor:c.blanc, fontStyle:"bold", halign:"center", fontSize:6.5},
+            footStyles:{fillColor:c.clair, textColor:c.principal, fontStyle:"bold", halign:"center"},
+            columnStyles:stylesColonnes,
+            horizontalPageBreak:true,
+            horizontalPageBreakRepeat:0,
+            didParseCell:function(data) {
+                if (data.section === "body" && data.column.index > 0 && data.column.index < materielsUtilises.length + 1 && !String(data.cell.raw || "").trim()) {
+                    data.cell.styles.fillColor = [255,255,255];
+                }
+            }
+        });
+
+        const finalY = doc.lastAutoTable.finalY + 6;
+        if (finalY < doc.internal.pageSize.getHeight() - 25) {
+            doc.setTextColor(...c.gris);
+            doc.setFont("helvetica", "normal");
+            doc.setFontSize(8);
+            doc.text(
+                texteCompatiblePDF(`${interventions.length} intervention(s) - ${materielsUtilises.length} reference(s) utilisee(s) - ${totalGeneral} unite(s) au total`),
+                10,
+                finalY
+            );
+        }
+
+        ajouterPiedDePagePDF(doc);
+        doc.save(nomFichierPDF(`commande-${archive.date || "pharmacie"}`));
+    } catch (erreur) {
+        afficherErreurExportPDF(erreur);
+    }
+}
+
 async function chargerPublicationsCaserne(type) {
     const supabase = obtenirClientSupabase();
     if (!supabase || !navigator.onLine) return [];
@@ -8202,7 +8655,7 @@ function cartePublicationCaserne(p, options = {}) {
             ${boutonCalendrierCaserne(titre, p.date_evenement, p.description || "", 60, "Ajouter l'événement au calendrier")}
             ${p.date_preparation ? boutonCalendrierCaserne(`${titre} · Préparation`, p.date_preparation, p.description || "", 60, "Ajouter la préparation au calendrier") : ""}
         </div>` : ""}
-        ${options.admin ? `<div class="caserne-actions-admin"><button type="button" onclick="modifierPublicationCaserne('${p.id}','${p.type_publication}')">Modifier</button><button type="button" onclick="supprimerPublicationCaserne('${p.id}','${p.type_publication}')">Supprimer</button></div>` : ""}
+        ${options.admin ? `<div class="caserne-actions-admin"><button type="button" class="caserne-export-pdf" onclick="exporterPublicationCasernePDF('${p.id}')">Exporter PDF</button><button type="button" onclick="modifierPublicationCaserne('${p.id}','${p.type_publication}')">Modifier</button><button type="button" onclick="supprimerPublicationCaserne('${p.id}','${p.type_publication}')">Supprimer</button></div>` : ""}
     </article>`;
 }
 
@@ -8515,7 +8968,7 @@ function formulaireAdminEntretienCaserne() {
                 <div id="caserne-entretien-dates-zone">${renduGroupesDatesEntretienCaserne()}</div>
                 <button type="button" class="caserne-entretien-ajouter-date" onclick="ajouterDateEntretienCaserne()">+ Ajouter une date</button>
                 <button type="button" class="caserne-bouton-admin-principal" onclick="creerPlanningEntretienCaserne()">Publier le planning</button>
-            </div>` : `<div id="caserne-entretien-reponses-admin" class="caserne-entretien-chargement">Chargement des réponses…</div>`}
+            </div>` : `<div class="caserne-entretien-export-actions"><button type="button" class="caserne-bouton-admin-principal caserne-export-pdf" onclick="exporterEntretiensPDF()">Exporter le planning en PDF</button></div><div id="caserne-entretien-reponses-admin" class="caserne-entretien-chargement">Chargement des réponses…</div>`}
     </section>`;
 }
 
@@ -8945,7 +9398,7 @@ function initialiserStyleEspaceCaserne() {
         .caserne-admin-acces{margin:0 0 16px;background:#e7c2a5;border-left:5px solid #9b5d2e;border-radius:14px;padding:15px 16px;display:flex;flex-direction:column;gap:4px}.caserne-admin-acces strong{color:#5f3215}.caserne-admin-acces span{font-size:13px;color:#654c3c}
         .caserne-admin-bloc{margin:0 0 22px;background:#3f1718;color:#fff;border-radius:20px;padding:18px;box-shadow:0 8px 22px rgba(60,20,20,.16)}.caserne-admin-titre small{font-size:10px;font-weight:800;letter-spacing:1.7px;opacity:.68}.caserne-admin-titre h2{margin:5px 0 16px;font-size:23px}.caserne-formulaire-sport{display:grid;gap:12px;min-width:0;overflow:hidden}.caserne-formulaire-sport label{display:grid;gap:6px;font-size:12px;font-weight:800;min-width:0;max-width:100%;overflow:hidden}.caserne-formulaire-sport input[type=text],.caserne-formulaire-sport input[type=datetime-local],.caserne-formulaire-sport input[type=file],.caserne-formulaire-sport textarea{width:100%;box-sizing:border-box;border:1px solid rgba(255,255,255,.18);background:#fff;color:#2b1716;border-radius:12px;padding:12px;font:inherit}.caserne-formulaire-sport textarea{resize:vertical}.caserne-formulaire-sport input[type=datetime-local],.caserne-formulaire-sport input[type=date]{display:block!important;width:100%!important;max-width:100%!important;min-width:0!important;box-sizing:border-box!important;-webkit-appearance:none;appearance:none;overflow:hidden;font-size:16px}.caserne-formulaire-sport input[type=datetime-local]::-webkit-date-and-time-value,.caserne-formulaire-sport input[type=date]::-webkit-date-and-time-value{min-width:0;text-align:left}.caserne-switch-ligne{display:flex!important;align-items:center;gap:10px!important;background:rgba(255,255,255,.09);padding:11px;border-radius:12px}.caserne-switch-ligne input{width:20px;height:20px}.caserne-aide-photo{opacity:.65;margin-top:-7px}.caserne-bouton-admin-principal{border:0;border-radius:12px;background:#f2d7d1;color:#5b1b1d;padding:13px 16px;font-weight:900;font-size:14px}.caserne-bouton-admin-principal:disabled{opacity:.55}.caserne-photos{display:flex;gap:8px;overflow-x:auto;margin-top:14px;padding-bottom:3px}.caserne-photos button{flex:0 0 128px;height:100px;border:0;padding:0;border-radius:12px;overflow:hidden;background:#eadbd7}.caserne-photos img{width:100%;height:100%;object-fit:cover;display:block}.caserne-photo-overlay{position:fixed;inset:0;z-index:20000;background:rgba(18,8,8,.94);display:flex;align-items:center;justify-content:center;padding:55px 12px 20px}.caserne-photo-overlay img{max-width:100%;max-height:100%;object-fit:contain;touch-action:pinch-zoom}.caserne-photo-fermer{position:absolute;left:14px;right:auto;top:14px;width:44px;height:44px;border-radius:50%;border:1px solid rgba(255,255,255,.25);background:rgba(255,255,255,.12);color:#fff;font-size:30px;line-height:1}.caserne-zone-reponse{margin-top:16px;border-top:1px solid #ead9d4;padding-top:14px}.caserne-boutons-reponse{display:grid;grid-template-columns:1fr 1fr;gap:9px}.caserne-boutons-reponse button{border:2px solid #d4b7b3;background:#fff;border-radius:11px;padding:12px 10px;font-weight:900;color:#672426;transition:transform .12s ease,box-shadow .12s ease,background .12s ease}.caserne-boutons-reponse button:first-child{background:#e8f6ed;color:#176b3a;border-color:#78c795}.caserne-boutons-reponse button:last-child{background:#fdeaea;color:#a12d32;border-color:#e4a0a3}.caserne-boutons-reponse button.selectionne.present{background:#23864f;color:#fff;border-color:#23864f;box-shadow:0 4px 12px rgba(35,134,79,.24)}.caserne-boutons-reponse button.selectionne.absent{background:#c94349;color:#fff;border-color:#c94349;box-shadow:0 4px 12px rgba(201,67,73,.22)}.caserne-liste-presents{margin-top:13px}.caserne-liste-presents>strong{display:block;font-size:12px;color:#7d2425;margin-bottom:7px}.caserne-liste-presents>div{display:flex;gap:6px;flex-wrap:wrap}.caserne-liste-presents span{display:inline-block;background:#f3e4e0;border-radius:999px;padding:6px 9px;font-size:12px;font-weight:700}.caserne-liste-presents small{color:#7d6b67}.caserne-actu-present{background:#f8dfda}.caserne-actions-admin{display:flex;justify-content:flex-end;margin-top:12px}.caserne-actions-admin button{border:0;background:#4a181a;color:#fff;border-radius:9px;padding:8px 11px;font-weight:800;font-size:11px}
         .caserne-entretien-onglets-admin{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:0 0 16px}.caserne-entretien-onglets-admin button{border:1px solid rgba(255,255,255,.18);border-radius:10px;padding:10px;background:rgba(255,255,255,.06);color:#fff;font-weight:800}.caserne-entretien-onglets-admin button.actif{background:#f2d7d1;color:#5b1b1d;border-color:#f2d7d1}.caserne-formulaire-entretien input[type=number]{width:100%;box-sizing:border-box;border:1px solid rgba(255,255,255,.18);background:#fff;color:#2b1716;border-radius:12px;padding:12px;font:inherit}.caserne-entretien-dates-titre{display:grid;gap:3px;margin-top:3px}.caserne-entretien-dates-titre small{opacity:.68}.caserne-entretien-date-groupe{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);border-radius:14px;padding:12px;display:grid;gap:10px}.caserne-entretien-date-entete{display:flex;gap:10px;align-items:end}.caserne-entretien-date-entete label{flex:1}.caserne-entretien-date-entete input,.caserne-entretien-heure-ligne input{width:100%;box-sizing:border-box;border:0;border-radius:10px;padding:10px;background:#fff;color:#2b1716;font:inherit}.caserne-entretien-retirer,.caserne-entretien-ajouter-heure,.caserne-entretien-ajouter-date{border:1px solid rgba(255,255,255,.24);border-radius:9px;padding:9px 11px;background:transparent;color:#fff;font-weight:800}.caserne-entretien-retirer{font-size:11px}.caserne-entretien-ajouter-heure{text-align:left}.caserne-entretien-ajouter-date{width:100%;padding:11px}.caserne-entretien-heures{display:grid;gap:7px}.caserne-entretien-heure-ligne{display:grid;grid-template-columns:1fr 42px;gap:7px}.caserne-entretien-heure-ligne button{border:0;border-radius:9px;background:#702326;color:#fff;font-size:22px}.caserne-entretien-card{background:#fff;border:1px solid #ead9d4;border-radius:18px;padding:18px;box-shadow:0 6px 18px rgba(80,40,30,.06)}.caserne-entretien-card-entete{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}.caserne-entretien-card-entete small{font-size:10px;font-weight:900;letter-spacing:1.2px;color:#7d2425}.caserne-entretien-card-entete h2{font-size:20px;margin:5px 0 0}.caserne-entretien-card-entete>span{background:#f2e4e0;border-radius:999px;padding:6px 9px;font-size:11px;font-weight:800;white-space:nowrap}.caserne-entretien-card>p{color:#5b4945;line-height:1.5}.caserne-entretien-mon-rdv{margin:14px 0;background:#5b1719;color:#fff;border-radius:13px;padding:13px;display:grid;gap:4px}.caserne-entretien-mon-rdv strong{font-size:11px;text-transform:uppercase;letter-spacing:.8px;opacity:.72}.caserne-entretien-mon-rdv span{font-size:16px;font-weight:900}.caserne-entretien-mon-rdv button{margin-top:6px;border:1px solid rgba(255,255,255,.3);background:transparent;color:#fff;border-radius:8px;padding:8px;font-weight:800}.caserne-entretien-creneaux{display:grid;gap:14px;margin-top:14px}.caserne-entretien-jour>strong{display:block;text-transform:capitalize;margin-bottom:8px;font-size:13px;color:#6b2426}.caserne-entretien-jour>div{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}.caserne-entretien-jour button{border:1px solid #d9c1bc;background:#fff;border-radius:11px;padding:9px 5px;display:grid;gap:2px;color:#4b2926}.caserne-entretien-jour button span{font-weight:900}.caserne-entretien-jour button small{font-size:9px}.caserne-entretien-jour button.selectionne{background:#7d2425;color:#fff;border-color:#7d2425}.caserne-entretien-jour button.complet{background:#eee8e6;color:#998984;border-color:#e0d6d3}.caserne-entretien-sans-creneau{padding:13px;border-radius:11px;background:#f5ece9;color:#765f5b;font-size:13px}.caserne-entretien-reponses-liste{display:grid;gap:8px}.caserne-entretien-reponses-liste article{background:rgba(255,255,255,.09);border-radius:11px;padding:11px;display:grid;gap:3px}.caserne-entretien-reponses-liste time{font-size:11px;opacity:.7}.caserne-entretien-reponses-liste strong{font-size:16px}.caserne-entretien-reponses-liste span{font-size:12px;opacity:.78}.caserne-entretien-chargement{padding:14px;border-radius:11px;background:rgba(255,255,255,.07);opacity:.8}.caserne-actu-entretien{cursor:pointer}.caserne-entretien-actu-badge{margin-top:14px;display:inline-block;background:#f3e3df;color:#6b2426;border:1px solid #e4cbc5;border-radius:999px;padding:7px 10px;font-size:11px;font-weight:900}.caserne-actu-rendezvous{background:#651c1f!important;color:#fff;border-color:#651c1f}.caserne-actu-rendezvous .caserne-actu-meta span,.caserne-actu-rendezvous .caserne-actu-meta time,.caserne-actu-rendezvous p{color:#fff}.caserne-rdv-badge{margin-top:14px;display:inline-block;background:rgba(255,255,255,.13);border:1px solid rgba(255,255,255,.2);border-radius:999px;padding:7px 10px;font-size:11px;font-weight:900}.caserne-calendrier-actions{display:grid;gap:8px;margin-top:14px}.caserne-bouton-calendrier{width:100%;border:1px solid #d7b9b4;background:#fff;color:#6b2426;border-radius:11px;padding:11px 12px;font-weight:900;font-size:12px}.caserne-actu-rendezvous .caserne-bouton-calendrier,.caserne-entretien-mon-rdv .caserne-bouton-calendrier{background:#fff;color:#651c1f;border-color:#fff}.caserne-entretien-mon-rdv .caserne-entretien-annuler{margin-top:0}.caserne-actu-entretien-detail .caserne-entretien-card-entete{margin-bottom:10px}.caserne-actu-entretien-detail .caserne-entretien-card-entete h2{margin:0}.caserne-actu-entretien-detail .caserne-entretien-creneaux{margin-top:15px}.caserne-actu-rendezvous .caserne-entretien-jour>strong{color:#fff}.caserne-actu-rendezvous .caserne-entretien-card-entete>span{background:rgba(255,255,255,.14);color:#fff}.caserne-actu-rendezvous .caserne-entretien-actu-badge{background:rgba(255,255,255,.12);color:#fff;border-color:rgba(255,255,255,.2)}
-        .caserne-formulaire-publication select{width:100%;box-sizing:border-box;border:1px solid #d9c7c2;border-radius:12px;background:#fff;padding:12px;font-size:15px;color:#2b1716}.caserne-badges-publication{display:flex;flex-wrap:wrap;gap:7px;margin:6px 0 9px}.caserne-badge-soustype,.caserne-badge-visibilite{display:inline-flex;border-radius:999px;padding:6px 9px;font-size:11px;font-weight:900;background:#f5e3df;color:#7d2425}.caserne-badge-visibilite{background:#7d2425;color:#fff}.caserne-reponse-contexte{display:block;margin-bottom:9px;color:#6f2325}.caserne-preparation-bloc{margin-top:14px;padding:14px;border-radius:14px;background:#f7eeee;border:1px solid #ead1cc;display:grid;gap:8px}.caserne-preparation-bloc>strong{color:#7d2425}.caserne-actions-admin{display:flex;gap:8px;flex-wrap:wrap}.caserne-actions-admin button{flex:1;min-width:120px}.caserne-actu-present .caserne-preparation-bloc{background:rgba(255,255,255,.16);border-color:rgba(255,255,255,.25)}.caserne-actu-present .caserne-preparation-bloc>strong,.caserne-actu-present .caserne-reponse-contexte{color:inherit}
+        .caserne-formulaire-publication select{width:100%;box-sizing:border-box;border:1px solid #d9c7c2;border-radius:12px;background:#fff;padding:12px;font-size:15px;color:#2b1716}.caserne-badges-publication{display:flex;flex-wrap:wrap;gap:7px;margin:6px 0 9px}.caserne-badge-soustype,.caserne-badge-visibilite{display:inline-flex;border-radius:999px;padding:6px 9px;font-size:11px;font-weight:900;background:#f5e3df;color:#7d2425}.caserne-badge-visibilite{background:#7d2425;color:#fff}.caserne-reponse-contexte{display:block;margin-bottom:9px;color:#6f2325}.caserne-preparation-bloc{margin-top:14px;padding:14px;border-radius:14px;background:#f7eeee;border:1px solid #ead1cc;display:grid;gap:8px}.caserne-preparation-bloc>strong{color:#7d2425}.caserne-actions-admin{display:flex;gap:8px;flex-wrap:wrap}.caserne-actions-admin button{flex:1;min-width:120px}.caserne-actions-admin .caserne-export-pdf,.caserne-entretien-export-actions .caserne-export-pdf{background:#fff;color:#6b2426;border:2px solid #6b2426}.caserne-entretien-export-actions{margin:0 0 14px}.caserne-entretien-export-actions button{width:100%}.caserne-actu-present .caserne-preparation-bloc{background:rgba(255,255,255,.16);border-color:rgba(255,255,255,.25)}.caserne-actu-present .caserne-preparation-bloc>strong,.caserne-actu-present .caserne-reponse-contexte{color:inherit}
         .caserne-separateur-passe{display:flex;align-items:center;gap:12px;margin:24px 2px 4px;color:#786f6c;font-size:12px;font-weight:900;text-transform:uppercase;letter-spacing:1px}.caserne-separateur-passe::before,.caserne-separateur-passe::after{content:"";height:1px;background:#c9c0bd;flex:1}.caserne-separateur-passe span{white-space:nowrap}.caserne-passes-au-dessus{display:grid;gap:14px;padding:0;background:transparent}.caserne-passes-au-dessus .caserne-separateur-passe{margin:8px 2px 0}.caserne-shell-actualites{min-height:100vh}.caserne-shell-actualites .caserne-top{position:sticky;top:0;z-index:40}.caserne-fil-actuel{min-height:55vh}
         .caserne-actu-passee{background:#dedbd9!important;border-color:#cbc6c3!important;color:#5d5957!important;box-shadow:none!important}.caserne-actu-passee .caserne-actu-meta span,.caserne-actu-passee .caserne-actu-meta time,.caserne-actu-passee h2,.caserne-actu-passee p,.caserne-actu-passee .caserne-reponse-contexte,.caserne-actu-passee .caserne-liste-presents>strong,.caserne-actu-passee .caserne-entretien-jour>strong{color:#5d5957!important}.caserne-actu-passee .caserne-liste-presents span,.caserne-actu-passee .caserne-badge-soustype,.caserne-actu-passee .caserne-badge-visibilite,.caserne-actu-passee .caserne-entretien-card-entete>span{background:#c9c5c2!important;color:#55514f!important}.caserne-actu-passee .caserne-preparation-bloc,.caserne-actu-passee .caserne-zone-reponse{background:rgba(255,255,255,.22)!important;border-color:#c7c2bf!important}.caserne-creneau-passe{border:1px solid #c2bdb9;background:#d2cfcc;border-radius:10px;padding:9px 5px;text-align:center;color:#5d5957}.caserne-creneau-passe span{font-weight:900}.caserne-zone-reponse-passee .caserne-liste-presents{margin-top:0}
         .caserne-admin-centre{display:grid;grid-template-columns:1fr 1fr;gap:12px}.caserne-admin-centre>button{border:1px solid #dcc7c2;background:#fff;border-radius:18px;padding:19px;text-align:left;min-height:108px;display:flex;flex-direction:column;justify-content:space-between;gap:12px;color:#2b1716;box-shadow:0 6px 18px rgba(80,40,30,.06)}.caserne-admin-centre>button strong{font-size:17px}.caserne-admin-centre>button span{font-size:12px;line-height:1.4;color:#765f5b}.caserne-administratif-page .caserne-vide{grid-column:1/-1}@media(max-width:560px){.caserne-admin-centre{grid-template-columns:1fr}}
@@ -11857,6 +12310,23 @@ function initialiserStylesArchivesHistorique() {
             font-size: 28px;
         }
 
+        .archive-export-pdf {
+            width: 100%;
+            margin: 9px 0 13px;
+            border: 2px solid #7d2425;
+            border-radius: 12px;
+            padding: 12px 14px;
+            background: #fff;
+            color: #7d2425;
+            font: inherit;
+            font-weight: 900;
+            cursor: pointer;
+        }
+
+        .archive-export-pdf-detail {
+            margin-top: 18px;
+        }
+
         .archive-interventions-titre {
             margin: 11px 4px 8px;
             color: #70757a;
@@ -12204,6 +12674,15 @@ async function afficherArchivesHistorique() {
 
                             </button>
 
+                            ${utilisateurPeutExporterPharmaciePDF() ? `
+                                <button
+                                    type="button"
+                                    class="archive-export-pdf"
+                                    onclick="exporterCommandeArchivePDF('${archive.id}')"
+                                >
+                                    Exporter cette commande en PDF
+                                </button>
+                            ` : ""}
 
                             <div
                                 class="archive-interventions-titre"
@@ -12394,6 +12873,16 @@ function afficherDetailCommandeArchive(
 
 
             ${lignes}
+
+            ${utilisateurPeutExporterPharmaciePDF() ? `
+                <button
+                    type="button"
+                    class="archive-export-pdf archive-export-pdf-detail"
+                    onclick="exporterCommandeArchivePDF('${String(archive.id)}')"
+                >
+                    Exporter cette commande en PDF
+                </button>
+            ` : ""}
 
 
             ${
@@ -18776,6 +19265,9 @@ window.creerPublicationModuleCaserne = creerPublicationModuleCaserne;
 window.modifierPublicationCaserne = modifierPublicationCaserne;
 window.supprimerPublicationCaserne = supprimerPublicationCaserne;
 window.changerVueAdminEntretienCaserne = changerVueAdminEntretienCaserne;
+window.exporterPublicationCasernePDF = exporterPublicationCasernePDF;
+window.exporterEntretiensPDF = exporterEntretiensPDF;
+window.exporterCommandeArchivePDF = exporterCommandeArchivePDF;
 window.ajouterDateEntretienCaserne = ajouterDateEntretienCaserne;
 window.retirerDateEntretienCaserne = retirerDateEntretienCaserne;
 window.modifierDateEntretienCaserne = modifierDateEntretienCaserne;
