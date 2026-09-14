@@ -7810,7 +7810,7 @@ function obtenirOngletsPharmacieAccessibles() {
         onglets.push({
             libelle: "Inventaire",
             aide: "Consulter le matériel disponible",
-            icone: "▦",
+            icone: "📦",
             action: "afficherInventaire()"
         });
     }
@@ -7819,7 +7819,7 @@ function obtenirOngletsPharmacieAccessibles() {
         onglets.push({
             libelle: "Retour d'intervention",
             aide: "Déclarer le matériel utilisé",
-            icone: "↩",
+            icone: "🚒",
             action: "afficherRetourIntervention()"
         });
     }
@@ -7828,7 +7828,7 @@ function obtenirOngletsPharmacieAccessibles() {
         onglets.push({
             libelle: "Historique",
             aide: "Voir les mouvements et consommations",
-            icone: "≡",
+            icone: "📊",
             action: "afficherHistorique()"
         });
     }
@@ -7837,7 +7837,7 @@ function obtenirOngletsPharmacieAccessibles() {
         onglets.push({
             libelle: "Administration pharmacie",
             aide: "Gérer le matériel et les réglages autorisés",
-            icone: "⚙",
+            icone: "⚙️",
             action: "ouvrirAdministration()"
         });
     }
@@ -7846,7 +7846,7 @@ function obtenirOngletsPharmacieAccessibles() {
         onglets.push({
             libelle: "Administrateur appli",
             aide: "Utilisateurs, rôles et notifications",
-            icone: "◇",
+            icone: "🛠️",
             action: "afficherMenuAdministrateurAppli()"
         });
     }
@@ -7863,6 +7863,10 @@ function carteMenuNavigationSimple(onglet) {
 }
 
 function ouvrirMenuPharmacie() {
+    if (document.querySelector(".menu-navigation-pharmacie")) {
+        afficherAccueil();
+        return;
+    }
     initialiserStyleEspaceCaserne();
     const onglets = obtenirOngletsPharmacieAccessibles();
 
@@ -7870,8 +7874,7 @@ function ouvrirMenuPharmacie() {
         <main class="page caserne-shell caserne-menu-page caserne-public-simple navigation-fixe-page menu-navigation-pharmacie">
             <header class="caserne-top caserne-top-simple menu-top-pharmacie">
                 <small>ESPACE PHARMACIE</small>
-                <h1>Que voulez-vous faire ?</h1>
-                <p>Seuls les onglets auxquels vous avez accès sont affichés.</p>
+                <h1>Menu</h1>
             </header>
             <button type="button" class="caserne-retour-actualites" onclick="afficherAccueil()">← Retour à la pharmacie</button>
             <section class="caserne-menu-liste-simple">
@@ -7885,6 +7888,10 @@ function ouvrirMenuPharmacie() {
 }
 
 function ouvrirMenuPrincipal() {
+    if (document.querySelector(".menu-navigation-principal")) {
+        afficherPortailPrincipal();
+        return;
+    }
     initialiserStyleEspaceCaserne();
 
     const caserne = [];
@@ -7913,8 +7920,7 @@ function ouvrirMenuPrincipal() {
         <main class="page caserne-shell caserne-menu-page caserne-public-simple navigation-fixe-page menu-navigation-principal">
             <header class="caserne-top caserne-top-simple menu-top-principal">
                 <small>CIS LE CHESNE</small>
-                <h1>Tous vos accès</h1>
-                <p>Appuyez sur l'onglet que vous souhaitez ouvrir.</p>
+                <h1>Menu</h1>
             </header>
             <button type="button" class="caserne-retour-actualites" onclick="afficherPortailPrincipal()">← Retour à l'accueil</button>
 
@@ -7953,14 +7959,17 @@ function obtenirPresentationRubriqueCaserne(type) {
 }
 
 function ouvrirMenuCaserne() {
+    if (document.querySelector(".caserne-menu-page:not(.menu-navigation-pharmacie):not(.menu-navigation-principal)")) {
+        afficherActualitesCaserne();
+        return;
+    }
     initialiserStyleEspaceCaserne();
     const rubriques = obtenirRubriquesCaserne().filter(utilisateurPeutVoirRubriqueCaserne);
     document.getElementById("app").innerHTML = `
         <main class="caserne-shell caserne-menu-page caserne-public-simple">
             <header class="caserne-top caserne-top-simple">
                 <small>ESPACE CASERNE</small>
-                <h1>Où voulez-vous aller ?</h1>
-                <p>Appuyez simplement sur la rubrique souhaitée.</p>
+                <h1>Menu</h1>
             </header>
             <button type="button" class="caserne-retour-actualites" onclick="afficherActualitesCaserne()">← Retour aux informations</button>
             <section class="caserne-menu-liste-simple">
