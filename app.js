@@ -9457,7 +9457,7 @@ async function afficherInventaire() {
         "app"
     ).innerHTML = `
 
-        <main class="page">
+        <main class="page navigation-fixe-page">
 
             <button
                 class="retour-button"
@@ -9487,6 +9487,8 @@ async function afficherInventaire() {
             <div id="inventaire-contenu"></div>
 
         </main>
+
+        ${navigationPrincipale("pharmacie", "pharmacie")}
 
     `;
 
@@ -10507,7 +10509,7 @@ async function afficherRetourIntervention() {
         "app"
     ).innerHTML = `
 
-        <main class="page">
+        <main class="page navigation-fixe-page">
 
             <button
                 class="retour-button"
@@ -10588,6 +10590,8 @@ async function afficherRetourIntervention() {
             </button>
 
         </main>
+
+        ${navigationPrincipale("pharmacie", "pharmacie")}
 
     `;
 
@@ -11700,7 +11704,7 @@ async function afficherHistorique() {
         "app"
     ).innerHTML = `
 
-        <main class="page">
+        <main class="page navigation-fixe-page">
 
             <button
                 class="retour-button"
@@ -11751,6 +11755,8 @@ async function afficherHistorique() {
             }
 
         </main>
+
+        ${navigationPrincipale("pharmacie", "pharmacie")}
 
     `;
 
@@ -12222,7 +12228,7 @@ async function afficherArchivesHistorique() {
         "app"
     ).innerHTML = `
 
-        <main class="page">
+        <main class="page navigation-fixe-page">
 
             <button
                 class="retour-button"
@@ -12240,6 +12246,8 @@ async function afficherArchivesHistorique() {
             ${contenu}
 
         </main>
+
+        ${navigationPrincipale("pharmacie", "pharmacie")}
 
     `;
 
@@ -15407,7 +15415,7 @@ function afficherMenuAdministration() {
         "app"
     ).innerHTML = `
 
-        <main class="page">
+        <main class="page navigation-fixe-page">
 
             <button
                 class="retour-button"
@@ -15495,6 +15503,8 @@ function afficherMenuAdministration() {
             </div>
 
         </main>
+
+        ${navigationPrincipale("pharmacie", "pharmacie")}
 
     `;
 
