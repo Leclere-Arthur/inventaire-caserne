@@ -7676,17 +7676,43 @@ function navigationCaserne(active) {
     return navigationPrincipale(active, "caserne");
 }
 
+function obtenirPresentationRubriqueCaserne(type) {
+    return ({
+        sport: {icone:"🏃", aide:"Séances de sport et informations associées"},
+        manoeuvre: {icone:"🚒", aide:"Manœuvres, exercices et préparations"},
+        casernement: {icone:"🏠", aide:"Informations pratiques de la caserne"},
+        reunion: {icone:"👥", aide:"Réunions et convocations"},
+        amical: {icone:"🤝", aide:"Actualités et événements de l’Amicale"},
+        comite_centre: {icone:"📋", aide:"Informations du comité de centre"},
+        administratif: {icone:"⚙️", aide:"Outils administratifs autorisés"},
+        entretien_individuel: {icone:"🗓️", aide:"Choisir ou consulter votre rendez-vous"}
+    })[type] || {icone:"•", aide:"Ouvrir cette rubrique"};
+}
+
 function ouvrirMenuCaserne() {
     initialiserStyleEspaceCaserne();
     const rubriques = obtenirRubriquesCaserne().filter(utilisateurPeutVoirRubriqueCaserne);
     document.getElementById("app").innerHTML = `
-        <main class="caserne-shell caserne-menu-page">
-            <header class="caserne-top"><small>ESPACE CASERNE</small><h1>Menu</h1><p>Accès aux rubriques</p></header>
-            <section class="caserne-menu-grille">
-                ${rubriques.map(r => `<button onclick="afficherRubriqueCaserne('${r[0]}')"><strong>${echapperHTML(r[1])}</strong><span>Ouvrir →</span></button>`).join("") || '<p>Aucune rubrique autorisée.</p>'}
+        <main class="caserne-shell caserne-menu-page caserne-public-simple">
+            <header class="caserne-top caserne-top-simple">
+                <small>ESPACE CASERNE</small>
+                <h1>Où voulez-vous aller ?</h1>
+                <p>Appuyez simplement sur la rubrique souhaitée.</p>
+            </header>
+            <button type="button" class="caserne-retour-actualites" onclick="afficherActualitesCaserne()">← Retour aux informations</button>
+            <section class="caserne-menu-liste-simple">
+                ${rubriques.map(r => {
+                    const presentation = obtenirPresentationRubriqueCaserne(r[0]);
+                    return `<button type="button" onclick="afficherRubriqueCaserne('${r[0]}')">
+                        <span class="caserne-menu-icone" aria-hidden="true">${presentation.icone}</span>
+                        <span class="caserne-menu-texte"><strong>${echapperHTML(r[1])}</strong><small>${echapperHTML(presentation.aide)}</small></span>
+                        <span class="caserne-menu-fleche" aria-hidden="true">›</span>
+                    </button>`;
+                }).join("") || '<div class="caserne-vide"><strong>Aucune rubrique disponible</strong><p>Votre rôle ne donne accès à aucune rubrique pour le moment.</p></div>'}
             </section>
         </main>${navigationCaserne("caserne")}`;
     actualiserInterfaceBureau();
+    window.scrollTo({top:0, behavior:"auto"});
 }
 
 function formaterDateHeureCaserne(valeur) {
@@ -7841,17 +7867,24 @@ function rafraichirVuePublicationCaserne(retour) {
 
 function blocReponsePublicationCaserne(p, contexte, libelle, retour) {
     const reponses = Array.isArray(p.reponses) ? p.reponses : [];
+    const monId = String(utilisateurConnecte?.id || "");
+    const maReponse = reponses.find(r => r.contexte === contexte && String(r.user_id) === monId);
     const presents = reponses.filter(r => r.contexte === contexte && r.reponse === "present");
-    const maReponse = reponses.find(r => r.contexte === contexte && String(r.user_id) === String(utilisateurConnecte?.id || ""));
     const present = maReponse?.reponse === "present";
     const absent = maReponse?.reponse === "absent";
-    return `<div class="caserne-zone-reponse">
-        <strong class="caserne-reponse-contexte">${echapperHTML(libelle)}</strong>
+    const question = contexte === "preparation" ? "Serez-vous présent à la préparation ?" : "Serez-vous présent ?";
+    const etat = present ? "Votre réponse : présent" : absent ? "Votre réponse : absent" : "Choisissez votre réponse";
+    return `<div class="caserne-zone-reponse caserne-zone-reponse-simple">
+        <strong class="caserne-question-reponse">${echapperHTML(question)}</strong>
+        <small class="caserne-etat-reponse">${echapperHTML(etat)}</small>
         <div class="caserne-boutons-reponse">
-            <button type="button" class="${present ? "selectionne present" : ""}" onclick="repondrePublicationCaserne('${p.id}','present','${contexte}','${retour}')">Présent</button>
-            <button type="button" class="${absent ? "selectionne absent" : ""}" onclick="repondrePublicationCaserne('${p.id}','absent','${contexte}','${retour}')">Absent</button>
+            <button type="button" class="${present ? "selectionne present" : ""}" onclick="repondrePublicationCaserne('${p.id}','present','${contexte}','${retour}')">✓ Je serai présent</button>
+            <button type="button" class="${absent ? "selectionne absent" : ""}" onclick="repondrePublicationCaserne('${p.id}','absent','${contexte}','${retour}')">✕ Je serai absent</button>
         </div>
-        <div class="caserne-liste-presents"><strong>Présents${presents.length ? ` · ${presents.length}` : ""}</strong>${presents.length ? `<div>${presents.map(r => `<span>${echapperHTML([r.user_prenom,r.user_nom].filter(Boolean).join(" ") || "Utilisateur")}</span>`).join("")}</div>` : `<small>Aucune réponse « Présent » pour le moment.</small>`}</div>
+        <details class="caserne-presents-details">
+            <summary>Voir les présents${presents.length ? ` (${presents.length})` : ""}</summary>
+            <div class="caserne-liste-presents">${presents.length ? `<div>${presents.map(r => `<span>${echapperHTML([r.user_prenom,r.user_nom].filter(Boolean).join(" ") || "Utilisateur")}</span>`).join("")}</div>` : `<small>Aucune réponse « Présent » pour le moment.</small>`}</div>
+        </details>
     </div>`;
 }
 
@@ -8466,7 +8499,6 @@ async function afficherActualitesCaserne(synchronisationDejaFaite = false) {
     await nettoyerEvenementsCaserneAnciens();
 
     let publications = await chargerPublicationsCaserne();
-    /* L'onglet Administratif est désormais un centre de gestion, pas un type d'événement. */
     publications = publications.filter(p => p.type_publication !== "administratif");
     publications = await chargerDetailsPublicationsCaserne(publications);
     window.__publicationsCaserneParId = Object.fromEntries(publications.map(p => [p.id,p]));
@@ -8474,7 +8506,6 @@ async function afficherActualitesCaserne(synchronisationDejaFaite = false) {
     const peutVoirEntretiens = utilisateurAPermission("acces_entretien_individuel") || utilisateurAPermission("acces_entretien_individuel_admin") || utilisateurEstSPVAdmin();
     const entretiens = peutVoirEntretiens ? await chargerEntretiensCaserne() : [];
     const maintenant = Date.now();
-
     const sansDate = [];
     const aVenir = [];
     const passes = [];
@@ -8485,13 +8516,9 @@ async function afficherActualitesCaserne(synchronisationDejaFaite = false) {
             return;
         }
         const date = new Date(p.date_evenement).getTime();
-        if (Number.isNaN(date)) {
-            sansDate.push({type:"publication", date:null, valeur:p});
-        } else if (date >= maintenant) {
-            aVenir.push({type:"publication", date, valeur:p});
-        } else {
-            passes.push({type:"publication", date, valeur:p});
-        }
+        if (Number.isNaN(date)) sansDate.push({type:"publication", date:null, valeur:p});
+        else if (date >= maintenant) aVenir.push({type:"publication", date, valeur:p});
+        else passes.push({type:"publication", date, valeur:p});
     });
 
     (entretiens || []).forEach(entretien => {
@@ -8499,78 +8526,55 @@ async function afficherActualitesCaserne(synchronisationDejaFaite = false) {
             .filter(c => c.date_heure && !Number.isNaN(new Date(c.date_heure).getTime()))
             .sort((a,b) => new Date(a.date_heure).getTime() - new Date(b.date_heure).getTime());
         if (!tousLesCreneaux.length) return;
-
         const creneauxFuturs = tousLesCreneaux.filter(c => new Date(c.date_heure).getTime() >= maintenant);
         if (creneauxFuturs.length) {
             const maReservation = creneauxFuturs.find(c => c.ma_reservation === true);
-            aVenir.push({
-                type:"entretien",
-                date:new Date((maReservation || creneauxFuturs[0]).date_heure).getTime(),
-                valeur:{...entretien, creneaux:creneauxFuturs}
-            });
+            aVenir.push({type:"entretien", date:new Date((maReservation || creneauxFuturs[0]).date_heure).getTime(), valeur:{...entretien, creneaux:creneauxFuturs}});
         } else {
             const dernier = tousLesCreneaux[tousLesCreneaux.length - 1];
-            passes.push({
-                type:"entretien_passe",
-                date:new Date(dernier.date_heure).getTime(),
-                valeur:{...entretien, creneaux:tousLesCreneaux},
-                dateReference:dernier.date_heure
-            });
+            passes.push({type:"entretien_passe", date:new Date(dernier.date_heure).getTime(), valeur:{...entretien, creneaux:tousLesCreneaux}, dateReference:dernier.date_heure});
         }
     });
 
-    /* Sans date en premier. Les prochains événements vont du plus proche au plus lointain. */
     sansDate.sort((a,b) => new Date(b.valeur.created_at || 0).getTime() - new Date(a.valeur.created_at || 0).getTime());
     aVenir.sort((a,b) => a.date - b.date);
-    /* Les événements passés sont placés AU-DESSUS du fil actuel :
-       le plus ancien tout en haut, le plus récent juste au-dessus de la séparation. */
-    passes.sort((a,b) => a.date - b.date);
+    passes.sort((a,b) => b.date - a.date);
 
     const futursHTML = [...sansDate, ...aVenir].map(e => e.type === "entretien"
         ? cartePlanningEntretienActualitesCaserne(e.valeur)
         : cartePublicationCaserne(e.valeur,{retour:"actualites"})
     ).join("");
-
     const passesHTML = passes.map(e => e.type === "entretien_passe"
         ? carteEntretienPasseActualitesCaserne(e.valeur, e.dateReference)
         : cartePublicationCaserne(e.valeur,{retour:"actualites",passe:true})
     ).join("");
 
+    const accesEntretien = peutVoirEntretiens
+        ? `<button type="button" class="caserne-raccourci caserne-raccourci-secondaire" onclick="afficherRubriqueCaserne('entretien_individuel')"><span>🗓️</span><strong>Mon entretien</strong></button>`
+        : "";
+
     document.getElementById("app").innerHTML = `
-        <main class="caserne-shell caserne-shell-actualites">
-            <header class="caserne-top"><small>ESPACE CASERNE</small><h1>Actualités</h1><p>Informations et événements de la caserne</p></header>
-            <section class="caserne-fil caserne-fil-actuel">
-                ${passesHTML ? `<section class="caserne-passes-au-dessus">${passesHTML}<div class="caserne-separateur-passe"><span>Événements passés</span></div></section>` : ""}
-                ${passesHTML ? `<div id="caserne-ancre-actuels" aria-hidden="true"></div>` : ""}
-                ${futursHTML || '<div class="caserne-vide"><strong>Rien de prévu pour le moment</strong><p>Les prochains événements apparaîtront ici.</p></div>'}
+        <main class="caserne-shell caserne-shell-actualites caserne-public-simple">
+            <header class="caserne-top caserne-top-simple">
+                <small>ESPACE CASERNE</small>
+                <h1>Informations</h1>
+                <p>Les informations importantes et les prochains rendez-vous sont ici.</p>
+            </header>
+
+            <section class="caserne-raccourcis-publics" aria-label="Raccourcis">
+                <button type="button" class="caserne-raccourci" onclick="ouvrirMenuCaserne()"><span>☰</span><strong>Voir les rubriques</strong></button>
+                ${accesEntretien}
             </section>
+
+            <div class="caserne-titre-section"><strong>À venir</strong><span>${aVenir.length + sansDate.length ? `${aVenir.length + sansDate.length} élément${aVenir.length + sansDate.length > 1 ? "s" : ""}` : ""}</span></div>
+            <section class="caserne-fil caserne-fil-actuel">
+                ${futursHTML || '<div class="caserne-vide"><strong>Rien de prévu pour le moment</strong><p>Vous n’avez aucune action à faire.</p></div>'}
+            </section>
+
+            ${passesHTML ? `<details class="caserne-anciens-evenements"><summary>Voir les événements passés</summary><section class="caserne-fil">${passesHTML}</section></details>` : ""}
         </main>${navigationCaserne("caserne")}`;
     actualiserInterfaceBureau();
-
-    /* À l'ouverture, le premier événement actuel/futur est affiché directement.
-       Les événements passés font maintenant partie de la MÊME liste, juste au-dessus.
-       Ils ne se révèlent que si l'utilisateur remonte volontairement le fil.
-       L'en-tête Actualités reste visible pendant ce mouvement. */
-    if (passesHTML) {
-        const ancreActuels = document.getElementById("caserne-ancre-actuels");
-        const enteteActualites = document.querySelector(".caserne-shell-actualites .caserne-top");
-
-        if (ancreActuels) {
-            const placerSurActuels = () => {
-                const hauteurEntete = enteteActualites ? enteteActualites.offsetHeight : 0;
-                const positionAncre = ancreActuels.getBoundingClientRect().top + window.scrollY;
-                const cible = Math.max(0, positionAncre - hauteurEntete - 12);
-                window.scrollTo({top:cible, behavior:"auto"});
-            };
-
-            requestAnimationFrame(() => {
-                placerSurActuels();
-                requestAnimationFrame(placerSurActuels);
-            });
-        }
-    } else {
-        window.scrollTo({top:0, behavior:"auto"});
-    }
+    window.scrollTo({top:0, behavior:"auto"});
 }
 
 function afficherAdministratifCaserne() {
@@ -8610,15 +8614,16 @@ async function afficherRubriqueCaserne(type) {
     if (type === "entretien_individuel") {
         const entretiens = await chargerEntretiensCaserne();
         document.getElementById("app").innerHTML = `
-            <main class="caserne-shell ${estAdmin ? "caserne-avec-admin" : ""}">
-                <header class="caserne-top"><small>ESPACE CASERNE</small><h1>${echapperHTML(rubrique[1])}</h1><p>${estAdmin ? "Planification · réponses · créneaux" : "Choisissez votre créneau"}</p></header>
-                ${estAdmin ? formulaireAdminEntretienCaserne() : ""}
+            <main class="caserne-shell ${estAdmin ? "caserne-avec-admin" : "caserne-public-simple"}">
+                <header class="caserne-top ${estAdmin ? "" : "caserne-top-simple"}"><small>ESPACE CASERNE</small><h1>${echapperHTML(rubrique[1])}</h1><p>${estAdmin ? "Planification · réponses · créneaux" : "Choisissez votre rendez-vous en appuyant sur un créneau disponible."}</p></header>
+                ${estAdmin ? formulaireAdminEntretienCaserne() : `<button type="button" class="caserne-retour-actualites" onclick="afficherActualitesCaserne()">← Retour aux informations</button>`}
                 <section class="caserne-fil caserne-entretiens-fil">
-                    ${entretiens.length ? entretiens.map(e => carteEntretienCaserne(e, estAdmin)).join("") : '<div class="caserne-vide"><strong>Aucun entretien planifié</strong><p>Les prochains créneaux apparaîtront ici.</p></div>'}
+                    ${entretiens.length ? entretiens.map(e => carteEntretienCaserne(e, estAdmin)).join("") : '<div class="caserne-vide"><strong>Aucun entretien planifié</strong><p>Vous n’avez rien à faire pour le moment.</p></div>'}
                 </section>
             </main>${navigationCaserne("caserne")}`;
         actualiserInterfaceBureau();
         if (estAdmin && vueAdminEntretienCaserne === "reponses") remplirReponsesEntretiensAdminCaserne();
+        window.scrollTo({top:0, behavior:"auto"});
         return;
     }
 
@@ -8626,15 +8631,17 @@ async function afficherRubriqueCaserne(type) {
     publications = await chargerDetailsPublicationsCaserne(publications);
     window.__publicationsCaserneParId = Object.fromEntries(publications.map(p => [p.id,p]));
     const formulaireAdmin = estAdmin ? formulaireAdminPublicationCaserne(type) : "";
+    const presentation = obtenirPresentationRubriqueCaserne(type);
     document.getElementById("app").innerHTML = `
-        <main class="caserne-shell ${estAdmin ? "caserne-avec-admin" : ""}">
-            <header class="caserne-top"><small>ESPACE CASERNE</small><h1>${echapperHTML(rubrique[1])}</h1><p>${estAdmin ? "Vue publique · administration" : "Informations et événements"}</p></header>
-            ${formulaireAdmin}
+        <main class="caserne-shell ${estAdmin ? "caserne-avec-admin" : "caserne-public-simple"}">
+            <header class="caserne-top ${estAdmin ? "" : "caserne-top-simple"}"><small>ESPACE CASERNE</small><h1>${echapperHTML(rubrique[1])}</h1><p>${estAdmin ? "Vue publique · administration" : echapperHTML(presentation.aide)}</p></header>
+            ${estAdmin ? formulaireAdmin : `<button type="button" class="caserne-retour-actualites" onclick="afficherActualitesCaserne()">← Retour aux informations</button>`}
             <section class="caserne-fil">
-                ${publications.length ? publications.map(p => cartePublicationCaserne(p, {admin:estAdmin,retour:type})).join("") : '<div class="caserne-vide"><strong>Aucune publication</strong><p>Les prochains contenus apparaîtront ici.</p></div>'}
+                ${publications.length ? publications.map(p => cartePublicationCaserne(p, {admin:estAdmin,retour:type})).join("") : '<div class="caserne-vide"><strong>Aucune information pour le moment</strong><p>Vous n’avez rien à faire dans cette rubrique.</p></div>'}
             </section>
         </main>${navigationCaserne("caserne")}`;
     actualiserInterfaceBureau();
+    window.scrollTo({top:0, behavior:"auto"});
 }
 
 function initialiserStyleEspaceCaserne() {
@@ -8667,6 +8674,17 @@ function initialiserStyleEspaceCaserne() {
         .navigation-fixe-page{padding-bottom:110px!important}
         .caserne-nav-bas.nav-theme-pharmacie>button.actif{color:#237448}.caserne-nav-bas.nav-theme-pharmacie .caserne-menu-bulle{background:#237448;box-shadow:0 5px 15px rgba(20,85,52,.24)}
         .caserne-nav-bas.nav-theme-accueil>button.actif{color:#171717}.caserne-nav-bas.nav-theme-accueil .caserne-menu-bulle{background:#171717;box-shadow:0 5px 15px rgba(0,0,0,.22)}
+        /* Interface publique simplifiée */
+        .caserne-public-simple{font-size:16px}.caserne-public-simple .caserne-top-simple{padding-bottom:24px}.caserne-public-simple .caserne-top-simple h1{font-size:32px;line-height:1.08}.caserne-public-simple .caserne-top-simple p{font-size:16px;line-height:1.45;max-width:560px}
+        .caserne-retour-actualites{width:100%;min-height:52px;margin:0 0 16px;border:1px solid #d7c5c0;background:#fff;color:#542326;border-radius:14px;padding:12px 16px;text-align:left;font-size:16px;font-weight:900;box-shadow:0 3px 10px rgba(70,20,20,.05)}
+        .caserne-raccourcis-publics{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:0 0 22px}.caserne-raccourci{min-height:70px;border:0;border-radius:17px;background:#fff;color:#542326;padding:13px 14px;display:flex;align-items:center;gap:11px;text-align:left;box-shadow:0 5px 16px rgba(70,20,20,.08)}.caserne-raccourci span{font-size:25px}.caserne-raccourci strong{font-size:15px;line-height:1.2}.caserne-raccourci-secondaire{background:#efe0dc}
+        .caserne-titre-section{display:flex;align-items:center;justify-content:space-between;margin:0 2px 10px}.caserne-titre-section strong{font-size:21px}.caserne-titre-section span{font-size:12px;color:#79635e;font-weight:800}
+        .caserne-menu-liste-simple{display:grid;gap:10px}.caserne-menu-liste-simple>button{width:100%;min-height:82px;border:1px solid #e0cfca;background:#fff;border-radius:17px;padding:13px 14px;display:grid;grid-template-columns:46px 1fr 24px;gap:10px;align-items:center;text-align:left;color:#2b1716;box-shadow:0 4px 13px rgba(80,40,30,.05)}.caserne-menu-icone{font-size:28px;text-align:center}.caserne-menu-texte{display:grid;gap:4px}.caserne-menu-texte strong{font-size:18px}.caserne-menu-texte small{font-size:13px;line-height:1.35;color:#71605b}.caserne-menu-fleche{font-size:32px;color:#8a3436;text-align:right}
+        .caserne-public-simple .caserne-actu-card{padding:17px;border-radius:17px}.caserne-public-simple .caserne-actu-meta{display:grid;grid-template-columns:1fr;margin-bottom:10px;gap:4px}.caserne-public-simple .caserne-actu-meta span{font-size:12px}.caserne-public-simple .caserne-actu-meta time{text-align:left;color:#4e3b37;font-size:16px;font-weight:900}.caserne-public-simple .caserne-actu-card h2{font-size:22px;line-height:1.2;margin-bottom:10px}.caserne-public-simple .caserne-actu-card p{font-size:16px;line-height:1.55}
+        .caserne-zone-reponse-simple{background:#f8f2f0;border:1px solid #ead7d2!important;border-radius:14px;padding:14px;margin-top:16px}.caserne-question-reponse{display:block;font-size:17px;color:#3f2020;margin-bottom:3px}.caserne-etat-reponse{display:block;color:#78635e;margin-bottom:11px}.caserne-zone-reponse-simple .caserne-boutons-reponse button{min-height:52px;font-size:15px;padding:10px 8px}.caserne-presents-details{margin-top:10px}.caserne-presents-details summary{cursor:pointer;padding:8px 2px;font-weight:800;color:#6a3434;font-size:14px}.caserne-presents-details .caserne-liste-presents{margin-top:6px}
+        .caserne-public-simple .caserne-bouton-calendrier{min-height:48px;font-size:14px}.caserne-public-simple .caserne-preparation-bloc{font-size:15px}
+        .caserne-anciens-evenements{margin-top:24px;border-top:1px solid #d5c8c4;padding-top:16px}.caserne-anciens-evenements>summary{cursor:pointer;list-style:none;background:#e6dedb;color:#5f5350;border-radius:14px;padding:14px 16px;font-weight:900;text-align:center}.caserne-anciens-evenements>summary::-webkit-details-marker{display:none}.caserne-anciens-evenements[open]>summary{margin-bottom:14px}.caserne-anciens-evenements .caserne-actu-card{opacity:.86}
+        @media(max-width:520px){.caserne-raccourcis-publics{grid-template-columns:1fr}.caserne-public-simple .caserne-boutons-reponse{grid-template-columns:1fr}.caserne-nav-bas{height:74px}.caserne-nav-bas>button:not(.caserne-menu-bulle){font-size:11px}.caserne-menu-bulle{width:54px;height:54px;top:10px}}
         @media(min-width:1000px){body:has(.caserne-shell) .sidebar-pc{display:none!important}.caserne-shell{padding-top:20px}.caserne-top{border-radius:28px;margin:0 0 24px}.caserne-nav-bas{bottom:22px}}
     `;
     document.head.appendChild(style);
