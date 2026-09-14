@@ -8235,7 +8235,12 @@ function afficherErreurExportPDF(erreur) {
 }
 
 function iconePDFHTML() {
-    return `<svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" focusable="false"><path d="M6 2.75h8.2L19 7.55V21.25H6z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M14 2.75v5h5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M8.2 16.9v-5.1h1.9c1.15 0 1.9.68 1.9 1.72 0 1.05-.75 1.73-1.9 1.73H9.4v1.65H8.2zm1.2-2.7h.61c.5 0 .78-.25.78-.68 0-.42-.28-.67-.78-.67H9.4v1.35zm3.3 2.7v-5.1h1.77c1.7 0 2.73.95 2.73 2.55 0 1.61-1.03 2.55-2.73 2.55H12.7zm1.2-1.05h.49c1.02 0 1.58-.49 1.58-1.5 0-1-.56-1.49-1.58-1.49h-.49v2.99z" fill="currentColor"/></svg>`;
+    return `<svg viewBox="0 0 30 30" width="30" height="30" aria-hidden="true" focusable="false">
+        <path d="M6 2.75h11L24 9.75V27.25H6z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+        <path d="M17 2.75v7h7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+        <rect x="7.5" y="15" width="15" height="7.2" rx="1.4" fill="currentColor"/>
+        <text x="15" y="20.25" text-anchor="middle" font-size="5.2" font-weight="800" font-family="Arial, Helvetica, sans-serif" fill="white">PDF</text>
+    </svg>`;
 }
 
 async function exporterPublicationCasernePDF(publicationId) {
@@ -12891,19 +12896,6 @@ function afficherDetailCommandeArchive(
 
             ${lignes}
 
-            ${utilisateurPeutExporterPharmaciePDF() ? `
-                <button
-                    type="button"
-                    class="archive-export-pdf archive-export-pdf-detail bouton-pdf-icone"
-                    onclick="exporterCommandeArchivePDF('${String(archive.id)}')"
-                    aria-label="Exporter cette commande en PDF"
-                    title="Exporter cette commande en PDF"
-                >
-                    ${iconePDFHTML()}
-                </button>
-            ` : ""}
-
-
             ${
                 utilisateurAPermission(
                     "acces_administration"
@@ -12919,6 +12911,16 @@ function afficherDetailCommandeArchive(
                     `
                     : ""
             }
+
+            ${utilisateurPeutExporterPharmaciePDF() ? `
+                <button
+                    type="button"
+                    class="archive-export-pdf archive-export-pdf-detail"
+                    onclick="exporterCommandeArchivePDF('${String(archive.id)}')"
+                >
+                    Exporter la commande en PDF
+                </button>
+            ` : ""}
 
         </main>
 
