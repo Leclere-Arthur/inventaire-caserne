@@ -8234,6 +8234,40 @@ function afficherErreurExportPDF(erreur) {
     alert("Impossible de creer le PDF : " + (erreur?.message || "erreur inconnue"));
 }
 
+async function enregistrerPDFSansApercuNavigateur(doc, nomFichier) {
+    const nom = nomFichier || "document.pdf";
+    const blob = doc.output("blob");
+    const fichier = new File([blob], nom, { type: "application/pdf" });
+
+    // Sur iPhone/iPad, le partage natif evite d'ouvrir le PDF dans la page Safari
+    // (et donc evite l'entete leclere-arthur.github.io).
+    const estAppleMobile = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+        (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+
+    if (estAppleMobile && navigator.share) {
+        try {
+            if (!navigator.canShare || navigator.canShare({ files: [fichier] })) {
+                await navigator.share({ files: [fichier] });
+                return;
+            }
+        } catch (erreur) {
+            if (erreur?.name === "AbortError") return;
+            console.warn("Partage PDF indisponible, telechargement classique utilise.", erreur);
+        }
+    }
+
+    // Sur PC/Android : telechargement direct, sans ouvrir un nouvel onglet PDF.
+    const url = URL.createObjectURL(blob);
+    const lien = document.createElement("a");
+    lien.href = url;
+    lien.download = nom;
+    lien.style.display = "none";
+    document.body.appendChild(lien);
+    lien.click();
+    lien.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 15000);
+}
+
 function iconePDFHTML() {
     return `<svg viewBox="0 0 30 30" width="30" height="30" aria-hidden="true" focusable="false">
         <path d="M6 2.75h11L24 9.75V27.25H6z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
@@ -8348,7 +8382,7 @@ async function exporterPublicationCasernePDF(publicationId) {
         }
 
         ajouterPiedDePagePDF(doc);
-        doc.save(nomFichierPDF(`${type}-${titre}`));
+        await enregistrerPDFSansApercuNavigateur(doc, nomFichierPDF(`${type}-${titre}`));
     } catch (erreur) {
         afficherErreurExportPDF(erreur);
     }
@@ -8417,7 +8451,7 @@ async function exporterEntretiensPDF() {
         }
 
         ajouterPiedDePagePDF(doc);
-        doc.save(nomFichierPDF("planning-entretiens"));
+        await enregistrerPDFSansApercuNavigateur(doc, nomFichierPDF("planning-entretiens"));
     } catch (erreur) {
         afficherErreurExportPDF(erreur);
     }
@@ -8549,7 +8583,7 @@ async function exporterCommandeArchivePDF(archiveId) {
         }
 
         ajouterPiedDePagePDF(doc);
-        doc.save(nomFichierPDF(`commande-${archive.date || "pharmacie"}`));
+        await enregistrerPDFSansApercuNavigateur(doc, nomFichierPDF(`commande-${archive.date || "pharmacie"}`));
     } catch (erreur) {
         afficherErreurExportPDF(erreur);
     }
