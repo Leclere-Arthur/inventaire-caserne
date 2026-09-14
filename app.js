@@ -8195,25 +8195,20 @@ async function reserverCreneauEntretienCaserne(creneauId, retourActualites = fal
         }
 
         const activerRappel = confirm(
-            "Créneau réservé.
+            `Créneau réservé.
 
-Voulez-vous recevoir une notification avant votre entretien ?"
+Voulez-vous recevoir une notification avant votre entretien ?`
         );
 
         if (activerRappel) {
             const choix = prompt(
-                "Combien de minutes avant l'entretien ?
+                `Combien de minutes avant l'entretien ?
 
-" +
-                "15 = 15 minutes
-" +
-                "30 = 30 minutes
-" +
-                "60 = 1 heure
-" +
-                "120 = 2 heures
-" +
-                "1440 = 1 jour",
+15 = 15 minutes
+30 = 30 minutes
+60 = 1 heure
+120 = 2 heures
+1440 = 1 jour`,
                 "60"
             );
 
