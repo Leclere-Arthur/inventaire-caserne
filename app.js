@@ -930,7 +930,7 @@ let minuteurVerificationMiseAJour =
  * Elle permet de détecter une nouvelle version même si seul app.js change.
  */
 const VERSION_APPLICATION_JS =
-    "2026-09-14-2234";
+    "2026-09-14-2310-fluidite";
 
 async function verifierNouvelleVersionAppJs() {
 
@@ -1839,13 +1839,19 @@ async function initialiserSystemeMiseAJourApplication() {
         );
     }
 
-    /* Vérification automatique toutes les 30 secondes au premier plan. */
+    /*
+     * Une vérification toutes les 5 minutes suffit. Les contrôles au retour
+     * dans l'application (focus/pageshow/visibilitychange) restent immédiats.
+     * Cela évite du travail réseau permanent sur les téléphones anciens.
+     */
     minuteurVerificationMiseAJour =
         setInterval(
             function () {
-                void verifierMaintenant();
+                if (document.visibilityState === "visible") {
+                    void verifierMaintenant();
+                }
             },
-            30000
+            300000
         );
 
     /*
@@ -5584,6 +5590,11 @@ let synchronisationSupabaseEnCours = false;
 let synchronisationSupabaseProgrammee = false;
 let abonnementSupabase = null;
 
+// Évite de retélécharger toute la base à chaque changement rapide d'onglet.
+// Les modifications locales, elles, restent toujours prioritaires et sont envoyées immédiatement.
+let derniereSynchronisationNavigation = 0;
+const DELAI_SYNCHRONISATION_NAVIGATION = 20000;
+
 const STORAGE_SYNC = {
     snapshot: "inventaire_caserne_supabase_snapshot_v1",
     modificationsEnAttente: "inventaire_caserne_supabase_modifications_en_attente_v1"
@@ -6031,7 +6042,7 @@ async function synchroniserManuellement() {
         const tempsRestant =
             Math.max(
                 0,
-                2000 - tempsEcoule
+                600 - tempsEcoule
             );
 
         if (tempsRestant > 0) {
@@ -6068,6 +6079,17 @@ async function synchroniserAvantNavigation() {
     }
 
     if (!navigator.onLine) {
+        return;
+    }
+
+    // Si une synchronisation complète vient juste d'être faite et qu'il
+    // n'y a aucune modification locale en attente, on réutilise les données
+    // déjà chargées. Cela rend les changements d'onglet beaucoup plus rapides.
+    if (
+        !existeModificationsEnAttente() &&
+        derniereSynchronisationNavigation > 0 &&
+        Date.now() - derniereSynchronisationNavigation < DELAI_SYNCHRONISATION_NAVIGATION
+    ) {
         return;
     }
 
@@ -6111,6 +6133,7 @@ async function synchroniserAvantNavigation() {
         }
 
         synchronisationSupabaseActive = true;
+        derniereSynchronisationNavigation = Date.now();
 
         console.log(
             "🔄 Synchronisation avant affichage terminée."
@@ -7735,19 +7758,19 @@ function afficherPortailPrincipal() {
 
 async function synchroniserCaserneAvantNavigation() {
     /*
-     * Même logique que dans l'espace Pharmacie : à chaque changement
-     * d'onglet, on synchronise d'abord les données locales puis les
-     * chargeurs Caserne interrogent Supabase juste après.
+     * L'Espace Caserne charge déjà ses propres données directement depuis
+     * Supabase. On évite donc ici la synchronisation complète de la Pharmacie,
+     * qui ralentissait inutilement chaque changement de rubrique.
      */
     if (!navigator.onLine) return;
+
     try {
-        await synchroniserAvantNavigation();
         const supabase = obtenirClientSupabase();
         if (supabase) {
             await supabase.auth.getSession();
         }
     } catch (erreur) {
-        console.warn("Synchronisation Caserne avant navigation :", erreur);
+        console.warn("Vérification session Caserne :", erreur);
     }
 }
 
