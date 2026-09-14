@@ -3428,6 +3428,14 @@ async function afficherProfilUtilisateur() {
 
                 </div>
 
+                <div id="profil-notifications-details" style="display:none; margin-top:16px; padding-top:14px; border-top:1px solid rgba(0,0,0,.08);">
+                    <strong style="display:block; margin-bottom:10px;">Notifications souhaitées</strong>
+                    <div id="profil-notifications-choix"></div>
+                    <small style="display:block; margin-top:10px; opacity:.62; line-height:1.35;">
+                        Seules les rubriques auxquelles tu as accès sont proposées.
+                    </small>
+                </div>
+
             </section>
 
 
@@ -3478,6 +3486,116 @@ async function afficherProfilUtilisateur() {
 
     await rafraichirNotificationsProfil();
 
+}
+
+
+function obtenirCategoriesNotificationsProfil() {
+    const categories = [
+        { cle: "sport", libelle: "Sport", permission: "acces_sport" },
+        { cle: "manoeuvre", libelle: "Manœuvre", permission: "acces_manoeuvre" },
+        { cle: "casernement", libelle: "Casernement", permission: "acces_casernement" },
+        { cle: "reunion", libelle: "Réunion", permission: "acces_reunion" },
+        { cle: "amical", libelle: "Amical", permission: "acces_amical_public", permissionAlternative: "acces_amical_membre" },
+        { cle: "comite_centre", libelle: "Comité de centre", permission: "acces_comite_centre" },
+        { cle: "administratif", libelle: "Administratif", permission: "acces_administratif" },
+        { cle: "entretien_individuel", libelle: "Entretien individuel", permission: "acces_entretien_individuel" }
+    ];
+
+    return categories.filter(function (categorie) {
+        if (utilisateurEstSPVAdmin()) return true;
+        return utilisateurAPermission(categorie.permission) ||
+            (categorie.permissionAlternative && utilisateurAPermission(categorie.permissionAlternative));
+    });
+}
+
+
+async function chargerPreferencesNotificationsProfil() {
+    const supabase = obtenirClientSupabase();
+    if (!supabase || !navigator.onLine) return null;
+
+    const { data, error } = await supabase.rpc("initialiser_preferences_notifications");
+    if (error) {
+        console.warn("Préférences notifications :", error);
+        return null;
+    }
+
+    return data || null;
+}
+
+
+function afficherChoixNotificationsProfil(preferences) {
+    const zone = document.getElementById("profil-notifications-choix");
+    if (!zone) return;
+
+    const categories = obtenirCategoriesNotificationsProfil();
+
+    if (!categories.length) {
+        zone.innerHTML = `<small>Aucune rubrique de notification disponible pour ton compte.</small>`;
+        return;
+    }
+
+    zone.innerHTML = categories.map(function (categorie) {
+        const active = preferences?.[categorie.cle] !== false;
+        return `
+            <div class="profil-notification-ligne" style="padding:9px 0;">
+                <div class="profil-notification-texte">
+                    <strong>${echapperHTML(categorie.libelle)}</strong>
+                </div>
+                <label class="switch-notifications">
+                    <input
+                        type="checkbox"
+                        data-notification-categorie="${echapperHTML(categorie.cle)}"
+                        ${active ? "checked" : ""}
+                        onchange="enregistrerPreferencesNotificationsProfil()"
+                    >
+                    <span></span>
+                </label>
+            </div>
+        `;
+    }).join("");
+}
+
+
+async function enregistrerPreferencesNotificationsProfil() {
+    const supabase = obtenirClientSupabase();
+    if (!supabase || !navigator.onLine) {
+        alert("Une connexion Internet est nécessaire pour modifier les notifications.");
+        return;
+    }
+
+    const valeurs = {
+        sport: true,
+        manoeuvre: true,
+        casernement: true,
+        reunion: true,
+        amical: true,
+        comite_centre: true,
+        administratif: true,
+        entretien_individuel: true
+    };
+
+    document.querySelectorAll("[data-notification-categorie]").forEach(function (caseNotification) {
+        const cle = caseNotification.getAttribute("data-notification-categorie");
+        if (cle && Object.prototype.hasOwnProperty.call(valeurs, cle)) {
+            valeurs[cle] = caseNotification.checked === true;
+        }
+    });
+
+    const { error } = await supabase.rpc("enregistrer_preferences_notifications", {
+        p_sport: valeurs.sport,
+        p_manoeuvre: valeurs.manoeuvre,
+        p_casernement: valeurs.casernement,
+        p_reunion: valeurs.reunion,
+        p_amical: valeurs.amical,
+        p_comite_centre: valeurs.comite_centre,
+        p_administratif: valeurs.administratif,
+        p_entretien_individuel: valeurs.entretien_individuel
+    });
+
+    if (error) {
+        console.error("Enregistrement préférences notifications :", error);
+        alert("Impossible d'enregistrer ce choix.");
+    }
 }
 
 
@@ -3533,6 +3651,17 @@ async function rafraichirNotificationsProfil() {
             actif
                 ? "Activées sur cet appareil"
                 : "Désactivées sur cet appareil";
+    }
+
+    const details = document.getElementById("profil-notifications-details");
+
+    if (details) {
+        details.style.display = actif ? "block" : "none";
+    }
+
+    if (actif) {
+        const preferences = await chargerPreferencesNotificationsProfil();
+        afficherChoixNotificationsProfil(preferences);
     }
 
 }
@@ -3796,7 +3925,8 @@ async function changerMonMotDePasse() {
 
 async function envoyerNotificationPush(
     titre,
-    message
+    message,
+    typeNotification = "generale"
 ) {
 
     if (!navigator.onLine) {
@@ -3833,6 +3963,10 @@ async function envoyerNotificationPush(
                     message:
                         String(
                             message || ""
+                        ),
+                    type_notification:
+                        String(
+                            typeNotification || "generale"
                         )
                 }
             }
@@ -4061,7 +4195,8 @@ async function envoyerNotificationsStockEnAttente() {
 
                 await envoyerNotificationPush(
                     notification.titre,
-                    notification.message
+                    notification.message,
+                    "pharmacie"
                 );
 
             } catch (erreur) {
@@ -15583,6 +15718,7 @@ function rendreGestionUtilisateurs() {
                             ${permissionRoleHTML(role,"acces_remise_zero_historique","Remise à zéro de l'historique",prefixe)}
                             ${permissionRoleHTML(role,"acces_gestion_utilisateurs","Gestion des utilisateurs",prefixe)}
                             ${permissionRoleHTML(role,"acces_notifications","Envoyer une notification",prefixe)}
+                            ${permissionRoleHTML(role,"acces_notifications_pharmacie","Notifications pharmacie",prefixe)}
                             ${permissionRoleHTML(role,"acces_espace_caserne","Espace Caserne",prefixe)}
 ${permissionRoleHTML(role,"acces_sport","Sport",prefixe)}
 ${permissionRoleHTML(role,"acces_sport_admin","Sport — Admin",prefixe)}
@@ -15730,6 +15866,7 @@ ${permissionRoleHTML(role,"acces_entretien_individuel_admin","Entretien individu
 <label><input type="checkbox" id="new-role-remise-zero"> Remise à zéro de l'historique</label>
 <label><input type="checkbox" id="new-role-utilisateurs"> Gestion des utilisateurs</label>
 <label><input type="checkbox" id="new-role-notifications"> Envoyer une notification</label>
+<label><input type="checkbox" id="new-role-notifications-pharmacie"> Notifications pharmacie</label>
 <label><input type="checkbox" id="new-role-espace-caserne"> Espace Caserne</label>
 <label><input type="checkbox" id="new-role-sport"> Sport</label>
 <label><input type="checkbox" id="new-role-sport-admin"> Sport — Admin</label>
@@ -16080,6 +16217,8 @@ async function creerRoleAdministration() {
                     lirePermissionRole("new-role-utilisateurs"),
                 acces_notifications:
                     lirePermissionRole("new-role-notifications"),
+                acces_notifications_pharmacie:
+                    lirePermissionRole("new-role-notifications-pharmacie"),
                 acces_espace_caserne:
                     lirePermissionRole("new-role-espace-caserne"),
                 acces_sport:
@@ -16209,6 +16348,8 @@ async function enregistrerRole(
                     lirePermissionRole(prefixe + "-acces_gestion_utilisateurs"),
                 acces_notifications:
                     lirePermissionRole(prefixe + "-acces_notifications"),
+                acces_notifications_pharmacie:
+                    lirePermissionRole(prefixe + "-acces_notifications_pharmacie"),
                 acces_espace_caserne:
                     lirePermissionRole(prefixe + "-acces_espace_caserne"),
                 acces_sport:
