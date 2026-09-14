@@ -8176,18 +8176,106 @@ function carteEntretienCaserne(entretien, estAdmin) {
 
 async function reserverCreneauEntretienCaserne(creneauId, retourActualites = false) {
     const supabase = obtenirClientSupabase();
-    if (!supabase || !navigator.onLine) { alert("Une connexion Internet est nécessaire pour choisir un créneau."); return; }
+
+    if (!supabase || !navigator.onLine) {
+        alert("Une connexion Internet est nécessaire pour choisir un créneau.");
+        return;
+    }
+
     try {
-        const {error} = await supabase.rpc("reserver_creneau_entretien_caserne", {p_creneau_id:creneauId});
-        if (error) throw error;
-        alert("Créneau réservé.");
-        if (retourActualites) await afficherActualitesCaserne();
-        else await afficherRubriqueCaserne("entretien_individuel");
+        const { error } = await supabase.rpc(
+            "reserver_creneau_entretien_caserne",
+            {
+                p_creneau_id: creneauId
+            }
+        );
+
+        if (error) {
+            throw error;
+        }
+
+        const activerRappel = confirm(
+            "Créneau réservé.
+
+Voulez-vous recevoir une notification avant votre entretien ?"
+        );
+
+        if (activerRappel) {
+            const choix = prompt(
+                "Combien de minutes avant l'entretien ?
+
+" +
+                "15 = 15 minutes
+" +
+                "30 = 30 minutes
+" +
+                "60 = 1 heure
+" +
+                "120 = 2 heures
+" +
+                "1440 = 1 jour",
+                "60"
+            );
+
+            if (choix !== null) {
+                const delaiMinutes = Math.max(
+                    1,
+                    Number(choix) || 60
+                );
+
+                const { error: rappelError } = await supabase.rpc(
+                    "configurer_rappel_entretien_caserne",
+                    {
+                        p_creneau_id: creneauId,
+                        p_delai_minutes: delaiMinutes
+                    }
+                );
+
+                if (rappelError) {
+                    console.error(
+                        "Erreur rappel entretien :",
+                        rappelError
+                    );
+
+                    alert(
+                        "Le créneau est réservé, mais le rappel n'a pas pu être enregistré : " +
+                        (rappelError.message || "erreur inconnue")
+                    );
+                } else {
+                    alert(
+                        "Créneau réservé et rappel automatique activé."
+                    );
+                }
+            } else {
+                alert("Créneau réservé.");
+            }
+        } else {
+            alert("Créneau réservé.");
+        }
+
+        if (retourActualites) {
+            await afficherActualitesCaserne();
+        } else {
+            await afficherRubriqueCaserne(
+                "entretien_individuel"
+            );
+        }
+
     } catch (erreur) {
         console.error(erreur);
-        alert("Impossible de réserver ce créneau : " + (erreur?.message || "erreur inconnue"));
-        if (retourActualites) await afficherActualitesCaserne();
-        else await afficherRubriqueCaserne("entretien_individuel");
+
+        alert(
+            "Impossible de réserver ce créneau : " +
+            (erreur?.message || "erreur inconnue")
+        );
+
+        if (retourActualites) {
+            await afficherActualitesCaserne();
+        } else {
+            await afficherRubriqueCaserne(
+                "entretien_individuel"
+            );
+        }
     }
 }
 
