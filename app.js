@@ -8235,37 +8235,21 @@ function afficherErreurExportPDF(erreur) {
 }
 
 async function enregistrerPDFSansApercuNavigateur(doc, nomFichier) {
-    const nom = nomFichier || "document.pdf";
     const blob = doc.output("blob");
-    const fichier = new File([blob], nom, { type: "application/pdf" });
+    const url = URL.createObjectURL(blob);
 
-    // Sur iPhone/iPad, le partage natif evite d'ouvrir le PDF dans la page Safari
-    // (et donc evite l'entete leclere-arthur.github.io).
-    const estAppleMobile = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
-        (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+    // Ouvre maintenant le PDF en prévisualisation dans le navigateur
+    // au lieu de lancer directement son téléchargement ou son partage.
+    const fenetrePDF = window.open(url, "_blank");
 
-    if (estAppleMobile && navigator.share) {
-        try {
-            if (!navigator.canShare || navigator.canShare({ files: [fichier] })) {
-                await navigator.share({ files: [fichier] });
-                return;
-            }
-        } catch (erreur) {
-            if (erreur?.name === "AbortError") return;
-            console.warn("Partage PDF indisponible, telechargement classique utilise.", erreur);
-        }
+    if (!fenetrePDF) {
+        // Solution de secours si le navigateur bloque l'ouverture du nouvel onglet.
+        window.location.href = url;
+        return;
     }
 
-    // Sur PC/Android : telechargement direct, sans ouvrir un nouvel onglet PDF.
-    const url = URL.createObjectURL(blob);
-    const lien = document.createElement("a");
-    lien.href = url;
-    lien.download = nom;
-    lien.style.display = "none";
-    document.body.appendChild(lien);
-    lien.click();
-    lien.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 15000);
+    // On laisse suffisamment de temps au navigateur pour charger le PDF.
+    setTimeout(() => URL.revokeObjectURL(url), 120000);
 }
 
 function iconePDFHTML() {
