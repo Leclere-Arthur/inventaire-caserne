@@ -930,7 +930,7 @@ let minuteurVerificationMiseAJour =
  * Elle permet de détecter une nouvelle version même si seul app.js change.
  */
 const VERSION_APPLICATION_JS =
-    "2026-09-14-2310-fluidite";
+    "2026-09-16-2205-pdf-entretien-modif-notif-creation";
 
 async function verifierNouvelleVersionAppJs() {
 
@@ -8372,6 +8372,88 @@ async function exporterPublicationCasernePDF(publicationId) {
     }
 }
 
+async function exporterEntretienPDF(entretienId) {
+    if (!utilisateurEstSPVAdmin() && !utilisateurAPermission("acces_entretien_individuel_admin")) {
+        alert("Export PDF réservé aux administrateurs.");
+        return;
+    }
+
+    try {
+        const entretiens = await chargerEntretiensCaserne();
+        const entretien = (entretiens || []).find(e => String(e.id) === String(entretienId));
+        if (!entretien) {
+            alert("Planning introuvable.");
+            return;
+        }
+
+        const reponses = await chargerReponsesEntretiensAdminCaserne();
+        const idsCreneaux = new Set((entretien.creneaux || []).map(c => String(c.creneau_id || c.id || "")).filter(Boolean));
+        const titreEntretien = String(entretien.titre || "Entretien individuel");
+        const filtrees = (reponses || []).filter(r => {
+            if (r.entretien_id != null) return String(r.entretien_id) === String(entretienId);
+            if (r.creneau_id != null && idsCreneaux.size) return idsCreneaux.has(String(r.creneau_id));
+            return String(r.titre || "Entretien individuel") === titreEntretien;
+        });
+        const triees = filtrees
+            .filter(r => r.date_heure && !Number.isNaN(new Date(r.date_heure).getTime()))
+            .sort((a,b) => new Date(a.date_heure) - new Date(b.date_heure));
+
+        if (!triees.length) {
+            alert("Aucun rendez-vous réservé pour ce planning.");
+            return;
+        }
+
+        const jsPDF = await obtenirBibliothequesPDF();
+        const doc = new jsPDF({orientation:"portrait", unit:"mm", format:"a4"});
+        const c = couleurPDF();
+        let y = ajouterEntetePDF(doc, titreEntretien.toUpperCase(), "Rendez-vous réservés pour ce planning");
+        const groupes = new Map();
+        triees.forEach(r => {
+            const d = new Date(r.date_heure);
+            const cle = d.toLocaleDateString("fr-FR", {year:"numeric", month:"2-digit", day:"2-digit"});
+            if (!groupes.has(cle)) groupes.set(cle, []);
+            groupes.get(cle).push(r);
+        });
+
+        for (const lignes of groupes.values()) {
+            if (y > 248) {
+                doc.addPage();
+                y = ajouterEntetePDF(doc, titreEntretien.toUpperCase(), "Suite du planning");
+            }
+            const premier = new Date(lignes[0].date_heure);
+            const libelleJour = premier.toLocaleDateString("fr-FR", {weekday:"long", day:"2-digit", month:"long", year:"numeric"});
+            doc.setFillColor(...c.principal);
+            doc.roundedRect(14, y, 182, 10, 2, 2, "F");
+            doc.setTextColor(...c.blanc);
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(10.5);
+            doc.text(texteCompatiblePDF(libelleJour.toUpperCase()), 18, y + 6.5);
+            y += 13;
+            const body = lignes.map(r => {
+                const d = new Date(r.date_heure);
+                const heure = d.toLocaleTimeString("fr-FR", {hour:"2-digit", minute:"2-digit"});
+                const nom = [r.user_prenom, r.user_nom].filter(Boolean).join(" ") || "Utilisateur";
+                return [texteCompatiblePDF(heure), texteCompatiblePDF(nom)];
+            });
+            doc.autoTable({
+                startY:y,
+                head:[["HEURE", "NOM / PRÉNOM"]],
+                body,
+                theme:"grid",
+                margin:{left:14, right:14, bottom:20},
+                headStyles:{fillColor:c.clair, textColor:c.principal, fontStyle:"bold", lineColor:c.ligne, lineWidth:.2},
+                styles:{font:"helvetica", fontSize:9, textColor:c.texte, cellPadding:2.7, lineColor:c.ligne, lineWidth:.15},
+                columnStyles:{0:{cellWidth:30, halign:"center", fontStyle:"bold"}, 1:{cellWidth:"auto"}}
+            });
+            y = doc.lastAutoTable.finalY + 8;
+        }
+        ajouterPiedDePagePDF(doc);
+        await enregistrerPDFSansApercuNavigateur(doc, nomFichierPDF(`entretien-${titreEntretien}`));
+    } catch (erreur) {
+        afficherErreurExportPDF(erreur);
+    }
+}
+
 async function exporterEntretiensPDF() {
     if (!utilisateurEstSPVAdmin() && !utilisateurAPermission("acces_entretien_individuel_admin")) {
         alert("Export PDF reserve aux administrateurs.");
@@ -8737,6 +8819,7 @@ function formulaireAdminPublicationCaserne(type) {
             ${estAmical ? `<label>Type<select id="caserne-publication-sous-type"><option value="evenement">Événement</option><option value="reunion">Réunion</option><option value="autre">Autre</option></select></label><label>Visibilité<select id="caserne-publication-visibilite"><option value="public">Tout le personnel autorisé</option><option value="membre">Membres de l'Amical</option></select></label>` : ""}
             <label>Date et heure${type === "administratif" || type === "casernement" ? " (facultatif)" : ""}<input id="caserne-publication-date" type="datetime-local"></label>
             <label class="caserne-switch-ligne"><input id="caserne-publication-reponse" type="checkbox"><span>Demander une réponse Présent / Absent</span></label>
+            <label class="caserne-switch-ligne"><input id="caserne-publication-notification-creation" type="checkbox"><span>Envoyer une notification : nouvelle actualité disponible</span></label>
             <label class="caserne-switch-ligne"><input id="caserne-publication-notification-auto" type="checkbox" onchange="gererOptionNotificationAutoCaserne(this)"><span>Envoyer une notification automatique aux personnes présentes</span></label>
             <label id="caserne-publication-notification-delai-ligne" style="display:none">Délai avant l'événement<select id="caserne-publication-notification-delai"><option value="15">15 minutes avant</option><option value="30">30 minutes avant</option><option value="60" selected>1 heure avant</option><option value="120">2 heures avant</option><option value="360">6 heures avant</option><option value="720">12 heures avant</option><option value="1440">1 jour avant</option><option value="2880">2 jours avant</option><option value="10080">7 jours avant</option></select><small>Le rappel est envoyé uniquement aux utilisateurs ayant répondu « Présent ».</small></label>
             ${estAmical ? `<label>Date et heure de préparation (facultatif)<input id="caserne-publication-preparation" type="datetime-local"></label><label class="caserne-switch-ligne"><input id="caserne-publication-reponse-preparation" type="checkbox"><span>Demander une réponse Présent / Absent pour la préparation</span></label>` : ""}
@@ -8792,6 +8875,7 @@ async function creerPublicationModuleCaserne(type) {
     const description = document.getElementById("caserne-publication-description")?.value?.trim() || null;
     const dateValeur = document.getElementById("caserne-publication-date")?.value || "";
     const prepValeur = type === "amical" ? (document.getElementById("caserne-publication-preparation")?.value || "") : "";
+    const notificationCreation = !!document.getElementById("caserne-publication-notification-creation")?.checked;
     const notificationAuto = !!document.getElementById("caserne-publication-notification-auto")?.checked;
     const notificationDelaiMinutes = Math.max(1, Number(document.getElementById("caserne-publication-notification-delai")?.value || 60));
     const demandeReponse = notificationAuto || !!document.getElementById("caserne-publication-reponse")?.checked;
@@ -8835,6 +8919,19 @@ async function creerPublicationModuleCaserne(type) {
                 if (photoError) throw photoError;
             }
         }
+        if (notificationCreation) {
+            try {
+                const libelleRubrique = obtenirLibelleTypeCaserne(type);
+                await envoyerNotificationPush(
+                    `Nouvelle actualité · ${libelleRubrique}`,
+                    `${titre || cfg.titre || libelleRubrique} · Nouvelle actualité disponible`,
+                    `caserne_${type}`
+                );
+            } catch (erreurNotification) {
+                console.error("Notification de création :", erreurNotification);
+                alert("La publication est créée, mais la notification n'a pas pu être envoyée : " + (erreurNotification?.message || "erreur inconnue"));
+            }
+        }
         alert("Publication enregistrée.");
         await afficherRubriqueCaserne(type);
     } catch (erreur) {
@@ -8858,6 +8955,11 @@ function valeurDateLocalePourPromptCaserne(valeur) {
 }
 
 async function modifierPublicationCaserne(publicationId, type) {
+    const rubrique = obtenirRubriquesCaserne().find(r => r[0] === type);
+    if (!rubrique || (!utilisateurEstSPVAdmin() && !utilisateurAPermission(rubrique[3]))) {
+        alert("Tu n'as pas l'autorisation de modifier cette publication.");
+        return;
+    }
     const p = window.__publicationsCaserneParId?.[publicationId];
     if (!p) { alert("Publication introuvable. Recharge la rubrique puis réessaie."); return; }
     const titre = prompt("Titre", p.titre || "");
@@ -8911,6 +9013,11 @@ async function modifierPublicationCaserne(publicationId, type) {
 }
 
 async function supprimerPublicationCaserne(publicationId, typeRetour) {
+    const rubrique = obtenirRubriquesCaserne().find(r => r[0] === typeRetour);
+    if (!rubrique || (!utilisateurEstSPVAdmin() && !utilisateurAPermission(rubrique[3]))) {
+        alert("Tu n'as pas l'autorisation de supprimer cette publication.");
+        return;
+    }
     if (!confirm("Supprimer cette publication ?")) return;
     const supabase = obtenirClientSupabase();
     if (!supabase || !navigator.onLine) { alert("Une connexion Internet est nécessaire."); return; }
@@ -9132,7 +9239,7 @@ function carteEntretienCaserne(entretien, estAdmin) {
                 }).join("")}</div></div>`;
             }).join("") : `<div class="caserne-entretien-sans-creneau">Aucun créneau n'a encore été ajouté.</div>`}
         </div>
-        ${estAdmin ? `<div class="caserne-actions-admin"><button type="button" onclick="supprimerPlanningEntretienCaserne('${entretien.id}')">Supprimer le planning</button></div>` : ""}
+        ${estAdmin ? `<div class="caserne-actions-admin"><button type="button" class="caserne-export-pdf bouton-pdf-icone" onclick="exporterEntretienPDF('${entretien.id}')" aria-label="Exporter ce planning en PDF" title="Exporter ce planning en PDF">${iconePDFHTML()}</button><button type="button" onclick="supprimerPlanningEntretienCaserne('${entretien.id}')">Supprimer le planning</button></div>` : ""}
     </article>`;
 }
 
@@ -19306,6 +19413,7 @@ window.supprimerPublicationCaserne = supprimerPublicationCaserne;
 window.changerVueAdminEntretienCaserne = changerVueAdminEntretienCaserne;
 window.exporterPublicationCasernePDF = exporterPublicationCasernePDF;
 window.exporterEntretiensPDF = exporterEntretiensPDF;
+window.exporterEntretienPDF = exporterEntretienPDF;
 window.exporterCommandeArchivePDF = exporterCommandeArchivePDF;
 window.ajouterDateEntretienCaserne = ajouterDateEntretienCaserne;
 window.retirerDateEntretienCaserne = retirerDateEntretienCaserne;
