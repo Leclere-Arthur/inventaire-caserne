@@ -21411,176 +21411,180 @@ if (
 
 
 /* =========================================================
-   TUTORIEL VISITEUR
-   Présentation courte des fonctions accessibles à l'utilisateur.
-   Les fonctions d'administration ne sont jamais présentées.
+   TUTORIEL VISITEUR INTERACTIF
+   L'utilisateur avance en cliquant lui-même sur les vrais boutons.
+   Aucune action d'administration n'est présentée et l'événement de
+   démonstration Caserne est uniquement visuel : rien n'est enregistré.
    ========================================================= */
 let tutorielApplicationActif = false;
-let tutorielApplicationEtapes = [];
-let tutorielApplicationIndex = 0;
+let tutorielApplicationEtape = 0;
+let tutorielApplicationNettoyageClic = null;
 
 function initialiserStyleTutorielApplication() {
     if (document.getElementById("style-tutoriel-application")) return;
     const style = document.createElement("style");
     style.id = "style-tutoriel-application";
     style.textContent = `
-        .tutoriel-voile {
-            position: fixed; inset: 0; z-index: 250000;
-            background: rgba(8,12,16,.76);
-        }
-        .tutoriel-cible {
-            position: relative !important; z-index: 250002 !important;
-            isolation: isolate; border-radius: 14px;
-            box-shadow: 0 0 0 4px rgba(255,255,255,.96), 0 8px 30px rgba(0,0,0,.28) !important;
-        }
-        .tutoriel-bulle {
-            position: fixed; z-index: 250003; left: 18px; right: 18px;
-            bottom: calc(105px + env(safe-area-inset-bottom, 0px));
-            max-width: 460px; margin: 0 auto; padding: 17px;
-            box-sizing: border-box; border-radius: 18px;
-            background: #fff; color: #202124; box-shadow: 0 14px 45px rgba(0,0,0,.32);
-        }
-        .tutoriel-bulle strong { display:block; font-size:18px; margin-bottom:6px; }
-        .tutoriel-bulle p { margin:0; font-size:15px; line-height:1.4; }
-        .tutoriel-actions { display:flex; gap:9px; margin-top:15px; }
-        .tutoriel-actions button { min-height:43px; border:0; border-radius:11px; padding:9px 13px; font:inherit; font-weight:800; }
-        .tutoriel-quitter { background:#eceff1; color:#333; }
-        .tutoriel-precedent { background:#eceff1; color:#333; margin-left:auto; }
-        .tutoriel-suivant { background:#8b2026; color:#fff; }
-        @media (min-width: 900px) {
-            .tutoriel-bulle { bottom: 30px; }
-        }
+        .tutoriel-voile{position:fixed;inset:0;z-index:250000;background:rgba(8,12,16,.76);pointer-events:auto}
+        .tutoriel-cible{position:relative!important;z-index:250002!important;isolation:isolate;border-radius:14px;box-shadow:0 0 0 4px rgba(255,255,255,.96),0 8px 30px rgba(0,0,0,.28)!important;pointer-events:auto!important}
+        .tutoriel-bulle{position:fixed;z-index:250003;left:18px;right:18px;bottom:calc(105px + env(safe-area-inset-bottom,0px));max-width:460px;margin:0 auto;padding:15px 17px;box-sizing:border-box;border-radius:18px;background:#fff;color:#202124;box-shadow:0 14px 45px rgba(0,0,0,.32)}
+        .tutoriel-bulle strong{display:block;font-size:18px;margin-bottom:5px}.tutoriel-bulle p{margin:0;font-size:15px;line-height:1.4}.tutoriel-indication{display:block;margin-top:8px;font-size:12px;font-weight:850;color:#7d2425}.tutoriel-actions{display:flex;justify-content:flex-end;margin-top:12px}.tutoriel-actions button{min-height:40px;border:0;border-radius:11px;padding:8px 13px;font:inherit;font-weight:800;background:#eceff1;color:#333}
+        .tutoriel-evenement-factice{border:2px dashed #8b3437!important}.tutoriel-evenement-factice .caserne-badge-tuto{display:inline-flex;margin-bottom:8px;padding:5px 8px;border-radius:999px;background:#f4e1dc;color:#74292b;font-size:11px;font-weight:900}
+        @media(min-width:900px){.tutoriel-bulle{bottom:30px}}
     `;
     document.head.appendChild(style);
 }
 
-function obtenirEtapesTutorielApplication() {
-    const etapes = [
-        {
-            titre: "Accueil",
-            texte: "C'est le point de départ pour accéder aux différents espaces.",
-            ouvrir: () => afficherPortailPrincipal(),
-            cible: () => document.querySelector(".portail-cis-espaces")
-        }
-    ];
-
-    if (utilisateurAPermission("acces_espace_caserne") || utilisateurEstSPVAdmin()) {
-        etapes.push({
-            titre: "Espace Caserne",
-            texte: "Retrouve ici les actualités, événements et informations de la caserne.",
-            ouvrir: () => afficherPortailPrincipal(),
-            cible: () => document.querySelector(".portail-cis-caserne")
-        });
-        etapes.push({
-            titre: "Rubriques Caserne",
-            texte: "Le menu affiche seulement les rubriques auxquelles tu as accès.",
-            ouvrir: () => ouvrirMenuCaserne(),
-            cible: () => document.querySelector(".caserne-menu-liste-simple")
-        });
-
-        for (const rubrique of obtenirRubriquesCaserne().filter(utilisateurPeutVoirRubriqueCaserne)) {
-            const presentation = obtenirPresentationRubriqueCaserne(rubrique[0]);
-            etapes.push({
-                titre: rubrique[1],
-                texte: presentation.aide + ".",
-                ouvrir: () => ouvrirMenuCaserne(),
-                cible: () => [...document.querySelectorAll(".caserne-menu-liste-simple button")]
-                    .find(b => String(b.textContent || "").includes(rubrique[1]))
-            });
-        }
-    }
-
-    const outilsPharmacie = obtenirOngletsPharmacieAccessibles().filter(o =>
-        !/administration|administrateur/i.test(String(o.libelle || ""))
-    );
-    if (outilsPharmacie.length) {
-        etapes.push({
-            titre: "Espace Pharmacie",
-            texte: "Cet espace regroupe les outils de matériel disponibles pour ton compte.",
-            ouvrir: () => afficherPortailPrincipal(),
-            cible: () => document.querySelector(".portail-cis-pharmacie")
-        });
-        for (const outil of outilsPharmacie) {
-            etapes.push({
-                titre: outil.libelle,
-                texte: outil.aide + ".",
-                ouvrir: () => afficherAccueil(),
-                cible: () => [...document.querySelectorAll(".menu-principal .menu-button")]
-                    .find(b => String(b.textContent || "").includes(outil.libelle))
-            });
-        }
-    }
-
-    etapes.push({
-        titre: "Ton profil",
-        texte: "Ici, tu peux gérer ton compte, tes notifications et les mises à jour de l'application.",
-        ouvrir: () => afficherPortailPrincipal(),
-        cible: () => [...document.querySelectorAll(".caserne-nav-bas button")]
-            .find(b => /profil/i.test(String(b.textContent || "")))
-    });
-    return etapes;
-}
-
 function nettoyerEtapeTutorielApplication() {
+    if (typeof tutorielApplicationNettoyageClic === "function") tutorielApplicationNettoyageClic();
+    tutorielApplicationNettoyageClic = null;
     document.querySelectorAll(".tutoriel-cible").forEach(el => el.classList.remove("tutoriel-cible"));
     document.querySelectorAll(".tutoriel-voile,.tutoriel-bulle").forEach(el => el.remove());
 }
 
-function quitterTutorielApplication() {
+function quitterTutorielApplication(terminer = false) {
     nettoyerEtapeTutorielApplication();
     tutorielApplicationActif = false;
-    tutorielApplicationEtapes = [];
-    tutorielApplicationIndex = 0;
+    tutorielApplicationEtape = 0;
+    document.querySelectorAll(".tutoriel-evenement-factice").forEach(el => el.remove());
     afficherPortailPrincipal();
+    if (terminer) setTimeout(() => alert("Tutoriel terminé. Tu peux maintenant utiliser l'application normalement."), 80);
 }
 
-async function afficherEtapeTutorielApplication(index) {
-    if (!tutorielApplicationActif) return;
+function ajouterEvenementFacticeTutoriel() {
+    if (!tutorielApplicationActif || document.querySelector(".tutoriel-evenement-factice")) return;
+    const fil = document.querySelector(".caserne-fil-actuel");
+    if (!fil) return;
+    const article = document.createElement("article");
+    article.className = "caserne-actu-card caserne-type-sport tutoriel-evenement-factice";
+    article.innerHTML = `
+        <span class="caserne-badge-tuto">EXEMPLE DU TUTORIEL</span>
+        <div class="caserne-actu-meta"><span>Sport</span><time>Exemple</time></div>
+        <h2>Entraînement sportif</h2>
+        <p>Ceci est un exemple. Il disparaîtra à la fin du tutoriel.</p>
+        <div class="caserne-zone-reponse caserne-zone-reponse-simple">
+            <strong class="caserne-question-reponse">Seras-tu présent ?</strong>
+            <small class="caserne-etat-reponse">Choisis ta réponse</small>
+            <div class="caserne-boutons-reponse">
+                <button type="button" class="tutoriel-present-factice">✓ Je serai présent</button>
+                <button type="button" disabled>✕ Je serai absent</button>
+            </div>
+        </div>`;
+    fil.prepend(article);
+}
+
+function afficherBulleTutoriel(titre, texte, cible, apresClic, options = {}) {
+    if (!tutorielApplicationActif || !cible) return false;
     nettoyerEtapeTutorielApplication();
-    if (index < 0) index = 0;
-    if (index >= tutorielApplicationEtapes.length) {
-        quitterTutorielApplication();
-        alert("Tutoriel terminé. Tu peux maintenant utiliser l'application normalement.");
-        return;
-    }
-    tutorielApplicationIndex = index;
-    const etape = tutorielApplicationEtapes[index];
-    await Promise.resolve(etape.ouvrir?.());
-    await new Promise(resolve => setTimeout(resolve, 80));
-
-    const cible = etape.cible?.();
-    if (!cible) {
-        afficherEtapeTutorielApplication(index + 1);
-        return;
-    }
     cible.classList.add("tutoriel-cible");
-    cible.scrollIntoView({behavior:"smooth", block:"center"});
-
+    cible.scrollIntoView({behavior:"smooth",block:"center"});
     const voile = document.createElement("div");
     voile.className = "tutoriel-voile";
     const bulle = document.createElement("div");
     bulle.className = "tutoriel-bulle";
-    bulle.innerHTML = `
-        <strong>${echapperHTML(etape.titre)}</strong>
-        <p>${echapperHTML(etape.texte)}</p>
-        <div class="tutoriel-actions">
-            <button type="button" class="tutoriel-quitter" onclick="quitterTutorielApplication()">Quitter</button>
-            ${index > 0 ? `<button type="button" class="tutoriel-precedent" onclick="afficherEtapeTutorielApplication(${index - 1})">Précédent</button>` : `<span style="margin-left:auto"></span>`}
-            <button type="button" class="tutoriel-suivant" onclick="afficherEtapeTutorielApplication(${index + 1})">${index === tutorielApplicationEtapes.length - 1 ? "Terminer" : "Suivant"}</button>
-        </div>`;
+    bulle.innerHTML = `<strong>${echapperHTML(titre)}</strong><p>${echapperHTML(texte)}</p><span class="tutoriel-indication">Appuie sur le bouton éclairé pour continuer.</span><div class="tutoriel-actions"><button type="button" onclick="quitterTutorielApplication()">Quitter le tutoriel</button></div>`;
     document.body.appendChild(voile);
     document.body.appendChild(bulle);
+
+    const gestionClic = (event) => {
+        if (options.empecherAction === true) {
+            event.preventDefault();
+            event.stopImmediatePropagation();
+        }
+        cible.removeEventListener("click", gestionClic, true);
+        tutorielApplicationNettoyageClic = null;
+        nettoyerEtapeTutorielApplication();
+        if (options.selectionPresent === true) {
+            cible.classList.add("selectionne", "present");
+            cible.textContent = "✓ Présent sélectionné";
+        }
+        setTimeout(() => apresClic?.(), options.delai || 180);
+    };
+    cible.addEventListener("click", gestionClic, true);
+    tutorielApplicationNettoyageClic = () => cible.removeEventListener("click", gestionClic, true);
+    return true;
+}
+
+function boutonNavigationTutoriel(libelle) {
+    return [...document.querySelectorAll(".caserne-nav-bas button")].find(b => String(b.textContent || "").toLowerCase().includes(libelle.toLowerCase()));
+}
+function boutonMenuPharmacieTutoriel(libelle) {
+    return [...document.querySelectorAll(".menu-button,.caserne-menu-liste-simple>button")].find(b => String(b.textContent || "").toLowerCase().includes(libelle.toLowerCase()));
+}
+
+async function afficherEtapeTutorielApplication(numero) {
+    if (!tutorielApplicationActif) return;
+    tutorielApplicationEtape = numero;
+
+    if (numero === 0) {
+        afficherPortailPrincipal();
+        await new Promise(r => setTimeout(r,80));
+        const cible = document.querySelector(".portail-cis-caserne");
+        if (!cible || (!utilisateurAPermission("acces_espace_caserne") && !utilisateurEstSPVAdmin())) return afficherEtapeTutorielApplication(3);
+        return afficherBulleTutoriel("Espace Caserne","Tu retrouves ici les actualités et événements de la caserne.",cible,() => afficherEtapeTutorielApplication(1),{delai:500});
+    }
+
+    if (numero === 1) {
+        await new Promise(r => setTimeout(r,350));
+        ajouterEvenementFacticeTutoriel();
+        const cible = document.querySelector(".tutoriel-present-factice");
+        if (!cible) return afficherEtapeTutorielApplication(2);
+        return afficherBulleTutoriel("Répondre à un événement","Quand une réponse est demandée, indique simplement si tu seras présent.",cible,() => afficherEtapeTutorielApplication(2),{empecherAction:true,selectionPresent:true,delai:450});
+    }
+
+    if (numero === 2) {
+        const cible = boutonNavigationTutoriel("Pharmacie");
+        if (!cible) return afficherEtapeTutorielApplication(7);
+        return afficherBulleTutoriel("Espace Pharmacie","Appuie sur Pharmacie pour découvrir les outils disponibles.",cible,() => afficherEtapeTutorielApplication(3),{delai:350});
+    }
+
+    if (numero === 3) {
+        await new Promise(r => setTimeout(r,180));
+        const cible = boutonMenuPharmacieTutoriel("Inventaire");
+        if (!cible) return afficherEtapeTutorielApplication(5);
+        return afficherBulleTutoriel("Inventaire","L'inventaire permet de rechercher un matériel et de consulter les quantités disponibles.",cible,() => afficherEtapeTutorielApplication(4),{delai:450});
+    }
+
+    if (numero === 4) {
+        await new Promise(r => setTimeout(r,250));
+        const cible = document.querySelector(".retour-button");
+        if (!cible) return afficherEtapeTutorielApplication(5);
+        return afficherBulleTutoriel("Consulter l'inventaire","Ici tu peux rechercher un matériel. Appuie sur Retour pour découvrir l'outil suivant.",cible,() => afficherEtapeTutorielApplication(5),{delai:350});
+    }
+
+    if (numero === 5) {
+        await new Promise(r => setTimeout(r,180));
+        const cible = boutonMenuPharmacieTutoriel("Retour d'intervention");
+        if (!cible) return afficherEtapeTutorielApplication(7);
+        return afficherBulleTutoriel("Retour d'intervention","Après une intervention, utilise cet onglet pour déclarer le matériel consommé.",cible,() => afficherEtapeTutorielApplication(6),{delai:450});
+    }
+
+    if (numero === 6) {
+        await new Promise(r => setTimeout(r,250));
+        const cible = document.querySelector(".retour-button");
+        if (!cible) return afficherEtapeTutorielApplication(7);
+        return afficherBulleTutoriel("Enregistrer un retour","Renseigne la date et le numéro d'intervention, puis sélectionne le matériel utilisé. Appuie sur Retour pour continuer.",cible,() => afficherEtapeTutorielApplication(7),{delai:350});
+    }
+
+    if (numero === 7) {
+        await new Promise(r => setTimeout(r,180));
+        const cible = boutonNavigationTutoriel("Profil");
+        if (!cible) return quitterTutorielApplication(true);
+        return afficherBulleTutoriel("Ton profil","Ton profil permet de gérer ton compte, tes notifications et les mises à jour de l'application.",cible,() => quitterTutorielApplication(true),{delai:350});
+    }
+
+    quitterTutorielApplication(true);
 }
 
 function demarrerTutorielApplication() {
     initialiserStyleTutorielApplication();
-    tutorielApplicationEtapes = obtenirEtapesTutorielApplication();
-    tutorielApplicationIndex = 0;
     tutorielApplicationActif = true;
+    tutorielApplicationEtape = 0;
     afficherPortailPrincipal();
-    setTimeout(() => afficherEtapeTutorielApplication(0), 80);
+    setTimeout(() => afficherEtapeTutorielApplication(0),80);
 }
 
 window.demarrerTutorielApplication = demarrerTutorielApplication;
 window.afficherEtapeTutorielApplication = afficherEtapeTutorielApplication;
 window.quitterTutorielApplication = quitterTutorielApplication;
+
