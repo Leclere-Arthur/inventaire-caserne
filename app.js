@@ -3582,6 +3582,27 @@ async function afficherProfilUtilisateur() {
             <section class="profil-carte">
 
                 <h3>
+                    Découvrir l'application
+                </h3>
+
+                <button
+                    class="profil-bouton-principal"
+                    type="button"
+                    onclick="demarrerTutorielApplication()"
+                >
+                    Tutoriel de l'application
+                </button>
+
+                <small class="profil-mise-a-jour-texte">
+                    Une visite rapide des fonctions auxquelles tu as accès.
+                </small>
+
+            </section>
+
+
+            <section class="profil-carte">
+
+                <h3>
                     Mise à jour de l'application
                 </h3>
 
@@ -21387,3 +21408,179 @@ if (
     initialiserInterfaceBureau();
 
 }
+
+
+/* =========================================================
+   TUTORIEL VISITEUR
+   Présentation courte des fonctions accessibles à l'utilisateur.
+   Les fonctions d'administration ne sont jamais présentées.
+   ========================================================= */
+let tutorielApplicationActif = false;
+let tutorielApplicationEtapes = [];
+let tutorielApplicationIndex = 0;
+
+function initialiserStyleTutorielApplication() {
+    if (document.getElementById("style-tutoriel-application")) return;
+    const style = document.createElement("style");
+    style.id = "style-tutoriel-application";
+    style.textContent = `
+        .tutoriel-voile {
+            position: fixed; inset: 0; z-index: 250000;
+            background: rgba(8,12,16,.76);
+        }
+        .tutoriel-cible {
+            position: relative !important; z-index: 250002 !important;
+            isolation: isolate; border-radius: 14px;
+            box-shadow: 0 0 0 4px rgba(255,255,255,.96), 0 8px 30px rgba(0,0,0,.28) !important;
+        }
+        .tutoriel-bulle {
+            position: fixed; z-index: 250003; left: 18px; right: 18px;
+            bottom: calc(105px + env(safe-area-inset-bottom, 0px));
+            max-width: 460px; margin: 0 auto; padding: 17px;
+            box-sizing: border-box; border-radius: 18px;
+            background: #fff; color: #202124; box-shadow: 0 14px 45px rgba(0,0,0,.32);
+        }
+        .tutoriel-bulle strong { display:block; font-size:18px; margin-bottom:6px; }
+        .tutoriel-bulle p { margin:0; font-size:15px; line-height:1.4; }
+        .tutoriel-actions { display:flex; gap:9px; margin-top:15px; }
+        .tutoriel-actions button { min-height:43px; border:0; border-radius:11px; padding:9px 13px; font:inherit; font-weight:800; }
+        .tutoriel-quitter { background:#eceff1; color:#333; }
+        .tutoriel-precedent { background:#eceff1; color:#333; margin-left:auto; }
+        .tutoriel-suivant { background:#8b2026; color:#fff; }
+        @media (min-width: 900px) {
+            .tutoriel-bulle { bottom: 30px; }
+        }
+    `;
+    document.head.appendChild(style);
+}
+
+function obtenirEtapesTutorielApplication() {
+    const etapes = [
+        {
+            titre: "Accueil",
+            texte: "C'est le point de départ pour accéder aux différents espaces.",
+            ouvrir: () => afficherPortailPrincipal(),
+            cible: () => document.querySelector(".portail-cis-espaces")
+        }
+    ];
+
+    if (utilisateurAPermission("acces_espace_caserne") || utilisateurEstSPVAdmin()) {
+        etapes.push({
+            titre: "Espace Caserne",
+            texte: "Retrouve ici les actualités, événements et informations de la caserne.",
+            ouvrir: () => afficherPortailPrincipal(),
+            cible: () => document.querySelector(".portail-cis-caserne")
+        });
+        etapes.push({
+            titre: "Rubriques Caserne",
+            texte: "Le menu affiche seulement les rubriques auxquelles tu as accès.",
+            ouvrir: () => ouvrirMenuCaserne(),
+            cible: () => document.querySelector(".caserne-menu-liste-simple")
+        });
+
+        for (const rubrique of obtenirRubriquesCaserne().filter(utilisateurPeutVoirRubriqueCaserne)) {
+            const presentation = obtenirPresentationRubriqueCaserne(rubrique[0]);
+            etapes.push({
+                titre: rubrique[1],
+                texte: presentation.aide + ".",
+                ouvrir: () => ouvrirMenuCaserne(),
+                cible: () => [...document.querySelectorAll(".caserne-menu-liste-simple button")]
+                    .find(b => String(b.textContent || "").includes(rubrique[1]))
+            });
+        }
+    }
+
+    const outilsPharmacie = obtenirOngletsPharmacieAccessibles().filter(o =>
+        !/administration|administrateur/i.test(String(o.libelle || ""))
+    );
+    if (outilsPharmacie.length) {
+        etapes.push({
+            titre: "Espace Pharmacie",
+            texte: "Cet espace regroupe les outils de matériel disponibles pour ton compte.",
+            ouvrir: () => afficherPortailPrincipal(),
+            cible: () => document.querySelector(".portail-cis-pharmacie")
+        });
+        for (const outil of outilsPharmacie) {
+            etapes.push({
+                titre: outil.libelle,
+                texte: outil.aide + ".",
+                ouvrir: () => afficherAccueil(),
+                cible: () => [...document.querySelectorAll(".menu-principal .menu-button")]
+                    .find(b => String(b.textContent || "").includes(outil.libelle))
+            });
+        }
+    }
+
+    etapes.push({
+        titre: "Ton profil",
+        texte: "Ici, tu peux gérer ton compte, tes notifications et les mises à jour de l'application.",
+        ouvrir: () => afficherPortailPrincipal(),
+        cible: () => [...document.querySelectorAll(".caserne-nav-bas button")]
+            .find(b => /profil/i.test(String(b.textContent || "")))
+    });
+    return etapes;
+}
+
+function nettoyerEtapeTutorielApplication() {
+    document.querySelectorAll(".tutoriel-cible").forEach(el => el.classList.remove("tutoriel-cible"));
+    document.querySelectorAll(".tutoriel-voile,.tutoriel-bulle").forEach(el => el.remove());
+}
+
+function quitterTutorielApplication() {
+    nettoyerEtapeTutorielApplication();
+    tutorielApplicationActif = false;
+    tutorielApplicationEtapes = [];
+    tutorielApplicationIndex = 0;
+    afficherPortailPrincipal();
+}
+
+async function afficherEtapeTutorielApplication(index) {
+    if (!tutorielApplicationActif) return;
+    nettoyerEtapeTutorielApplication();
+    if (index < 0) index = 0;
+    if (index >= tutorielApplicationEtapes.length) {
+        quitterTutorielApplication();
+        alert("Tutoriel terminé. Tu peux maintenant utiliser l'application normalement.");
+        return;
+    }
+    tutorielApplicationIndex = index;
+    const etape = tutorielApplicationEtapes[index];
+    await Promise.resolve(etape.ouvrir?.());
+    await new Promise(resolve => setTimeout(resolve, 80));
+
+    const cible = etape.cible?.();
+    if (!cible) {
+        afficherEtapeTutorielApplication(index + 1);
+        return;
+    }
+    cible.classList.add("tutoriel-cible");
+    cible.scrollIntoView({behavior:"smooth", block:"center"});
+
+    const voile = document.createElement("div");
+    voile.className = "tutoriel-voile";
+    const bulle = document.createElement("div");
+    bulle.className = "tutoriel-bulle";
+    bulle.innerHTML = `
+        <strong>${echapperHTML(etape.titre)}</strong>
+        <p>${echapperHTML(etape.texte)}</p>
+        <div class="tutoriel-actions">
+            <button type="button" class="tutoriel-quitter" onclick="quitterTutorielApplication()">Quitter</button>
+            ${index > 0 ? `<button type="button" class="tutoriel-precedent" onclick="afficherEtapeTutorielApplication(${index - 1})">Précédent</button>` : `<span style="margin-left:auto"></span>`}
+            <button type="button" class="tutoriel-suivant" onclick="afficherEtapeTutorielApplication(${index + 1})">${index === tutorielApplicationEtapes.length - 1 ? "Terminer" : "Suivant"}</button>
+        </div>`;
+    document.body.appendChild(voile);
+    document.body.appendChild(bulle);
+}
+
+function demarrerTutorielApplication() {
+    initialiserStyleTutorielApplication();
+    tutorielApplicationEtapes = obtenirEtapesTutorielApplication();
+    tutorielApplicationIndex = 0;
+    tutorielApplicationActif = true;
+    afficherPortailPrincipal();
+    setTimeout(() => afficherEtapeTutorielApplication(0), 80);
+}
+
+window.demarrerTutorielApplication = demarrerTutorielApplication;
+window.afficherEtapeTutorielApplication = afficherEtapeTutorielApplication;
+window.quitterTutorielApplication = quitterTutorielApplication;
