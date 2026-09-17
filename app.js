@@ -930,7 +930,7 @@ let minuteurVerificationMiseAJour =
  * Elle permet de détecter une nouvelle version même si seul app.js change.
  */
 const VERSION_APPLICATION_JS =
-    "2026-09-17-1835-tutoriel-permissions-individuelles";
+    "2026-09-17-2140-tutoriel-permissions-visibilite";
 
 async function verifierNouvelleVersionAppJs() {
 
@@ -2120,13 +2120,12 @@ function utilisateurAPermission(
     permission
 ) {
     const role = obtenirRoleUtilisateur();
-    const personnalisations = profilUtilisateurConnecte?.permissions_personnalisees;
-    if (personnalisations && typeof personnalisations === "object" &&
-        Object.prototype.hasOwnProperty.call(personnalisations, permission) &&
-        typeof personnalisations[permission] === "boolean") {
-        return profilUtilisateurConnecte?.actif === true && personnalisations[permission] === true;
+    const personnelles = profilUtilisateurConnecte?.permissions_personnalisees;
+    if (!profilUtilisateurConnecte || profilUtilisateurConnecte.actif !== true) return false;
+    if (personnelles && typeof personnelles === "object" && typeof personnelles[permission] === "boolean") {
+        return personnelles[permission] === true;
     }
-    return Boolean(profilUtilisateurConnecte && profilUtilisateurConnecte.actif === true && role && role[permission] === true);
+    return Boolean(role && role[permission] === true);
 }
 
 
@@ -2860,8 +2859,6 @@ function initialiserStyleConnexion() {
             width: auto;
             min-height: 0;
         }
-        .permissions-utilisateur-details{margin-top:12px;padding:12px;border:1px solid #e0e3e7;border-radius:12px}.permissions-utilisateur-details summary{cursor:pointer;font-weight:800}.permissions-utilisateur-aide{font-size:12px;opacity:.7;line-height:1.4}.permissions-utilisateur-grille{display:grid;gap:8px;margin:10px 0}.permission-utilisateur-ligne{display:grid!important;grid-template-columns:minmax(0,1fr) minmax(145px,190px);gap:10px!important;align-items:center!important}.permission-utilisateur-ligne span small{display:block;font-size:11px;opacity:.65}.permission-utilisateur-ligne select{min-height:40px!important}
-
 
         .badge-role {
             display: inline-block;
@@ -2872,6 +2869,13 @@ function initialiserStyleConnexion() {
             font-size: 12px;
             font-weight: 800;
         }
+
+        .permissions-utilisateur-details { margin-top:14px; padding-top:12px; border-top:1px solid #e0e3e7; }
+        .permissions-utilisateur-details summary { cursor:pointer; font-weight:850; color:#b51f2a; }
+        .permissions-utilisateur { display:grid; gap:7px; margin-top:10px; }
+        .permission-utilisateur-rouge { display:flex!important; align-items:center; gap:8px; min-height:38px; padding:8px 10px; box-sizing:border-box; border:1px solid #d65b63; border-radius:9px; background:#fff4f4; color:#8f1e27!important; font-size:13px; font-weight:750; }
+        .permission-utilisateur-rouge input[type="checkbox"] { width:18px!important; height:18px!important; min-height:0!important; accent-color:#c62828!important; }
+        .bouton-permissions-utilisateur { margin-top:10px; background:#b3262e!important; color:#fff!important; }
     `;
 
     document.head.appendChild(
@@ -7719,60 +7723,27 @@ function formaterDate(date) {
    PORTAIL PRINCIPAL
    ========================================================= */
 
-function afficherPortailPrincipal() {
+function utilisateurPeutAccederPharmacie() {
+    return obtenirOngletsPharmacieAccessibles().length > 0;
+}
 
+function afficherPortailPrincipal() {
     initialiserStyleConnexion();
     initialiserStyleEspaceCaserne();
-
-    document.body.classList.remove(
-        "mode-connexion"
-    );
-
-    if (!profilUtilisateurConnecte) {
-        afficherConnexion();
-        return;
-    }
-
+    document.body.classList.remove("mode-connexion");
+    if (!profilUtilisateurConnecte) { afficherConnexion(); return; }
     appliquerVisibiliteElementsConnectes(true);
-
     const role = obtenirRoleUtilisateur();
-
+    const peutCaserne = utilisateurAPermission("acces_espace_caserne");
+    const peutPharmacie = utilisateurPeutAccederPharmacie();
     document.getElementById("app").innerHTML = `
         <main class="page portail-cis-page navigation-fixe-page">
-            <div class="utilisateur-entete">
-                <button
-                    class="bouton-profil-accueil"
-                    type="button"
-                    onclick="ouvrirProfilDepuisPageCourante()"
-                >
-                    <strong>${echapperHTML(obtenirNomUtilisateurAffiche())}</strong>
-                    <span>${echapperHTML(role?.nom || "")}</span>
-                </button>
-            </div>
-
+            <div class="utilisateur-entete"><button class="bouton-profil-accueil" type="button" onclick="ouvrirProfilDepuisPageCourante()"><strong>${echapperHTML(obtenirNomUtilisateurAffiche())}</strong><span>${echapperHTML(role?.nom || "")}</span></button></div>
             <section class="portail-cis-espaces">
-                <button
-                    type="button"
-                    class="portail-cis-carte portail-cis-caserne"
-                    onclick="afficherEspaceCaserne()"
-                >
-                    <span class="portail-cis-titre">Espace Caserne</span>
-                    <span class="portail-cis-fleche">›</span>
-                </button>
-
-                <button
-                    type="button"
-                    class="portail-cis-carte portail-cis-pharmacie"
-                    onclick="afficherAccueil()"
-                >
-                    <span class="portail-cis-titre">Espace Pharmacie</span>
-                    <span class="portail-cis-fleche">›</span>
-                </button>
+                ${peutCaserne ? `<button type="button" class="portail-cis-carte portail-cis-caserne" onclick="afficherEspaceCaserne()"><span class="portail-cis-titre">Espace Caserne</span><span class="portail-cis-fleche">›</span></button>` : ""}
+                ${peutPharmacie ? `<button type="button" class="portail-cis-carte portail-cis-pharmacie" onclick="afficherAccueil()"><span class="portail-cis-titre">Espace Pharmacie</span><span class="portail-cis-fleche">›</span></button>` : ""}
             </section>
-        </main>
-        ${navigationPrincipale("accueil", "accueil")}
-    `;
-
+        </main>${navigationPrincipale("accueil", "accueil")}`;
     actualiserInterfaceBureau();
 }
 
@@ -7797,7 +7768,7 @@ async function synchroniserCaserneAvantNavigation() {
 
 async function afficherEspaceCaserne() {
 
-    if (!utilisateurAPermission("acces_espace_caserne") && !utilisateurEstSPVAdmin()) {
+    if (!utilisateurAPermission("acces_espace_caserne")) {
         alert("Tu n'as pas accès à l'Espace Caserne.");
         afficherPortailPrincipal();
         return;
@@ -7822,33 +7793,24 @@ function obtenirRubriquesCaserne() {
 }
 
 function utilisateurPeutVoirRubriqueCaserne(rubrique) {
-    if (utilisateurEstSPVAdmin()) return true;
+    if (!utilisateurAPermission("acces_espace_caserne")) return false;
     if (rubrique[0] === "amical" && utilisateurAPermission("acces_amical_membre")) return true;
     return utilisateurAPermission(rubrique[2]) || utilisateurAPermission(rubrique[3]);
 }
 
 function navigationPrincipale(active, theme = "caserne") {
-    const classeTheme = theme === "pharmacie"
-        ? "nav-theme-pharmacie"
-        : theme === "accueil"
-            ? "nav-theme-accueil"
-            : "nav-theme-caserne";
-
-    const actionMenu = theme === "caserne"
-        ? "ouvrirMenuCaserne()"
-        : theme === "pharmacie"
-            ? "ouvrirMenuPharmacie()"
-            : "ouvrirMenuPrincipal()";
-
-    return `
-        <nav class="caserne-nav-bas ${classeTheme}">
-            <button onclick="afficherPortailPrincipal()" class="${active === "accueil" ? "actif" : ""}"><span>⌂</span>Accueil</button>
-            <button onclick="afficherEspaceCaserne()" class="${active === "caserne" ? "actif" : ""}"><span>▣</span>Caserne</button>
-            <button onclick="afficherAccueil()" class="${active === "pharmacie" ? "actif" : ""}"><span>✚</span>Pharmacie</button>
-            <button onclick="ouvrirProfilDepuisPageCourante()" class="${active === "profil" ? "actif" : ""}"><span>○</span>Profil</button>
-            <button onclick="${actionMenu}" class="caserne-menu-bulle" aria-label="Menu"><span>☰</span></button>
-        </nav>`;
+    const classeTheme = theme === "pharmacie" ? "nav-theme-pharmacie" : theme === "accueil" ? "nav-theme-accueil" : "nav-theme-caserne";
+    const actionMenu = theme === "caserne" ? "ouvrirMenuCaserne()" : theme === "pharmacie" ? "ouvrirMenuPharmacie()" : "ouvrirMenuPrincipal()";
+    const peutCaserne = utilisateurAPermission("acces_espace_caserne");
+    const peutPharmacie = utilisateurPeutAccederPharmacie();
+    return `<nav class="caserne-nav-bas ${classeTheme}">
+        <button onclick="afficherPortailPrincipal()" class="${active === "accueil" ? "actif" : ""}"><span>⌂</span>Accueil</button>
+        ${peutCaserne ? `<button onclick="afficherEspaceCaserne()" class="${active === "caserne" ? "actif" : ""}"><span>▣</span>Caserne</button>` : ""}
+        ${peutPharmacie ? `<button onclick="afficherAccueil()" class="${active === "pharmacie" ? "actif" : ""}"><span>✚</span>Pharmacie</button>` : ""}
+        <button onclick="ouvrirProfilDepuisPageCourante()" class="${active === "profil" ? "actif" : ""}"><span>○</span>Profil</button>
+        <button onclick="${actionMenu}" class="caserne-menu-bulle" aria-label="Menu"><span>☰</span></button></nav>`;
 }
+
 
 function navigationCaserne(active) {
     return navigationPrincipale(active, "caserne");
@@ -7946,7 +7908,7 @@ function ouvrirMenuPrincipal() {
     initialiserStyleEspaceCaserne();
 
     const caserne = [];
-    if (utilisateurAPermission("acces_espace_caserne") || utilisateurEstSPVAdmin()) {
+    if (utilisateurAPermission("acces_espace_caserne")) {
         caserne.push({
             libelle: "Fil d'actualité Caserne",
             aide: "Voir toutes les informations récentes",
@@ -16460,13 +16422,18 @@ function permissionRoleHTML(
 }
 
 
-const PERMISSIONS_UTILISATEUR_ADMIN = [
-["acces_inventaire","Inventaire"],["acces_retour_intervention","Retour d'intervention"],["acces_historique","Historique"],["acces_archives","Archives"],["acces_administration","Administration"],["acces_ajout_materiel","Ajouter du matériel"],["acces_gestion_materiel","Gestion du matériel"],["acces_gestion_categories","Gestion des catégories"],["acces_reapprovisionnement","Réapprovisionnement"],["acces_remise_zero_historique","Remise à zéro de l'historique"],["acces_gestion_utilisateurs","Gestion des utilisateurs"],["acces_notifications","Envoyer une notification"],["acces_notifications_pharmacie","Notifications pharmacie"],["acces_espace_caserne","Espace Caserne"],["acces_sport","Sport"],["acces_sport_admin","Sport — Admin"],["acces_manoeuvre","Manœuvre"],["acces_manoeuvre_admin","Manœuvre — Admin"],["acces_casernement","Casernement"],["acces_casernement_admin","Casernement — Admin"],["acces_reunion","Réunion"],["acces_reunion_admin","Réunion — Admin"],["acces_amical_public","Amical — Public"],["acces_amical_membre","Amical — Membre"],["acces_amical_admin","Amical — Admin"],["acces_comite_centre","Comité de centre"],["acces_comite_centre_admin","Comité de centre — Admin"],["acces_administratif","Administratif"],["acces_administratif_admin","Administratif — Admin"],["acces_entretien_individuel","Entretien individuel"],["acces_entretien_individuel_admin","Entretien individuel — Admin"]
-];
+const PERMISSIONS_APPLICATION = [
+["acces_inventaire","Inventaire"],["acces_retour_intervention","Retour d'intervention"],["acces_historique","Historique"],["acces_archives","Archives"],["acces_administration","Administration"],["acces_ajout_materiel","Ajouter du matériel"],["acces_gestion_materiel","Gestion du matériel"],["acces_gestion_categories","Gestion des catégories"],["acces_reapprovisionnement","Réapprovisionnement"],["acces_remise_zero_historique","Remise à zéro de l'historique"],["acces_gestion_utilisateurs","Gestion des utilisateurs"],["acces_notifications","Envoyer une notification"],["acces_notifications_pharmacie","Notifications pharmacie"],["acces_espace_caserne","Espace Caserne"],["acces_sport","Sport"],["acces_sport_admin","Sport — Admin"],["acces_manoeuvre","Manœuvre"],["acces_manoeuvre_admin","Manœuvre — Admin"],["acces_casernement","Casernement"],["acces_casernement_admin","Casernement — Admin"],["acces_reunion","Réunion"],["acces_reunion_admin","Réunion — Admin"],["acces_amical_public","Amical — Public"],["acces_amical_membre","Amical — Membre"],["acces_amical_admin","Amical — Admin"],["acces_comite_centre","Comité de centre"],["acces_comite_centre_admin","Comité de centre — Admin"],["acces_administratif","Administratif"],["acces_administratif_admin","Administratif — Admin"],["acces_entretien_individuel","Entretien individuel"],["acces_entretien_individuel_admin","Entretien individuel — Admin"]];
+
 function permissionsUtilisateurHTML(utilisateur, role) {
- const perso=utilisateur?.permissions_personnalisees&&typeof utilisateur.permissions_personnalisees==="object"?utilisateur.permissions_personnalisees:{};
- return PERMISSIONS_UTILISATEUR_ADMIN.map(([permission,libelle])=>{const a=Object.prototype.hasOwnProperty.call(perso,permission)&&typeof perso[permission]==="boolean";const v=a?(perso[permission]?"autoriser":"refuser"):"role";const er=role?.[permission]===true?"autorisé":"refusé";return `<label class="permission-utilisateur-ligne"><span>${echapperHTML(libelle)}<small>Rôle : ${er}</small></span><select id="perm-user-${echapperHTML(utilisateur.id)}-${permission}"><option value="role" ${v==="role"?"selected":""}>Selon le rôle</option><option value="autoriser" ${v==="autoriser"?"selected":""}>Autoriser</option><option value="refuser" ${v==="refuser"?"selected":""}>Refuser</option></select></label>`;}).join("");
+ const perso=(utilisateur.permissions_personnalisees&&typeof utilisateur.permissions_personnalisees==="object")?utilisateur.permissions_personnalisees:{};
+ return PERMISSIONS_APPLICATION.map(([permission,libelle])=>{const valeur=typeof perso[permission]==="boolean"?perso[permission]:role?.[permission]===true; return `<label class="permission-utilisateur-rouge"><input type="checkbox" data-permission-utilisateur="${permission}" data-user-id="${echapperHTML(utilisateur.id)}" ${valeur?"checked":""}> ${echapperHTML(libelle)}</label>`;}).join("");
 }
+async function enregistrerPermissionsUtilisateur(userId) {
+ const permissions={}; document.querySelectorAll(`input[data-permission-utilisateur][data-user-id="${CSS.escape(String(userId))}"]`).forEach(input=>{permissions[input.dataset.permissionUtilisateur]=input.checked===true;});
+ try { await appelerGestionUtilisateurs("modifier_permissions_utilisateur",{user_id:userId,permissions_personnalisees:permissions}); if(profilUtilisateurConnecte?.id===userId){profilUtilisateurConnecte.permissions_personnalisees=permissions;sauvegarderProfilUtilisateurCache();} alert("✅ Permissions personnelles enregistrées."); await afficherGestionUtilisateurs(); } catch(erreur){alert("⚠️ "+(erreur?.message||"Enregistrement impossible."));}
+}
+window.enregistrerPermissionsUtilisateur=enregistrerPermissionsUtilisateur;
 
 
 async function afficherGestionUtilisateurs() {
@@ -16627,13 +16594,6 @@ function rendreGestionUtilisateurs() {
                             ${options}
                         </select>
 
-                        <details class="permissions-utilisateur-details">
-                            <summary>Permissions propres à cet utilisateur</summary>
-                            <p class="permissions-utilisateur-aide">Par défaut, les accès viennent du rôle. Tu peux changer une permission uniquement pour cette personne.</p>
-                            <div class="permissions-utilisateur-grille">${permissionsUtilisateurHTML(utilisateur, role)}</div>
-                            <button class="petit-bouton" type="button" onclick="enregistrerPermissionsUtilisateur('${echapperHTML(utilisateur.id)}')">💾 Enregistrer les permissions</button>
-                        </details>
-
                         <div class="ligne-actions">
 
                             <button
@@ -16669,6 +16629,12 @@ function rendreGestionUtilisateurs() {
                                     : "DÉSACTIVÉ"}
                             </strong>
                         </small>
+                        <details class="permissions-utilisateur-details">
+                            <summary>Permissions de cet utilisateur</summary>
+                            <small>Rouge = permissions individuelles propres à cette personne.</small>
+                            <div class="permissions-utilisateur">${permissionsUtilisateurHTML(utilisateur, role)}</div>
+                            <button class="petit-bouton bouton-permissions-utilisateur" onclick="enregistrerPermissionsUtilisateur('${echapperHTML(utilisateur.id)}')">💾 Enregistrer les permissions</button>
+                        </details>
 
                     </div>
                 `;
@@ -17038,14 +17004,6 @@ async function modifierRoleUtilisateur(
 
     }
 
-}
-
-
-async function enregistrerPermissionsUtilisateur(userId) {
- const permissions={};
- for(const [permission] of PERMISSIONS_UTILISATEUR_ADMIN){const v=document.getElementById(`perm-user-${userId}-${permission}`)?.value||"role";if(v==="autoriser")permissions[permission]=true;if(v==="refuser")permissions[permission]=false;}
- try{await appelerGestionUtilisateurs("modifier_permissions_utilisateur",{user_id:userId,permissions_personnalisees:permissions});alert("✅ Permissions de l'utilisateur modifiées.");if(String(userId)===String(utilisateurConnecte?.id)){try{await chargerProfilUtilisateurDepuisSupabase(utilisateurConnecte);}catch(_){}}await afficherGestionUtilisateurs();}
- catch(erreur){alert("⚠️ "+(erreur?.message||"Modification des permissions impossible."));}
 }
 
 
@@ -21476,63 +21434,27 @@ function quitterTutorielApplication(terminer = false) {
 }
 
 function ajouterEvenementFacticeTutoriel() {
- if(!tutorielApplicationActif||document.querySelector(".tutoriel-evenement-factice"))return;const fil=document.querySelector(".caserne-fil-actuel");if(!fil)return;const article=document.createElement("article");article.className="caserne-actu-card caserne-type-sport tutoriel-evenement-factice";article.innerHTML=`<span class="caserne-badge-tuto">EXEMPLE DU TUTORIEL</span><div class="caserne-actu-meta"><span>Sport</span><time>Vendredi 18 septembre · 18:30</time></div><h2>Entraînement sportif</h2><p>Appuie sur cet événement pour voir les informations avant de répondre.</p><div class="tutoriel-detail-factice" hidden><hr><strong>Détail de l'événement</strong><p><b>Lieu :</b> CIS Le Chesne</p><p><b>Horaire :</b> 18:30 à 20:00</p><p><b>Information :</b> séance sportive collective. Prévoir une tenue adaptée.</p><div class="caserne-zone-reponse caserne-zone-reponse-simple"><strong class="caserne-question-reponse">Seras-tu présent ?</strong><small class="caserne-etat-reponse">Ta réponse permet à l'organisateur de connaître les participants.</small><div class="caserne-boutons-reponse"><button type="button" class="tutoriel-present-factice">✓ Je serai présent</button><button type="button" disabled>✕ Je serai absent</button></div></div></div>`;fil.prepend(article);
+    if (!tutorielApplicationActif || document.querySelector(".tutoriel-evenement-factice")) return;
+    const fil=document.querySelector(".caserne-fil-actuel"); if(!fil)return; const article=document.createElement("article"); article.className="caserne-actu-card caserne-type-sport tutoriel-evenement-factice";
+    article.innerHTML=`<span class="caserne-badge-tuto">EXEMPLE DU TUTORIEL</span><div class="caserne-actu-meta"><span>Sport</span><time>Samedi 19 septembre · 09:00</time></div><h2>Entraînement sportif</h2><p>Découvre d'abord le détail de l'événement.</p><button type="button" class="tutoriel-voir-detail petit-bouton">Voir le détail de l'événement</button>`; fil.prepend(article);
 }
+function afficherDetailEvenementFacticeTutoriel(){const app=document.getElementById("app");if(!app)return;app.innerHTML=`<main class="page caserne-shell navigation-fixe-page"><article class="caserne-actu-card caserne-type-sport tutoriel-evenement-factice"><span class="caserne-badge-tuto">EXEMPLE DU TUTORIEL</span><div class="caserne-actu-meta"><span>Sport</span><time>Samedi 19 septembre · 09:00</time></div><h2>Entraînement sportif</h2><p><strong>Horaire :</strong> 09:00 à 11:00</p><p><strong>Information :</strong> Entraînement collectif à la caserne. Tenue de sport et bouteille d'eau.</p><div class="caserne-zone-reponse caserne-zone-reponse-simple"><strong class="caserne-question-reponse">Seras-tu présent ?</strong><small class="caserne-etat-reponse">Ta réponse permet à l'organisateur de connaître les participants.</small><div class="caserne-boutons-reponse"><button type="button" class="tutoriel-present-factice">✓ Je serai présent</button><button type="button" disabled>✕ Je serai absent</button></div></div></article></main>${navigationPrincipale("caserne","caserne")}`;}
+function afficherBulleTutoriel(titre,texte,cible,apresClic,options={}){if(!tutorielApplicationActif||!cible)return false;nettoyerEtapeTutorielApplication();cible.classList.add("tutoriel-cible");cible.scrollIntoView({behavior:"smooth",block:"center"});const voile=document.createElement("div");voile.className="tutoriel-voile";const bulle=document.createElement("div");bulle.className="tutoriel-bulle";bulle.innerHTML=`<strong>${echapperHTML(titre)}</strong><p>${echapperHTML(texte)}</p><span class="tutoriel-indication">Appuie sur le bouton éclairé pour continuer.</span><div class="tutoriel-actions"><button type="button" onclick="quitterTutorielApplication()">Quitter le tutoriel</button></div>`;document.body.appendChild(voile);document.body.appendChild(bulle);const gestionClic=(event)=>{if(options.empecherAction===true){event.preventDefault();event.stopImmediatePropagation();}cible.removeEventListener("click",gestionClic,true);tutorielApplicationNettoyageClic=null;nettoyerEtapeTutorielApplication();if(options.selectionPresent===true){cible.classList.add("selectionne","present");cible.textContent="✓ Présent sélectionné";}setTimeout(()=>apresClic?.(),options.delai||180);};cible.addEventListener("click",gestionClic,true);tutorielApplicationNettoyageClic=()=>cible.removeEventListener("click",gestionClic,true);return true;}
+function boutonNavigationTutoriel(libelle){return [...document.querySelectorAll(".caserne-nav-bas button")].find(b=>String(b.textContent||"").toLowerCase().includes(libelle.toLowerCase()));}
+function boutonMenuPharmacieTutoriel(libelle){return [...document.querySelectorAll(".menu-button,.caserne-menu-liste-simple>button")].find(b=>String(b.textContent||"").toLowerCase().includes(libelle.toLowerCase()));}
+async function afficherEtapeTutorielApplication(numero){if(!tutorielApplicationActif)return;tutorielApplicationEtape=numero;
+if(numero===0){afficherPortailPrincipal();await new Promise(r=>setTimeout(r,100));const cible=document.querySelector(".portail-cis-caserne");if(!cible)return afficherEtapeTutorielApplication(4);return afficherBulleTutoriel("Espace Caserne","Tu retrouves ici les actualités et événements de la caserne.",cible,()=>afficherEtapeTutorielApplication(1),{delai:600});}
+if(numero===1){await new Promise(r=>setTimeout(r,450));ajouterEvenementFacticeTutoriel();const cible=document.querySelector(".tutoriel-voir-detail");if(!cible)return afficherEtapeTutorielApplication(3);return afficherBulleTutoriel("Un événement","Ouvre l'événement pour lire la date, l'horaire et les informations avant de répondre.",cible,()=>{afficherDetailEvenementFacticeTutoriel();afficherEtapeTutorielApplication(2);},{empecherAction:true,delai:180});}
+if(numero===2){await new Promise(r=>setTimeout(r,120));const cible=document.querySelector(".tutoriel-present-factice");return afficherBulleTutoriel("Répondre à l'événement","Tu as maintenant toutes les informations. Indique ta présence. Cet exemple n'enregistre rien.",cible,()=>afficherEtapeTutorielApplication(3),{empecherAction:true,selectionPresent:true,delai:300});}
+if(numero===3){const cible=boutonNavigationTutoriel("Accueil");if(!cible){afficherPortailPrincipal();return afficherEtapeTutorielApplication(4);}return afficherBulleTutoriel("Retour à l'accueil","Pour changer d'espace, reviens d'abord à l'accueil général.",cible,()=>afficherEtapeTutorielApplication(4),{delai:450});}
+if(numero===4){await new Promise(r=>setTimeout(r,180));const cible=document.querySelector(".portail-cis-pharmacie");if(!cible)return afficherEtapeTutorielApplication(9);return afficherBulleTutoriel("Espace Pharmacie","Ouvre maintenant l'Espace Pharmacie.",cible,()=>afficherEtapeTutorielApplication(5),{delai:450});}
+if(numero===5){await new Promise(r=>setTimeout(r,220));const cible=boutonMenuPharmacieTutoriel("Inventaire");if(!cible)return afficherEtapeTutorielApplication(7);return afficherBulleTutoriel("Inventaire","L'inventaire sert à rechercher le matériel et à vérifier les quantités disponibles.",cible,()=>afficherEtapeTutorielApplication(6),{delai:450});}
+if(numero===6){await new Promise(r=>setTimeout(r,250));const cible=document.querySelector(".retour-button");if(!cible)return afficherEtapeTutorielApplication(7);return afficherBulleTutoriel("Dans l'inventaire","Tu peux parcourir les catégories, rechercher un matériel et voir son stock. Appuie sur Retour.",cible,()=>afficherEtapeTutorielApplication(7),{delai:400});}
+if(numero===7){await new Promise(r=>setTimeout(r,220));const cible=boutonMenuPharmacieTutoriel("Retour d'intervention");if(!cible)return afficherEtapeTutorielApplication(9);return afficherBulleTutoriel("Retour d'intervention","Après une intervention, ouvre cet outil pour déclarer le matériel consommé.",cible,()=>afficherEtapeTutorielApplication(8),{delai:450});}
+if(numero===8){await new Promise(r=>setTimeout(r,250));const cible=document.querySelector(".retour-button");if(!cible)return afficherEtapeTutorielApplication(9);return afficherBulleTutoriel("Remplir le retour","Renseigne la date, le numéro d'intervention et les quantités utilisées. Appuie sur Retour.",cible,()=>afficherEtapeTutorielApplication(9),{delai:400});}
+if(numero===9){await new Promise(r=>setTimeout(r,180));const cible=boutonNavigationTutoriel("Accueil");if(!cible){afficherPortailPrincipal();return afficherEtapeTutorielApplication(10);}return afficherBulleTutoriel("Accueil général","Reviens à l'accueil général.",cible,()=>afficherEtapeTutorielApplication(10),{delai:350});}
+if(numero===10){await new Promise(r=>setTimeout(r,180));const cible=boutonNavigationTutoriel("Profil");if(!cible)return quitterTutorielApplication(true);return afficherBulleTutoriel("Ton profil","Ton profil permet de gérer ton compte, tes notifications, le tutoriel et les mises à jour.",cible,()=>quitterTutorielApplication(true),{delai:350});}quitterTutorielApplication(true);}
 
-function afficherBulleTutoriel(titre, texte, cible, apresClic, options = {}) {
-    if (!tutorielApplicationActif || !cible) return false;
-    nettoyerEtapeTutorielApplication();
-    cible.classList.add("tutoriel-cible");
-    cible.scrollIntoView({behavior:"smooth",block:"center"});
-    const voile = document.createElement("div");
-    voile.className = "tutoriel-voile";
-    const bulle = document.createElement("div");
-    bulle.className = "tutoriel-bulle";
-    bulle.innerHTML = `<strong>${echapperHTML(titre)}</strong><p>${echapperHTML(texte)}</p><span class="tutoriel-indication">Appuie sur le bouton éclairé pour continuer.</span><div class="tutoriel-actions"><button type="button" onclick="quitterTutorielApplication()">Quitter le tutoriel</button></div>`;
-    document.body.appendChild(voile);
-    document.body.appendChild(bulle);
-
-    const gestionClic = (event) => {
-        if (options.empecherAction === true) {
-            event.preventDefault();
-            event.stopImmediatePropagation();
-        }
-        cible.removeEventListener("click", gestionClic, true);
-        tutorielApplicationNettoyageClic = null;
-        nettoyerEtapeTutorielApplication();
-        if (options.selectionPresent === true) {
-            cible.classList.add("selectionne", "present");
-            cible.textContent = "✓ Présent sélectionné";
-        }
-        setTimeout(() => apresClic?.(), options.delai || 180);
-    };
-    cible.addEventListener("click", gestionClic, true);
-    tutorielApplicationNettoyageClic = () => cible.removeEventListener("click", gestionClic, true);
-    return true;
-}
-
-function boutonNavigationTutoriel(libelle) {
-    return [...document.querySelectorAll(".caserne-nav-bas button")].find(b => String(b.textContent || "").toLowerCase().includes(libelle.toLowerCase()));
-}
-function boutonMenuPharmacieTutoriel(libelle) {
-    return [...document.querySelectorAll(".menu-button,.caserne-menu-liste-simple>button")].find(b => String(b.textContent || "").toLowerCase().includes(libelle.toLowerCase()));
-}
-
-async function afficherEtapeTutorielApplication(numero){
- if(!tutorielApplicationActif)return;tutorielApplicationEtape=numero;
- if(numero===0){afficherPortailPrincipal();await new Promise(r=>setTimeout(r,100));const c=document.querySelector(".portail-cis-caserne");if(!c||(!utilisateurAPermission("acces_espace_caserne")&&!utilisateurEstSPVAdmin()))return afficherEtapeTutorielApplication(5);return afficherBulleTutoriel("Espace Caserne","Appuie ici pour ouvrir les actualités et événements de la caserne.",c,()=>afficherEtapeTutorielApplication(1),{delai:500});}
- if(numero===1){await new Promise(r=>setTimeout(r,400));ajouterEvenementFacticeTutoriel();const c=document.querySelector(".tutoriel-evenement-factice");if(!c)return afficherEtapeTutorielApplication(4);return afficherBulleTutoriel("Ouvrir un événement","Avant de répondre, ouvre l'événement pour lire sa date, son horaire et les informations utiles.",c,()=>{const d=document.querySelector(".tutoriel-detail-factice");if(d)d.hidden=false;afficherEtapeTutorielApplication(2);},{empecherAction:true,delai:120});}
- if(numero===2){await new Promise(r=>setTimeout(r,120));const c=document.querySelector(".tutoriel-detail-factice");if(!c)return afficherEtapeTutorielApplication(3);return afficherBulleTutoriel("Détail de l'événement","Lis les informations de l'événement. Appuie sur cette zone quand tu as terminé.",c,()=>afficherEtapeTutorielApplication(3),{empecherAction:true,delai:120});}
- if(numero===3){const c=document.querySelector(".tutoriel-present-factice");if(!c)return afficherEtapeTutorielApplication(4);return afficherBulleTutoriel("Confirmer ta présence","Maintenant tu peux répondre. Pendant le tutoriel, aucune réponse n'est enregistrée.",c,()=>afficherEtapeTutorielApplication(4),{empecherAction:true,selectionPresent:true,delai:350});}
- if(numero===4){const c=boutonNavigationTutoriel("Accueil");if(!c){afficherPortailPrincipal();return setTimeout(()=>afficherEtapeTutorielApplication(5),100);}return afficherBulleTutoriel("Retour à l'accueil","Pour changer d'espace, reviens d'abord à l'accueil général.",c,()=>afficherEtapeTutorielApplication(5),{delai:400});}
- if(numero===5){await new Promise(r=>setTimeout(r,250));if(!document.querySelector(".portail-cis-pharmacie")){afficherPortailPrincipal();await new Promise(r=>setTimeout(r,120));}const c=document.querySelector(".portail-cis-pharmacie");if(!c)return afficherEtapeTutorielApplication(10);return afficherBulleTutoriel("Espace Pharmacie","Appuie sur Pharmacie pour découvrir Inventaire et Retour d'intervention.",c,()=>afficherEtapeTutorielApplication(6),{delai:400});}
- if(numero===6){await new Promise(r=>setTimeout(r,220));const c=boutonMenuPharmacieTutoriel("Inventaire");if(!c||!utilisateurAPermission("acces_inventaire"))return afficherEtapeTutorielApplication(8);return afficherBulleTutoriel("Inventaire","Appuie sur Inventaire pour consulter le matériel et les quantités disponibles.",c,()=>afficherEtapeTutorielApplication(7),{delai:450});}
- if(numero===7){await new Promise(r=>setTimeout(r,250));const c=document.querySelector("input[type='search'],input[placeholder*='Recherch' i]")||document.querySelector(".retour-button");if(!c)return afficherEtapeTutorielApplication(8);return afficherBulleTutoriel("Rechercher du matériel","Ici tu peux rechercher un matériel et contrôler la quantité disponible.",c,()=>{const b=document.querySelector(".retour-button");if(b)b.click();setTimeout(()=>afficherEtapeTutorielApplication(8),250);},{empecherAction:true,delai:80});}
- if(numero===8){await new Promise(r=>setTimeout(r,220));const c=boutonMenuPharmacieTutoriel("Retour d'intervention");if(!c||!utilisateurAPermission("acces_retour_intervention"))return afficherEtapeTutorielApplication(10);return afficherBulleTutoriel("Retour d'intervention","Appuie ici après une intervention pour déclarer le matériel utilisé.",c,()=>afficherEtapeTutorielApplication(9),{delai:450});}
- if(numero===9){await new Promise(r=>setTimeout(r,250));const c=document.querySelector("input[type='date'],#date-intervention,.retour-page form,.retour-button");if(!c)return afficherEtapeTutorielApplication(10);return afficherBulleTutoriel("Déclarer le matériel utilisé","Tu renseignes la date, le numéro d'intervention puis le matériel consommé. Le tutoriel n'enregistre rien.",c,()=>afficherEtapeTutorielApplication(10),{empecherAction:true,delai:150});}
- if(numero===10){nettoyerEtapeTutorielApplication();afficherPortailPrincipal();await new Promise(r=>setTimeout(r,180));const c=boutonNavigationTutoriel("Profil")||document.querySelector("[onclick*='ouvrirProfil']");if(!c)return quitterTutorielApplication(true);return afficherBulleTutoriel("Ton profil","Le profil permet de gérer ton compte, tes notifications, les mises à jour et de relancer ce tutoriel.",c,()=>quitterTutorielApplication(true),{delai:300});}
- quitterTutorielApplication(true);
-}
 
 function demarrerTutorielApplication() {
     initialiserStyleTutorielApplication();
