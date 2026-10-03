@@ -930,7 +930,7 @@ let minuteurVerificationMiseAJour =
  * Elle permet de détecter une nouvelle version même si seul app.js change.
  */
 const VERSION_APPLICATION_JS =
-    "2026-09-17-2140-tutoriel-permissions-visibilite";
+    "2026-10-03-gestion-gardes";
 
 async function verifierNouvelleVersionAppJs() {
 
@@ -7743,8 +7743,15 @@ function afficherPortailPrincipal() {
                 ${peutCaserne ? `<button type="button" class="portail-cis-carte portail-cis-caserne" onclick="afficherEspaceCaserne()"><span class="portail-cis-titre">Espace Caserne</span><span class="portail-cis-fleche">›</span></button>` : ""}
                 ${peutPharmacie ? `<button type="button" class="portail-cis-carte portail-cis-pharmacie" onclick="afficherAccueil()"><span class="portail-cis-titre">Espace Pharmacie</span><span class="portail-cis-fleche">›</span></button>` : ""}
             </section>
+            <section id="carte-garde-accueil" class="garde-accueil-zone">
+                <div class="garde-accueil-carte garde-chargement">
+                    <small>GARDE</small>
+                    <strong>Chargement de la garde…</strong>
+                </div>
+            </section>
         </main>${navigationPrincipale("accueil", "accueil")}`;
     actualiserInterfaceBureau();
+    void actualiserCarteGardeAccueil();
 }
 
 
@@ -16197,6 +16204,17 @@ function afficherMenuAdministrateurAppli() {
 
                 <button
                     class="menu-button"
+                    onclick="afficherGestionGardes()"
+                >
+                    <span class="menu-icon">📅</span>
+                    <span>
+                        <strong>Gestion des gardes</strong>
+                        <small>Équipes et calendrier des semaines</small>
+                    </span>
+                </button>
+
+                <button
+                    class="menu-button"
                     onclick="afficherNotificationsAdministration()"
                 >
 
@@ -21468,3 +21486,120 @@ window.demarrerTutorielApplication = demarrerTutorielApplication;
 window.afficherEtapeTutorielApplication = afficherEtapeTutorielApplication;
 window.quitterTutorielApplication = quitterTutorielApplication;
 
+
+
+/* =========================================================
+   GESTION DES GARDES
+   ========================================================= */
+
+function initialiserStyleGardes() {
+    if (document.getElementById("style-gestion-gardes")) return;
+    const style = document.createElement("style");
+    style.id = "style-gestion-gardes";
+    style.textContent = `
+        .garde-accueil-zone{margin:22px 0 110px}.garde-accueil-carte{box-sizing:border-box;width:100%;padding:20px;border-radius:18px;background:#171d24;color:#fff;box-shadow:0 8px 24px rgba(0,0,0,.12)}
+        .garde-accueil-carte small{display:block;font-size:12px;font-weight:900;letter-spacing:.12em;opacity:.7;margin-bottom:8px}.garde-accueil-carte strong{display:block;font-size:20px;line-height:1.25}.garde-accueil-carte span{display:block;margin-top:7px;font-size:14px;opacity:.88}.garde-accueil-carte.ma-garde{background:#176b45}.garde-accueil-carte.pas-garde{background:#29313a}.garde-accueil-carte.sans-garde{background:#5b6168}
+        .gestion-gardes-page{padding-bottom:110px}.gardes-bloc{margin:16px 0;padding:16px;border-radius:16px;background:#fff;box-shadow:0 4px 18px rgba(0,0,0,.08)}.gardes-bloc h3{margin:0 0 12px}.gardes-form-ligne{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.gardes-form-ligne input,.gardes-form-ligne select{min-height:44px;padding:9px 11px;border:1px solid #d5d9de;border-radius:10px;font:inherit;box-sizing:border-box}.gardes-form-ligne input{flex:1;min-width:170px}.gardes-form-ligne button,.garde-equipe-actions button,.garde-semaine button{min-height:42px;border:0;border-radius:10px;padding:9px 13px;font:inherit;font-weight:800;cursor:pointer}.gardes-form-ligne button{background:#1f6f4a;color:#fff}
+        .garde-equipe{margin-top:12px;padding:14px;border:1px solid #e2e5e8;border-radius:13px}.garde-equipe-entete{display:flex;align-items:center;justify-content:space-between;gap:10px}.garde-equipe-entete strong{font-size:16px}.garde-equipe-actions{display:flex;gap:6px}.garde-equipe-actions button{min-height:36px;padding:7px 9px;background:#eef1f3}.garde-equipe-actions .danger{background:#fbe8e8;color:#9f2832}.garde-membres{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:7px;margin-top:12px}.garde-membres label{display:flex;gap:8px;align-items:center;padding:8px 9px;border-radius:9px;background:#f6f7f8;font-size:14px}.garde-membres input{width:18px;height:18px}.garde-enregistrer-membres{margin-top:10px;background:#171d24!important;color:#fff}
+        .garde-semaine{display:grid;grid-template-columns:minmax(145px,1fr) minmax(150px,1fr);gap:9px;align-items:center;padding:10px 0;border-bottom:1px solid #eceef0}.garde-semaine:last-child{border-bottom:0}.garde-semaine span{font-size:14px;font-weight:700}.garde-semaine select{width:100%;min-height:42px;border:1px solid #d5d9de;border-radius:10px;padding:8px;font:inherit;background:#fff}
+        @media(max-width:520px){.garde-semaine{grid-template-columns:1fr}.garde-accueil-zone{margin-top:18px}.gardes-bloc{padding:14px}}
+    `;
+    document.head.appendChild(style);
+}
+
+function lundiDeLaSemaine(date = new Date()) {
+    const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    const jour = d.getDay() || 7;
+    d.setDate(d.getDate() - jour + 1);
+    return d;
+}
+
+function dateISOlocale(date) {
+    const y=date.getFullYear(), m=String(date.getMonth()+1).padStart(2,"0"), j=String(date.getDate()).padStart(2,"0");
+    return `${y}-${m}-${j}`;
+}
+
+function libelleSemaineGarde(dateDebut) {
+    const debut = new Date(`${dateDebut}T12:00:00`);
+    const fin = new Date(debut); fin.setDate(fin.getDate()+6);
+    const a = debut.toLocaleDateString("fr-FR",{day:"2-digit",month:"short"});
+    const b = fin.toLocaleDateString("fr-FR",{day:"2-digit",month:"short",year:"numeric"});
+    return `Du ${a} au ${b}`;
+}
+
+async function chargerGardeSemaineCourante() {
+    const supabase = obtenirClientSupabase();
+    if (!supabase || !navigator.onLine) return null;
+    const lundi = dateISOlocale(lundiDeLaSemaine(new Date()));
+    const {data: planning,error} = await supabase.from("planning_gardes").select("id,date_debut,equipe_id,equipes_garde(id,nom,actif)").eq("date_debut",lundi).maybeSingle();
+    if (error) throw error;
+    if (!planning) return {date_debut:lundi,equipe:null,estMembre:false};
+    const equipe = Array.isArray(planning.equipes_garde) ? planning.equipes_garde[0] : planning.equipes_garde;
+    const {data: membre,error:errMembre} = await supabase.from("equipes_garde_membres").select("id").eq("equipe_id",planning.equipe_id).eq("utilisateur_id",profilUtilisateurConnecte?.id || "").maybeSingle();
+    if (errMembre) throw errMembre;
+    return {date_debut:lundi,equipe,estMembre:!!membre};
+}
+
+async function actualiserCarteGardeAccueil() {
+    initialiserStyleGardes();
+    const zone=document.getElementById("carte-garde-accueil"); if(!zone) return;
+    try {
+        const garde=await chargerGardeSemaineCourante();
+        if(!document.getElementById("carte-garde-accueil")) return;
+        if(!garde){ zone.innerHTML=`<div class="garde-accueil-carte sans-garde"><small>GARDE</small><strong>Planning indisponible hors connexion</strong></div>`; return; }
+        if(!garde.equipe){ zone.innerHTML=`<div class="garde-accueil-carte sans-garde"><small>GARDE</small><strong>Aucune équipe programmée cette semaine</strong><span>${echapperHTML(libelleSemaineGarde(garde.date_debut))}</span></div>`; return; }
+        zone.innerHTML=`<div class="garde-accueil-carte ${garde.estMembre?"ma-garde":"pas-garde"}"><small>GARDE · ${echapperHTML(garde.equipe.nom || "Équipe")}</small><strong>${garde.estMembre?"TU ES DE GARDE CETTE SEMAINE":"TU N’ES PAS DE GARDE CETTE SEMAINE"}</strong><span>${echapperHTML(libelleSemaineGarde(garde.date_debut))}</span></div>`;
+    } catch(erreur) {
+        console.error("Affichage garde :",erreur);
+        zone.innerHTML=`<div class="garde-accueil-carte sans-garde"><small>GARDE</small><strong>Planning momentanément indisponible</strong></div>`;
+    }
+}
+
+async function chargerDonneesGardesAdmin() {
+    if (!utilisateurEstSPVAdmin()) throw new Error("Accès réservé au rôle SPV ADMIN.");
+    const supabase=obtenirClientSupabase(); if(!supabase) throw new Error("Supabase indisponible.");
+    const [eq,mem,plan] = await Promise.all([
+        supabase.from("equipes_garde").select("id,nom,actif").order("nom"),
+        supabase.from("equipes_garde_membres").select("id,equipe_id,utilisateur_id"),
+        supabase.from("planning_gardes").select("id,date_debut,equipe_id").order("date_debut")
+    ]);
+    if(eq.error) throw eq.error; if(mem.error) throw mem.error; if(plan.error) throw plan.error;
+    if(!donneesGestionUtilisateurs.utilisateurs?.length) await chargerGestionUtilisateurs();
+    return {equipes:eq.data||[],membres:mem.data||[],planning:plan.data||[],utilisateurs:donneesGestionUtilisateurs.utilisateurs.filter(u=>u.actif===true)};
+}
+
+async function afficherGestionGardes() {
+    if(!utilisateurEstSPVAdmin()){ alert("Accès réservé au rôle SPV ADMIN."); return; }
+    initialiserStyleGardes();
+    document.getElementById("app").innerHTML=`<main class="page gestion-gardes-page"><button class="retour-button" onclick="afficherMenuAdministrateurAppli()">← Retour</button><h2>Gestion des gardes</h2><div class="gardes-bloc">Chargement…</div></main>${navigationPrincipale("", "accueil")}`;
+    try { const d=await chargerDonneesGardesAdmin(); rendreGestionGardes(d); }
+    catch(e){ console.error(e); document.querySelector(".gardes-bloc").innerHTML=`⚠️ ${echapperHTML(e?.message||"Chargement impossible.")}`; }
+}
+
+function rendreGestionGardes(d) {
+    const actifs=d.equipes.filter(e=>e.actif!==false);
+    const utilisateurs=[...d.utilisateurs].sort((a,b)=>`${a.nom||""} ${a.prenom||""}`.localeCompare(`${b.nom||""} ${b.prenom||""}`,"fr"));
+    const cartes=d.equipes.map(e=>{
+        const ids=new Set(d.membres.filter(m=>m.equipe_id===e.id).map(m=>m.utilisateur_id));
+        return `<div class="garde-equipe"><div class="garde-equipe-entete"><strong>${echapperHTML(e.nom)}${e.actif===false?" (inactive)":""}</strong><div class="garde-equipe-actions"><button onclick="renommerEquipeGarde('${e.id}','${echapperHTML(String(e.nom).replaceAll("'","&#39;"))}')">Renommer</button><button class="danger" onclick="supprimerEquipeGarde('${e.id}')">Supprimer</button></div></div><div class="garde-membres">${utilisateurs.map(u=>`<label><input type="checkbox" data-garde-equipe="${e.id}" value="${u.id}" ${ids.has(u.id)?"checked":""}> ${echapperHTML([u.prenom,u.nom].filter(Boolean).join(" ")||u.identifiant||"Utilisateur")}</label>`).join("")||"Aucun utilisateur actif."}</div><button class="garde-enregistrer-membres" onclick="enregistrerMembresEquipeGarde('${e.id}')">Enregistrer les membres</button></div>`;
+    }).join("");
+    const lundi=lundiDeLaSemaine(new Date());
+    const semaines=[]; for(let i=-4;i<20;i++){const x=new Date(lundi);x.setDate(x.getDate()+i*7);semaines.push(dateISOlocale(x));}
+    const options=(valeur)=>`<option value="">Aucune équipe</option>`+actifs.map(e=>`<option value="${e.id}" ${e.id===valeur?"selected":""}>${echapperHTML(e.nom)}</option>`).join("");
+    const lignes=semaines.map(date=>{const p=d.planning.find(x=>x.date_debut===date);return `<div class="garde-semaine"><span>${echapperHTML(libelleSemaineGarde(date))}</span><select onchange="attribuerEquipeSemaineGarde('${date}',this.value)">${options(p?.equipe_id||"")}</select></div>`}).join("");
+    document.getElementById("app").innerHTML=`<main class="page gestion-gardes-page"><button class="retour-button" onclick="afficherMenuAdministrateurAppli()">← Retour</button><h2>Gestion des gardes</h2><section class="gardes-bloc"><h3>Équipes</h3><div class="gardes-form-ligne"><input id="nouvelle-equipe-garde" placeholder="Nom de l'équipe"><button onclick="creerEquipeGarde()">Créer l'équipe</button></div>${cartes||"<p>Aucune équipe créée.</p>"}</section><section class="gardes-bloc"><h3>Calendrier des gardes</h3><p>Choisis l'équipe de garde pour chaque semaine. La modification est enregistrée immédiatement.</p>${lignes}</section></main>${navigationPrincipale("", "accueil")}`;
+    actualiserInterfaceBureau();
+}
+
+async function creerEquipeGarde(){const input=document.getElementById("nouvelle-equipe-garde"),nom=String(input?.value||"").trim();if(!nom){alert("Indique le nom de l'équipe.");return;}try{const s=obtenirClientSupabase();const {error}=await s.from("equipes_garde").insert({nom});if(error)throw error;await afficherGestionGardes();}catch(e){alert("⚠️ "+(e?.message||"Création impossible."));}}
+async function renommerEquipeGarde(id,ancienNom){const nom=await afficherSaisieCIS("Nouveau nom de l'équipe :",ancienNom);if(nom===null||!String(nom).trim())return;try{const {error}=await obtenirClientSupabase().from("equipes_garde").update({nom:String(nom).trim(),updated_at:new Date().toISOString()}).eq("id",id);if(error)throw error;await afficherGestionGardes();}catch(e){alert("⚠️ "+(e?.message||"Modification impossible."));}}
+async function supprimerEquipeGarde(id){if(!await afficherConfirmationCIS("Supprimer cette équipe ? Les semaines qui lui sont attribuées seront également supprimées."))return;try{const {error}=await obtenirClientSupabase().from("equipes_garde").delete().eq("id",id);if(error)throw error;await afficherGestionGardes();}catch(e){alert("⚠️ "+(e?.message||"Suppression impossible."));}}
+async function enregistrerMembresEquipeGarde(equipeId){try{const s=obtenirClientSupabase();const ids=[...document.querySelectorAll(`input[data-garde-equipe="${CSS.escape(equipeId)}"]:checked`)].map(x=>x.value);const {error:e1}=await s.from("equipes_garde_membres").delete().eq("equipe_id",equipeId);if(e1)throw e1;if(ids.length){const {error:e2}=await s.from("equipes_garde_membres").insert(ids.map(utilisateur_id=>({equipe_id:equipeId,utilisateur_id})));if(e2)throw e2;}alert("✅ Membres de l'équipe enregistrés.");await afficherGestionGardes();}catch(e){alert("⚠️ "+(e?.message||"Enregistrement impossible."));}}
+async function attribuerEquipeSemaineGarde(dateDebut,equipeId){try{const s=obtenirClientSupabase();if(!equipeId){const {error}=await s.from("planning_gardes").delete().eq("date_debut",dateDebut);if(error)throw error;}else{const {error}=await s.from("planning_gardes").upsert({date_debut:dateDebut,equipe_id:equipeId,updated_at:new Date().toISOString()},{onConflict:"date_debut"});if(error)throw error;}}catch(e){alert("⚠️ "+(e?.message||"Planning impossible à enregistrer."));await afficherGestionGardes();}}
+
+window.afficherGestionGardes=afficherGestionGardes;
+window.creerEquipeGarde=creerEquipeGarde;
+window.renommerEquipeGarde=renommerEquipeGarde;
+window.supprimerEquipeGarde=supprimerEquipeGarde;
+window.enregistrerMembresEquipeGarde=enregistrerMembresEquipeGarde;
+window.attribuerEquipeSemaineGarde=attribuerEquipeSemaineGarde;
