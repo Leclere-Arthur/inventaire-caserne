@@ -9144,6 +9144,8 @@ function construireCreneauxEntretienCaserne() {
 }
 
 async function creerPlanningEntretienCaserne() {
+    window.location.href = "https://admin.cis-lechesne.fr/";
+    return;
     if (!utilisateurEstSPVAdmin() && !utilisateurAPermission("acces_entretien_individuel_admin")) { alert("Accès non autorisé."); return; }
     const supabase = obtenirClientSupabase();
     if (!supabase || !navigator.onLine) { alert("Une connexion Internet est nécessaire pour publier le planning."); return; }
@@ -9464,7 +9466,6 @@ function afficherAdministratifCaserne() {
     const peutArchives = utilisateurAPermission("acces_archives");
 
     const outils = [
-        peutUtilisateurs ? `<button type="button" onclick="afficherGestionUtilisateurs()"><strong>Gestion des utilisateurs</strong><span>Comptes, rôles et permissions</span></button>` : "",
         peutNotifications ? `<button type="button" onclick="afficherNotificationsAdministration()"><strong>Notifications</strong><span>Créer et envoyer une notification</span></button>` : "",
         peutPharmacie ? `<button type="button" onclick="ouvrirAdministration()"><strong>Administration pharmacie</strong><span>Matériel, catégories, réapprovisionnement et historique</span></button>` : "",
         peutArchives ? `<button type="button" onclick="afficherArchivesHistorique()"><strong>Archives</strong><span>Consulter les historiques archivés</span></button>` : ""
@@ -9484,7 +9485,10 @@ async function afficherRubriqueCaserne(type) {
     const rubrique = obtenirRubriquesCaserne().find(r => r[0] === type);
     if (!rubrique || !utilisateurPeutVoirRubriqueCaserne(rubrique)) { alert("Accès non autorisé."); return; }
     await synchroniserCaserneAvantNavigation();
-    const estAdmin = utilisateurEstSPVAdmin() || utilisateurAPermission(rubrique[3]);
+    const estAdmin =
+        type === "entretien_individuel"
+            ? false
+            : (utilisateurEstSPVAdmin() || utilisateurAPermission(rubrique[3]));
 
     if (type === "administratif") {
         afficherAdministratifCaserne();
@@ -16180,41 +16184,6 @@ function afficherMenuAdministrateurAppli() {
 
                 <button
                     class="menu-button"
-                    onclick="afficherGestionUtilisateurs()"
-                >
-
-                    <span class="menu-icon">
-                        👥
-                    </span>
-
-                    <span>
-
-                        <strong>
-                            Gestion des utilisateurs
-                        </strong>
-
-                        <small>
-                            Comptes, rôles et permissions
-                        </small>
-
-                    </span>
-
-                </button>
-
-
-                <button
-                    class="menu-button"
-                    onclick="afficherGestionGardes()"
-                >
-                    <span class="menu-icon">📅</span>
-                    <span>
-                        <strong>Gestion des gardes</strong>
-                        <small>Équipes et calendrier des semaines</small>
-                    </span>
-                </button>
-
-                <button
-                    class="menu-button"
                     onclick="afficherNotificationsAdministration()"
                 >
 
@@ -16455,6 +16424,8 @@ window.enregistrerPermissionsUtilisateur=enregistrerPermissionsUtilisateur;
 
 
 async function afficherGestionUtilisateurs() {
+    window.location.href = "https://admin.cis-lechesne.fr/";
+    return;
 
     if (
         !verifierAccesAdministrateurAppli()
@@ -21569,6 +21540,8 @@ async function chargerDonneesGardesAdmin() {
 }
 
 async function afficherGestionGardes() {
+    window.location.href = "https://admin.cis-lechesne.fr/";
+    return;
     if(!utilisateurEstSPVAdmin()){ alert("Accès réservé au rôle SPV ADMIN."); return; }
     initialiserStyleGardes();
     document.getElementById("app").innerHTML=`<main class="page gestion-gardes-page"><button class="retour-button" onclick="afficherMenuAdministrateurAppli()">← Retour</button><h2>Gestion des gardes</h2><div class="gardes-bloc">Chargement…</div></main>${navigationPrincipale("", "accueil")}`;
