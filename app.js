@@ -21489,23 +21489,47 @@ function dateISOlocale(date) {
 
 function libelleSemaineGarde(dateDebut) {
     const debut = new Date(`${dateDebut}T12:00:00`);
-    const fin = new Date(debut); fin.setDate(fin.getDate()+6);
+    const fin = new Date(debut); fin.setDate(fin.getDate()+7);
     const a = debut.toLocaleDateString("fr-FR",{day:"2-digit",month:"short"});
     const b = fin.toLocaleDateString("fr-FR",{day:"2-digit",month:"short",year:"numeric"});
-    return `Du ${a} au ${b}`;
+    return `Du ${a} à 19 h au ${b} à 19 h`;
+}
+
+function vendrediReferenceGarde(date = new Date()) {
+    const d = new Date(date);
+    const jour = d.getDay();
+    let recul = (jour - 5 + 7) % 7;
+    // Friday before 19:00 still belongs to the guard that started the previous Friday.
+    if (jour === 5 && d.getHours() < 19) recul = 7;
+    d.setHours(12,0,0,0);
+    d.setDate(d.getDate() - recul);
+    return d;
 }
 
 async function chargerGardeSemaineCourante() {
     const supabase = obtenirClientSupabase();
-    if (!supabase || !navigator.onLine) return null;
-    const lundi = dateISOlocale(lundiDeLaSemaine(new Date()));
-    const {data: planning,error} = await supabase.from("planning_gardes").select("id,date_debut,equipe_id,equipes_garde(id,nom,actif)").eq("date_debut",lundi).maybeSingle();
+    if (!supabase || !profilUtilisateurConnecte?.id) return null;
+
+    const vendredi = dateISOlocale(vendrediReferenceGarde(new Date()));
+
+    // Do not depend on the PostgREST relationship: fetch planning then team separately.
+    const {data: planning,error} = await supabase
+        .from("planning_gardes")
+        .select("id,date_debut,equipe_id")
+        .eq("date_debut",vendredi)
+        .maybeSingle();
+
     if (error) throw error;
-    if (!planning) return {date_debut:lundi,equipe:null,estMembre:false};
-    const equipe = Array.isArray(planning.equipes_garde) ? planning.equipes_garde[0] : planning.equipes_garde;
-    const {data: membre,error:errMembre} = await supabase.from("equipes_garde_membres").select("id").eq("equipe_id",planning.equipe_id).eq("utilisateur_id",profilUtilisateurConnecte?.id || "").maybeSingle();
+    if (!planning) return {date_debut:vendredi,equipe:null,estMembre:false};
+
+    const [{data:equipe,error:errEquipe},{data:membre,error:errMembre}] = await Promise.all([
+        supabase.from("equipes_garde").select("id,nom,actif").eq("id",planning.equipe_id).maybeSingle(),
+        supabase.from("equipes_garde_membres").select("id").eq("equipe_id",planning.equipe_id).eq("utilisateur_id",profilUtilisateurConnecte.id).maybeSingle()
+    ]);
+    if (errEquipe) throw errEquipe;
     if (errMembre) throw errMembre;
-    return {date_debut:lundi,equipe,estMembre:!!membre};
+
+    return {date_debut:vendredi,equipe:equipe||null,estMembre:!!membre};
 }
 
 try {
@@ -21514,6 +21538,13 @@ try {
 } catch (_) {}
 
 let cacheCarteGardeAccueilHTML = "";
+try {
+    const cacheVersion=sessionStorage.getItem("cis_carte_equipe_version");
+    if(cacheVersion!=="v8"){
+        sessionStorage.removeItem("cis_carte_equipe_accueil");
+        sessionStorage.setItem("cis_carte_equipe_version","v8");
+    }
+} catch (_) {}
 try { cacheCarteGardeAccueilHTML = sessionStorage.getItem("cis_carte_equipe_accueil") || ""; } catch (_) {}
 
 function memoriserCarteEquipeAccueil(html) {
@@ -21621,8 +21652,11 @@ function sauvegarderSelectionMenageGarde(){
     actualiserPlanMenageGarde();
 }
 function actualiserPlanMenageGarde(){
-    const zones=new Set([...document.querySelectorAll("[data-garde-zone]:checked")].map(x=>x.value));
-    document.querySelectorAll("[data-plan-zone]").forEach(el=>el.classList.toggle("actif",zones.has(el.dataset.planZone)));
+    document.querySelectorAll("[data-plan-zone]").forEach(el=>{
+        const cible=[...document.querySelectorAll("[data-garde-zone]")].find(c=>c.value===el.dataset.planZone);
+        el.classList.toggle("actif",!!cible?.checked);
+        el.setAttribute("aria-pressed",cible?.checked ? "true" : "false");
+    });
 }
 
 function basculerZoneDepuisPlanGarde(nomZone){
@@ -21659,8 +21693,8 @@ function initialiserStyleEspaceGardeUtilisateur(){
       .plan-menage-wrap{background:#fff;border-radius:15px;padding:10px;margin:0 0 18px;box-shadow:0 3px 14px rgba(0,0,0,.08)}
       .plan-menage{position:relative;width:100%;aspect-ratio:1200/850;overflow:hidden;border-radius:9px;background:#fff}
       .plan-menage img{display:block;width:100%;height:100%;object-fit:contain;position:relative;z-index:1}
-      .plan-menage-zone{position:absolute;border:3px solid transparent;border-radius:7px;box-sizing:border-box;pointer-events:auto;cursor:pointer;z-index:10;transition:background .15s,border-color .15s}
-      .plan-menage-zone.actif{background:#58c86b!important;border-color:#087c2b!important;opacity:1!important}
+      .plan-menage-zone{appearance:none;-webkit-appearance:none;display:block;position:absolute;margin:0;padding:0;border:3px solid transparent;border-radius:7px;box-sizing:border-box;pointer-events:auto;cursor:pointer;z-index:20;background:transparent;transition:background .15s,border-color .15s}
+      .plan-menage-zone.actif{background:rgba(48,200,86,.82)!important;border:4px solid #087c2b!important;opacity:1!important}
       .pm-reunion{left:4.6%;top:6.5%;width:20.5%;height:44.5%}.pm-foyer{left:26.2%;top:6.5%;width:17.8%;height:21.8%}.pm-pmr{left:45.2%;top:6.5%;width:7.2%;height:21.8%}.pm-femme{left:53.7%;top:6.5%;width:14.1%;height:21.8%}.pm-homme{left:69%;top:6.5%;width:27%;height:21.8%}
       .pm-amical{left:4.6%;top:53%;width:20.5%;height:8%}.pm-radio{left:4.6%;top:62.5%;width:20.5%;height:8%}.pm-bureau{left:4.6%;top:72.5%;width:20.5%;height:21.5%}.pm-remise{left:26.2%;top:30%;width:49%;height:64%}.pm-vsav{left:76.6%;top:30%;width:19.4%;height:64%}
 
@@ -21697,16 +21731,16 @@ async function afficherMenageEspaceGarde(){
        <h1>🧹 Ménage</h1>
        <div class="plan-menage-wrap"><div class="plan-menage">
          <img src="./plan-caserne.png" alt="Plan de la caserne">
-         <span class="plan-menage-zone pm-reunion" data-plan-zone="Salle de cour" onclick="basculerZoneDepuisPlanGarde(this.dataset.planZone)"></span>
-         <span class="plan-menage-zone pm-foyer" data-plan-zone="Foyer" onclick="basculerZoneDepuisPlanGarde(this.dataset.planZone)"></span>
-         <span class="plan-menage-zone pm-pmr" data-plan-zone="Toilettes PMR" onclick="basculerZoneDepuisPlanGarde(this.dataset.planZone)"></span>
-         <span class="plan-menage-zone pm-femme" data-plan-zone="Vestiaire femme" onclick="basculerZoneDepuisPlanGarde(this.dataset.planZone)"></span>
-         <span class="plan-menage-zone pm-homme" data-plan-zone="Vestiaire homme" onclick="basculerZoneDepuisPlanGarde(this.dataset.planZone)"></span>
-         <span class="plan-menage-zone pm-amical" data-plan-zone="Amical" onclick="basculerZoneDepuisPlanGarde(this.dataset.planZone)"></span>
-         <span class="plan-menage-zone pm-radio" data-plan-zone="Salle radio" onclick="basculerZoneDepuisPlanGarde(this.dataset.planZone)"></span>
-         <span class="plan-menage-zone pm-bureau" data-plan-zone="Bureau" onclick="basculerZoneDepuisPlanGarde(this.dataset.planZone)"></span>
-         <span class="plan-menage-zone pm-remise" data-plan-zone="Remise à engin" onclick="basculerZoneDepuisPlanGarde(this.dataset.planZone)"></span>
-         <span class="plan-menage-zone pm-vsav" data-plan-zone="Local VSAV" onclick="basculerZoneDepuisPlanGarde(this.dataset.planZone)"></span>
+         <button type="button" class="plan-menage-zone pm-reunion" data-plan-zone="Salle de cour" aria-label="Salle de cour" onclick="basculerZoneDepuisPlanGarde(this.dataset.planZone)"></button>
+         <button type="button" class="plan-menage-zone pm-foyer" data-plan-zone="Foyer" aria-label="Foyer" onclick="basculerZoneDepuisPlanGarde(this.dataset.planZone)"></button>
+         <button type="button" class="plan-menage-zone pm-pmr" data-plan-zone="Toilettes PMR" aria-label="Toilettes PMR" onclick="basculerZoneDepuisPlanGarde(this.dataset.planZone)"></button>
+         <button type="button" class="plan-menage-zone pm-femme" data-plan-zone="Vestiaire femme" aria-label="Vestiaire femme" onclick="basculerZoneDepuisPlanGarde(this.dataset.planZone)"></button>
+         <button type="button" class="plan-menage-zone pm-homme" data-plan-zone="Vestiaire homme" aria-label="Vestiaire homme" onclick="basculerZoneDepuisPlanGarde(this.dataset.planZone)"></button>
+         <button type="button" class="plan-menage-zone pm-amical" data-plan-zone="Amical" aria-label="Amical" onclick="basculerZoneDepuisPlanGarde(this.dataset.planZone)"></button>
+         <button type="button" class="plan-menage-zone pm-radio" data-plan-zone="Salle radio" aria-label="Salle radio" onclick="basculerZoneDepuisPlanGarde(this.dataset.planZone)"></button>
+         <button type="button" class="plan-menage-zone pm-bureau" data-plan-zone="Bureau" aria-label="Bureau" onclick="basculerZoneDepuisPlanGarde(this.dataset.planZone)"></button>
+         <button type="button" class="plan-menage-zone pm-remise" data-plan-zone="Remise à engin" aria-label="Remise à engin" onclick="basculerZoneDepuisPlanGarde(this.dataset.planZone)"></button>
+         <button type="button" class="plan-menage-zone pm-vsav" data-plan-zone="Local VSAV" aria-label="Local VSAV" onclick="basculerZoneDepuisPlanGarde(this.dataset.planZone)"></button>
        </div></div>
        <h2 class="garde-sous-titre">Zones</h2>
        ${ZONES_MENAGE_GARDE.map(n=>`<label class="garde-zone"><input type="checkbox" data-garde-zone value="${echapperHTML(n)}" ${zs.has(n)?"checked":""} onchange="sauvegarderSelectionMenageGarde()"><span>${echapperHTML(n)}</span></label>`).join("")}
