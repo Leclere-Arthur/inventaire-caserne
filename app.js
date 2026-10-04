@@ -21511,18 +21511,32 @@ async function chargerGardeSemaineCourante() {
     return {date_debut:lundi,equipe,estMembre:!!membre};
 }
 
+let cacheCarteGardeAccueilHTML = "";
+
 async function actualiserCarteGardeAccueil() {
     initialiserStyleGardes();
     const zone=document.getElementById("carte-garde-accueil"); if(!zone) return;
+
+    // Au retour de l'Espace équipe, on réaffiche immédiatement la dernière carte
+    // au lieu de laisser "Chargement de la garde..." à l'écran.
+    if (cacheCarteGardeAccueilHTML) {
+        zone.innerHTML = cacheCarteGardeAccueilHTML;
+        return;
+    }
+
     try {
-        const garde=await chargerGardeSemaineCourante();
+        // Sécurité : Supabase ne peut plus laisser cette carte charger indéfiniment.
+        const garde=await Promise.race([
+            chargerGardeSemaineCourante(),
+            new Promise(resolve => setTimeout(() => resolve(null), 4500))
+        ]);
         if(!document.getElementById("carte-garde-accueil")) return;
-        if(!garde){ zone.innerHTML=`<div class="garde-accueil-carte sans-garde"><small>GARDE</small><strong>Planning indisponible hors connexion</strong></div>`; return; }
-        if(!garde.equipe){ zone.innerHTML=`<div class="garde-accueil-carte sans-garde"><small>GARDE</small><strong>Aucune équipe programmée cette semaine</strong><span>${echapperHTML(libelleSemaineGarde(garde.date_debut))}</span></div>`; return; }
-        zone.innerHTML=`<div class="garde-accueil-carte ${garde.estMembre?"ma-garde":"pas-garde"}" role="button" tabindex="0" onclick="afficherEspaceGarde()" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();afficherEspaceGarde();}"><small>GARDE · ${echapperHTML(garde.equipe.nom || "Équipe")}</small><strong>${garde.estMembre?"TU ES DE GARDE CETTE SEMAINE":"TU N’ES PAS DE GARDE CETTE SEMAINE"}</strong><span>${echapperHTML(libelleSemaineGarde(garde.date_debut))}</span></div>`;
+        if(!garde){ cacheCarteGardeAccueilHTML=`<div class="garde-accueil-carte sans-garde"><small>GARDE</small><strong>Planning momentanément indisponible</strong></div>`; zone.innerHTML=cacheCarteGardeAccueilHTML; return; }
+        if(!garde.equipe){ cacheCarteGardeAccueilHTML=`<div class="garde-accueil-carte sans-garde"><small>GARDE</small><strong>Aucune équipe programmée cette semaine</strong><span>${echapperHTML(libelleSemaineGarde(garde.date_debut))}</span></div>`; zone.innerHTML=cacheCarteGardeAccueilHTML; return; }
+        cacheCarteGardeAccueilHTML=`<div class="garde-accueil-carte ${garde.estMembre?"ma-garde":"pas-garde"}" role="button" tabindex="0" onclick="afficherEspaceGarde()" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();afficherEspaceGarde();}"><small>ÉQUIPE · ${echapperHTML(garde.equipe.nom || "Équipe")}</small><strong>${garde.estMembre?"TU ES DE GARDE CETTE SEMAINE":"TU N’ES PAS DE GARDE CETTE SEMAINE"}</strong><span>${echapperHTML(libelleSemaineGarde(garde.date_debut))}</span></div>`; zone.innerHTML=cacheCarteGardeAccueilHTML;
     } catch(erreur) {
         console.error("Affichage garde :",erreur);
-        zone.innerHTML=`<div class="garde-accueil-carte sans-garde"><small>GARDE</small><strong>Planning momentanément indisponible</strong></div>`;
+        cacheCarteGardeAccueilHTML=`<div class="garde-accueil-carte sans-garde"><small>ÉQUIPE</small><strong>Planning momentanément indisponible</strong></div>`; zone.innerHTML=cacheCarteGardeAccueilHTML;
     }
 }
 
@@ -21639,7 +21653,7 @@ function afficherEspaceGarde(){
     document.getElementById("app").innerHTML=`
       <main class="garde-menu-page">
         <button class="retour-button" onclick="afficherPortailPrincipal()">← Retour</button>
-        <header class="garde-menu-entete"><small>ESPACE GARDE</small><h1>Ma garde</h1></header>
+        <header class="garde-menu-entete"><small>ESPACE ÉQUIPE</small><h1>Espace équipe</h1></header>
         <div class="garde-menu-cartes">
           <button class="garde-menu-carte" onclick="afficherMenageEspaceGarde()"><span class="ico">🧹</span><span><strong>Ménage</strong></span><b class="fleche">›</b></button>
           <button class="garde-menu-carte" onclick="afficherInventaireVehiculeEspaceGarde()"><span class="ico">🚒</span><span><strong>Inventaire véhicule</strong></span><b class="fleche">›</b></button>
@@ -21655,7 +21669,7 @@ async function afficherMenageEspaceGarde(){
     const sel=lireSelectionMenageGarde(),zs=new Set(sel.zones||[]),ps=new Set(sel.personnes||[]);
     document.getElementById("app").innerHTML=`
       <main class="garde-section">
-       <button class="retour-button" onclick="afficherEspaceGarde()">← Espace garde</button>
+       <button class="retour-button" onclick="afficherEspaceGarde()">← Espace équipe</button>
        <h1>🧹 Ménage</h1>
        <h2 class="garde-sous-titre">Zones</h2>
        ${ZONES_MENAGE_GARDE.map(n=>`<label class="garde-zone"><input type="checkbox" data-garde-zone value="${echapperHTML(n)}" ${zs.has(n)?"checked":""} onchange="sauvegarderSelectionMenageGarde()"><span>${echapperHTML(n)}</span></label>`).join("")}
@@ -21668,7 +21682,7 @@ async function afficherMenageEspaceGarde(){
 function afficherInventaireVehiculeEspaceGarde(){
     initialiserStyleEspaceGardeUtilisateur();
     document.getElementById("app").innerHTML=`
-      <main class="garde-section"><button class="retour-button" onclick="afficherEspaceGarde()">← Espace garde</button><h1>🚒 Inventaire véhicule</h1>
+      <main class="garde-section"><button class="retour-button" onclick="afficherEspaceGarde()">← Espace équipe</button><h1>🚒 Inventaire véhicule</h1>
       ${VEHICULES_INVENTAIRE_GARDE.map(v=>`<div class="garde-vehicule-v2">${v}</div>`).join("")}
       </main>${navigationPrincipale("","accueil")}`;
     actualiserInterfaceBureau();window.scrollTo({top:0,behavior:"auto"});
@@ -21679,7 +21693,7 @@ function afficherInventaireVehiculeEspaceGarde(){
 async function afficherPlanningEspaceGarde(){
     initialiserStyleEspaceGardeUtilisateur();
     document.getElementById("app").innerHTML=`
-      <main class="garde-section"><button class="retour-button" onclick="afficherEspaceGarde()">← Espace garde</button><h1>📅 Planning</h1>
+      <main class="garde-section"><button class="retour-button" onclick="afficherEspaceGarde()">← Espace équipe</button><h1>📅 Planning</h1>
       <div id="garde-planning-photo" class="garde-planning-attente">Création du planning…</div></main>${navigationPrincipale("","accueil")}`;
     actualiserInterfaceBureau();
     try{
