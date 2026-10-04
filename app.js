@@ -930,7 +930,7 @@ let minuteurVerificationMiseAJour =
  * Elle permet de détecter une nouvelle version même si seul app.js change.
  */
 const VERSION_APPLICATION_JS =
-    "2026-10-04-espace-equipe-v12";
+    "2026-10-04-espace-equipe-v15";
 
 async function verifierNouvelleVersionAppJs() {
 
@@ -21712,7 +21712,7 @@ function initialiserStyleEspaceGardeUtilisateur(){
       .garde-menage-statut{display:none;margin:12px 0;padding:13px;border-radius:12px;font-weight:850}.garde-menage-statut.ok{display:block;background:#dff6e7;color:#075d2b}.garde-menage-statut.err{display:block;background:#fde3e3;color:#8b1111}.garde-menage-enregistrer{background:#176b45;color:#fff}.garde-menage-admin{background:#e8ecef;color:#263238}
       .garde-admin-card{background:#fff;border-radius:14px;padding:15px;margin:10px 0;box-shadow:0 2px 10px rgba(0,0,0,.07)}
       .garde-admin-card button{width:100%;border:0;background:transparent;text-align:left;font:inherit;padding:0;cursor:pointer}
-      .garde-stat-ligne{background:#fff;border-radius:12px;padding:12px;margin:7px 0}.garde-stat-ligne strong{display:block}.garde-stat-ligne small{color:#687078}
+      .garde-stat-ligne{background:#fff;border-radius:12px;padding:12px;margin:7px 0}.garde-stat-ligne strong{display:block}.garde-stat-ligne small{color:#687078}.garde-stat-ligne-flex{display:flex;align-items:center;justify-content:space-between;gap:12px}.garde-date-recente{color:#12813b!important;font-weight:900;font-size:15px}.garde-date-ancienne{color:#c62828!important;font-weight:900;font-size:15px}.garde-presence-pct{font-size:18px;font-weight:900;color:#176b45;white-space:nowrap}.plan-menage-detail{pointer-events:none}
       .planning-photo-cliquable{cursor:zoom-in}
       .planning-modal{position:fixed;inset:0;z-index:99999;background:#111;display:flex;flex-direction:column}
       .planning-modal-bar{display:flex;gap:8px;padding:10px;background:#111}.planning-modal-bar button,.planning-modal-bar a{border:0;border-radius:9px;background:#fff;color:#111;padding:10px 13px;font-weight:850;text-decoration:none}
@@ -21750,7 +21750,12 @@ function afficherEspaceGarde(){
 
 async function afficherMenageEspaceGarde(){
     initialiserStyleEspaceGardeUtilisateur();
-    if(!utilisateursEspaceGarde.length)utilisateursEspaceGarde=await chargerUtilisateursEspaceGarde();
+    if(!utilisateursEspaceGarde.length){
+      document.getElementById("app").innerHTML=`<main class="garde-section"><button class="retour-button" onclick="afficherEspaceGarde()">← Espace équipe</button><h1>🧹 Ménage</h1><div id="menage-garde-chargement" class="garde-planning-attente">Chargement…</div></main>${navigationPrincipale("","accueil")}`;
+      actualiserInterfaceBureau();
+      utilisateursEspaceGarde=await chargerUtilisateursEspaceGarde();
+      if(!document.getElementById("menage-garde-chargement"))return;
+    }
     const sel=lireSelectionMenageGarde(),zs=new Set(sel.zones||[]),ps=new Set(sel.personnes||[]);
     document.getElementById("app").innerHTML=`
       <main class="garde-section">
@@ -21933,38 +21938,68 @@ async function enregistrerMenageEquipe(){
     }
 }
 
+function formaterDateMenageLongue(v){
+    if(!v)return "Jamais";
+    return new Date(v).toLocaleDateString("fr-FR",{day:"numeric",month:"long",year:"numeric"});
+}
+function classeDateMenage(v){
+    if(!v)return "garde-date-ancienne";
+    const age=(Date.now()-new Date(v).getTime())/86400000;
+    return age<30?"garde-date-recente":"garde-date-ancienne";
+}
+function htmlPlanMenageHistorique(zones){
+    const z=new Set(zones||[]);
+    const defs=[["pm-reunion","Salle de cour"],["pm-foyer","Foyer"],["pm-pmr","Toilettes PMR"],["pm-femme","Vestiaire femme"],["pm-homme","Vestiaire homme"],["pm-amical","Amical"],["pm-radio","Salle radio"],["pm-bureau","Bureau"],["pm-remise","Remise à engin"],["pm-vsav","Local VSAV"]];
+    return `<div class="plan-menage-wrap"><div class="plan-menage plan-menage-detail"><img src="./plan-caserne.png?v=15" alt="Plan des zones nettoyées">${defs.map(([c,n])=>`<span class="plan-menage-zone ${c} ${z.has(n)?"actif":""}"></span>`).join("")}</div></div>`;
+}
+
 async function afficherAdminMenageEquipe(){
     if(!utilisateurAPermission("acces_admin_menage")){alert("Accès non autorisé.");return}
+    initialiserStyleEspaceGardeUtilisateur();
+    document.getElementById("app").innerHTML=`<main class="garde-section"><button class="retour-button" onclick="afficherEspaceGarde()">← Espace équipe</button><h1>Administration ménage</h1><div id="admin-menage-chargement" class="garde-planning-attente">Chargement…</div></main>${navigationPrincipale("","accueil")}`;
+    actualiserInterfaceBureau();
     const supabase=obtenirClientSupabase();
-    const {data,error}=await supabase.from("menages_garde").select("*").order("date_menage",{ascending:false});
-    if(error){alert("Historique ménage indisponible.");return}
-    const rows=data||[];
+    const [hist,membres]=await Promise.all([
+      supabase.from("menages_garde").select("*").order("date_menage",{ascending:false}),
+      supabase.from("equipes_garde_membres").select("equipe_id,utilisateur_id")
+    ]);
+    if(!document.getElementById("admin-menage-chargement"))return;
+    if(hist.error){document.getElementById("admin-menage-chargement").textContent="Historique ménage indisponible.";return}
+    const rows=hist.data||[], membresEquipe=membres.data||[];
     if(!utilisateursEspaceGarde.length)utilisateursEspaceGarde=await chargerUtilisateursEspaceGarde();
+    if(!document.getElementById("admin-menage-chargement"))return;
     const nom=id=>{const u=utilisateursEspaceGarde.find(x=>String(x.id)===String(id));return u?([u.prenom,u.nom].filter(Boolean).join(" ")||u.identifiant):"Utilisateur"};
-    const zones=[...new Set(rows.flatMap(r=>r.zones_nettoyees||[]))];
+    const zones=[...new Set([...ZONES_MENAGE_GARDE,...rows.flatMap(r=>r.zones_nettoyees||[])])];
     const zoneStats=zones.map(z=>{const r=rows.find(x=>(x.zones_nettoyees||[]).includes(z));return {z,date:r?.date_menage}});
     const presence=new Map();rows.forEach(r=>(r.personnes_presentes||[]).forEach(id=>presence.set(String(id),(presence.get(String(id))||0)+1)));
+    const attendues=new Map();
+    rows.forEach(r=>{if(!r.equipe_id)return;membresEquipe.filter(m=>String(m.equipe_id)===String(r.equipe_id)).forEach(m=>{const id=String(m.utilisateur_id);attendues.set(id,(attendues.get(id)||0)+1)})});
+    const personnes=[...new Set([...presence.keys(),...attendues.keys()])];
     document.getElementById("app").innerHTML=`<main class="garde-section">
       <button class="retour-button" onclick="afficherEspaceGarde()">← Espace équipe</button><h1>Administration ménage</h1>
       <h2 class="garde-sous-titre">Dernier nettoyage par zone</h2>
-      ${zoneStats.map(s=>`<div class="garde-stat-ligne"><strong>${echapperHTML(s.z)}</strong><small>${s.date?new Date(s.date).toLocaleString("fr-FR"):"Jamais"}</small></div>`).join("")}
+      ${zoneStats.map(s=>`<div class="garde-stat-ligne"><strong>${echapperHTML(s.z)}</strong><small class="${classeDateMenage(s.date)}">${s.date?formaterDateMenageLongue(s.date):"Jamais"}</small></div>`).join("")}
       <h2 class="garde-sous-titre">Présences</h2>
-      ${[...presence.entries()].sort((a,b)=>b[1]-a[1]).map(([id,n])=>`<div class="garde-stat-ligne"><strong>${echapperHTML(nom(id))}</strong><small>${n} présence${n>1?"s":""}</small></div>`).join("")}
+      ${personnes.sort((a,b)=>(presence.get(b)||0)-(presence.get(a)||0)).map(id=>{const n=presence.get(id)||0,d=attendues.get(id)||0,p=d?Math.round(n/d*100):0;return `<div class="garde-stat-ligne garde-stat-ligne-flex"><div><strong>${echapperHTML(nom(id))}</strong><small>${n} présence${n>1?"s":""} sur ${d} ménage${d>1?"s":""} de son équipe</small></div><span class="garde-presence-pct">${p}%</span></div>`}).join("")||'<div class="garde-stat-ligne">Aucune présence enregistrée.</div>'}
       <h2 class="garde-sous-titre">Historique</h2>
       ${rows.map(r=>`<div class="garde-admin-card"><button onclick="afficherDetailMenageEquipe('${r.id}')"><strong>${new Date(r.date_menage).toLocaleString("fr-FR")}</strong><br><small>${(r.zones_nettoyees||[]).length} zone(s) · ${r.duree_minutes||0} min</small></button></div>`).join("")||"<div>Aucun ménage enregistré.</div>"}
     </main>${navigationPrincipale("","accueil")}`;actualiserInterfaceBureau();window.scrollTo({top:0,behavior:"auto"});
 }
-
 async function afficherDetailMenageEquipe(id){
+    initialiserStyleEspaceGardeUtilisateur();
+    document.getElementById("app").innerHTML=`<main class="garde-section"><button class="retour-button" onclick="afficherAdminMenageEquipe()">← Retour</button><h1>Détail du ménage</h1><div id="detail-menage-chargement" class="garde-planning-attente">Chargement…</div></main>${navigationPrincipale("","accueil")}`;
+    actualiserInterfaceBureau();
     const supabase=obtenirClientSupabase();const {data:r,error}=await supabase.from("menages_garde").select("*").eq("id",id).single();
-    if(error||!r){alert("Détail indisponible.");return}
+    if(!document.getElementById("detail-menage-chargement"))return;
+    if(error||!r){document.getElementById("detail-menage-chargement").textContent="Détail indisponible.";return}
     if(!utilisateursEspaceGarde.length)utilisateursEspaceGarde=await chargerUtilisateursEspaceGarde();
+    if(!document.getElementById("detail-menage-chargement"))return;
     const nom=id=>{const u=utilisateursEspaceGarde.find(x=>String(x.id)===String(id));return u?([u.prenom,u.nom].filter(Boolean).join(" ")||u.identifiant):"Utilisateur"};
     document.getElementById("app").innerHTML=`<main class="garde-section"><button class="retour-button" onclick="afficherAdminMenageEquipe()">← Retour</button><h1>Détail du ménage</h1>
+    ${htmlPlanMenageHistorique(r.zones_nettoyees||[])}
     <div class="garde-admin-card"><strong>Date</strong><p>${new Date(r.date_menage).toLocaleString("fr-FR")}</p><strong>Temps passé</strong><p>${r.duree_minutes||0} min</p><strong>Zones nettoyées</strong><p>${(r.zones_nettoyees||[]).map(echapperHTML).join(" · ")}</p><strong>Personnes présentes</strong><p>${(r.personnes_presentes||[]).map(x=>echapperHTML(nom(x))).join(" · ")}</p></div></main>${navigationPrincipale("","accueil")}`;
     actualiserInterfaceBureau();
 }
-
 window.ouvrirPlanningEquipeGrand=ouvrirPlanningEquipeGrand;
 window.enregistrerPhotoPlanningEquipe=enregistrerPhotoPlanningEquipe;
 window.enregistrerMenageEquipe=enregistrerMenageEquipe;
