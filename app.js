@@ -21651,13 +21651,20 @@ function sauvegarderSelectionMenageGarde(){
     localStorage.setItem(cleSelectionMenageGarde(),JSON.stringify({zones,personnes}));
     actualiserPlanMenageGarde();
 }
-function actualiserPlanMenageGarde(){
-    document.querySelectorAll("[data-plan-zone]").forEach(el=>{
-        const cible=[...document.querySelectorAll("[data-garde-zone]")].find(c=>c.value===el.dataset.planZone);
-        el.classList.toggle("actif",!!cible?.checked);
-        el.setAttribute("aria-pressed",cible?.checked ? "true" : "false");
-    });
+let imagePlanMenageGarde=null;
+function dessinerPlanMenageGarde(){
+ const canvas=document.getElementById("canvas-plan-menage");if(!canvas)return;
+ if(!imagePlanMenageGarde){imagePlanMenageGarde=new Image();imagePlanMenageGarde.onload=dessinerPlanMenageGarde;imagePlanMenageGarde.src="./plan-caserne.png?v=9";return;}
+ if(!imagePlanMenageGarde.complete||!imagePlanMenageGarde.naturalWidth)return;
+ canvas.width=imagePlanMenageGarde.naturalWidth;canvas.height=imagePlanMenageGarde.naturalHeight;
+ const c=canvas.getContext("2d");c.drawImage(imagePlanMenageGarde,0,0,canvas.width,canvas.height);
+ const zones=new Set([...document.querySelectorAll("[data-garde-zone]:checked")].map(x=>x.value));
+ const R={"Salle de cour":[.046,.065,.205,.445],"Foyer":[.262,.065,.178,.218],"Toilettes PMR":[.452,.065,.072,.218],"Vestiaire femme":[.537,.065,.141,.218],"Vestiaire homme":[.690,.065,.270,.218],"Amical":[.046,.530,.205,.080],"Salle radio":[.046,.625,.205,.080],"Bureau":[.046,.725,.205,.215],"Remise à engin":[.262,.300,.490,.640],"Local VSAV":[.766,.300,.194,.640]};
+ c.save();c.fillStyle="#20c75a";c.globalAlpha=.88;
+ zones.forEach(n=>{const r=R[n];if(r)c.fillRect(r[0]*canvas.width,r[1]*canvas.height,r[2]*canvas.width,r[3]*canvas.height)});c.restore();
+ document.querySelectorAll("[data-plan-zone]").forEach(el=>{const a=zones.has(el.dataset.planZone);el.classList.toggle("actif",a);el.setAttribute("aria-pressed",a?"true":"false")});
 }
+function actualiserPlanMenageGarde(){dessinerPlanMenageGarde();}
 
 function basculerZoneDepuisPlanGarde(nomZone){
     const cases=[...document.querySelectorAll("[data-garde-zone]")];
@@ -21692,9 +21699,9 @@ function initialiserStyleEspaceGardeUtilisateur(){
       .garde-zone input,.garde-personne-v2 input{width:21px;height:21px;accent-color:#176b45}
       .plan-menage-wrap{background:#fff;border-radius:15px;padding:10px;margin:0 0 18px;box-shadow:0 3px 14px rgba(0,0,0,.08)}
       .plan-menage{position:relative;width:100%;aspect-ratio:1200/850;overflow:hidden;border-radius:9px;background:#fff}
-      .plan-menage img{display:block;width:100%;height:100%;object-fit:contain;position:relative;z-index:1}
+      .plan-menage img,.plan-menage canvas{display:block;width:100%;height:100%;object-fit:contain;position:relative;z-index:1}
       .plan-menage-zone{appearance:none;-webkit-appearance:none;display:block;position:absolute;margin:0;padding:0;border:3px solid transparent;border-radius:7px;box-sizing:border-box;pointer-events:auto;cursor:pointer;z-index:20;background:transparent;transition:background .15s,border-color .15s}
-      .plan-menage-zone.actif{background:rgba(48,200,86,.82)!important;border:4px solid #087c2b!important;opacity:1!important}
+      .plan-menage-zone.actif{background:transparent!important;border:4px solid #087c2b!important;opacity:1!important}
       .pm-reunion{left:4.6%;top:6.5%;width:20.5%;height:44.5%}.pm-foyer{left:26.2%;top:6.5%;width:17.8%;height:21.8%}.pm-pmr{left:45.2%;top:6.5%;width:7.2%;height:21.8%}.pm-femme{left:53.7%;top:6.5%;width:14.1%;height:21.8%}.pm-homme{left:69%;top:6.5%;width:27%;height:21.8%}
       .pm-amical{left:4.6%;top:53%;width:20.5%;height:8%}.pm-radio{left:4.6%;top:62.5%;width:20.5%;height:8%}.pm-bureau{left:4.6%;top:72.5%;width:20.5%;height:21.5%}.pm-remise{left:26.2%;top:30%;width:49%;height:64%}.pm-vsav{left:76.6%;top:30%;width:19.4%;height:64%}
 
@@ -21706,11 +21713,16 @@ function initialiserStyleEspaceGardeUtilisateur(){
     document.head.appendChild(s);
 }
 
+function retourAccueilDepuisEspaceEquipe(){
+    afficherPortailPrincipal();
+    requestAnimationFrame(()=>requestAnimationFrame(()=>void actualiserCarteGardeAccueil()));
+}
+
 function afficherEspaceGarde(){
     initialiserStyleEspaceGardeUtilisateur();
     document.getElementById("app").innerHTML=`
       <main class="garde-menu-page">
-        <button class="retour-button" onclick="afficherPortailPrincipal()">← Retour</button>
+        <button class="retour-button" onclick="retourAccueilDepuisEspaceEquipe()">← Retour</button>
         <header class="garde-menu-entete"><small>ESPACE ÉQUIPE</small><h1>Espace équipe</h1></header>
         <div class="garde-menu-cartes">
           <button class="garde-menu-carte" onclick="afficherMenageEspaceGarde()"><span class="ico">🧹</span><span><strong>Ménage</strong></span><b class="fleche">›</b></button>
@@ -21730,7 +21742,7 @@ async function afficherMenageEspaceGarde(){
        <button class="retour-button" onclick="afficherEspaceGarde()">← Espace équipe</button>
        <h1>🧹 Ménage</h1>
        <div class="plan-menage-wrap"><div class="plan-menage">
-         <img src="./plan-caserne.png" alt="Plan de la caserne">
+         <canvas id="canvas-plan-menage" aria-label="Plan de la caserne"></canvas>
          <button type="button" class="plan-menage-zone pm-reunion" data-plan-zone="Salle de cour" aria-label="Salle de cour" onclick="basculerZoneDepuisPlanGarde(this.dataset.planZone)"></button>
          <button type="button" class="plan-menage-zone pm-foyer" data-plan-zone="Foyer" aria-label="Foyer" onclick="basculerZoneDepuisPlanGarde(this.dataset.planZone)"></button>
          <button type="button" class="plan-menage-zone pm-pmr" data-plan-zone="Toilettes PMR" aria-label="Toilettes PMR" onclick="basculerZoneDepuisPlanGarde(this.dataset.planZone)"></button>
@@ -21842,6 +21854,7 @@ async function creerPhotoPlanningGarde(){
     return canvas.toDataURL("image/png");
 }
 
+window.retourAccueilDepuisEspaceEquipe=retourAccueilDepuisEspaceEquipe;
 window.afficherEspaceGarde=afficherEspaceGarde;
 window.afficherMenageEspaceGarde=afficherMenageEspaceGarde;
 window.afficherInventaireVehiculeEspaceGarde=afficherInventaireVehiculeEspaceGarde;
