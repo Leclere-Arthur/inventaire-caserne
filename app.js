@@ -21578,169 +21578,187 @@ window.enregistrerMembresEquipeGarde=enregistrerMembresEquipeGarde;
 window.attribuerEquipeSemaineGarde=attribuerEquipeSemaineGarde;
 
 
+
 /* =========================================================
-   ESPACE GARDE UTILISATEUR
-   Ménage / Inventaire véhicule / Planning
+   ESPACE GARDE UTILISATEUR — présentation comme le reste de l'app
    ========================================================= */
 
 const ZONES_MENAGE_GARDE = [
-    "Remise à engin",
-    "Local VSAV",
-    "Vestiaire homme",
-    "Vestiaire femme",
-    "Toilettes PMR",
-    "Foyer",
-    "Salle de cour",
-    "Salle radio",
-    "Poubelle de trie"
+    "Remise à engin","Local VSAV","Vestiaire homme","Vestiaire femme",
+    "Toilettes PMR","Foyer","Salle de cour","Salle radio","Poubelle de trie"
 ];
-
-const VEHICULES_INVENTAIRE_GARDE = ["VSAV", "CCRM", "VTU", "VL", "VLHR"];
-
-function initialiserStyleEspaceGardeUtilisateur() {
-    if (document.getElementById("style-espace-garde-utilisateur")) return;
-    const style = document.createElement("style");
-    style.id = "style-espace-garde-utilisateur";
-    style.textContent = `
-        .espace-garde-page{padding:18px 18px 115px;max-width:820px;margin:0 auto;box-sizing:border-box}
-        .espace-garde-entete{margin:6px 0 18px}.espace-garde-entete small{font-size:12px;font-weight:900;letter-spacing:.12em;color:#176b45}.espace-garde-entete h1{margin:5px 0 3px;font-size:28px}.espace-garde-entete p{margin:0;color:#66707a}
-        .espace-garde-onglets{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:18px}
-        .espace-garde-onglets button{border:1px solid #d8dde1;background:#fff;border-radius:12px;padding:12px 8px;font-weight:850;font-size:13px;cursor:pointer}.espace-garde-onglets button.actif{background:#176b45;color:#fff;border-color:#176b45}
-        .espace-garde-bloc{background:#fff;border-radius:16px;padding:16px;box-shadow:0 5px 20px rgba(0,0,0,.08);margin-bottom:14px}.espace-garde-bloc h2{margin:0 0 5px;font-size:20px}.espace-garde-bloc>p{margin:0 0 15px;color:#68717a;font-size:14px}
-        .garde-check-liste{display:grid;gap:9px}.garde-check{display:flex;align-items:center;gap:11px;padding:12px;border:1px solid #e0e4e7;border-radius:12px;background:#f8f9fa;font-weight:750}.garde-check input{width:21px;height:21px;accent-color:#176b45}
-        .garde-personnes{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:8px}.garde-personne{display:flex;align-items:center;gap:9px;padding:10px;border-radius:10px;background:#f4f6f7}.garde-personne input{width:19px;height:19px;accent-color:#176b45}
-        .garde-vehicules{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px}.garde-vehicule{border:1px solid #dce1e4;border-radius:14px;padding:18px 12px;background:#f7f8f9;text-align:center;font-size:18px;font-weight:900}
-        .garde-planning{overflow:auto}.garde-planning-table{width:100%;min-width:650px;border-collapse:separate;border-spacing:4px}.garde-planning-table th{padding:9px 5px;font-size:12px;text-transform:uppercase;color:#4d5860}.garde-planning-table td{height:68px;border-radius:10px;padding:8px;text-align:center;font-weight:850;background:#eef1f3}.garde-planning-table td.menage{background:#fff0bf;color:#765500}.garde-planning-table td.garde-equipe-cell{background:#dcefe5;color:#155c3c}.garde-planning-legende{display:flex;gap:12px;flex-wrap:wrap;margin-top:12px;font-size:12px;font-weight:750;color:#5d666d}
-        .garde-point{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:5px;vertical-align:-1px}.garde-point.equipe{background:#dcefe5}.garde-point.menage{background:#fff0bf}
-        .garde-retour{border:0;background:#eef1f3;border-radius:10px;padding:10px 13px;font-weight:800;cursor:pointer;margin-bottom:12px}
-        .garde-info{padding:12px;border-radius:11px;background:#f3f5f6;color:#5f6971;font-size:13px}
-        @media(max-width:520px){.espace-garde-page{padding:14px 14px 110px}.espace-garde-onglets{gap:5px}.espace-garde-onglets button{padding:11px 5px;font-size:12px}.espace-garde-entete h1{font-size:25px}}
-    `;
-    document.head.appendChild(style);
-}
-
-let ongletEspaceGardeActif = "menage";
+const VEHICULES_INVENTAIRE_GARDE = ["VSAV","CCRM","VTU","VL","VLHR"];
 let utilisateursEspaceGarde = [];
 
-function cleSelectionMenageGarde() {
+function cleSelectionMenageGarde(){
     return "cis_garde_menage_" + dateISOlocale(vendrediGardeCourante(new Date()));
 }
-
-function lireSelectionMenageGarde() {
-    try { return JSON.parse(localStorage.getItem(cleSelectionMenageGarde()) || '{"zones":[],"personnes":[]}'); }
-    catch (_) { return {zones:[],personnes:[]}; }
+function lireSelectionMenageGarde(){
+    try{return JSON.parse(localStorage.getItem(cleSelectionMenageGarde())||'{"zones":[],"personnes":[]}')}
+    catch(_){return {zones:[],personnes:[]}}
+}
+function sauvegarderSelectionMenageGarde(){
+    const zones=[...document.querySelectorAll("[data-garde-zone]:checked")].map(x=>x.value);
+    const personnes=[...document.querySelectorAll("[data-garde-personne]:checked")].map(x=>x.value);
+    localStorage.setItem(cleSelectionMenageGarde(),JSON.stringify({zones,personnes}));
+}
+async function chargerUtilisateursEspaceGarde(){
+    const supabase=obtenirClientSupabase();
+    if(!supabase||!navigator.onLine)return [];
+    try{
+        const {data,error}=await supabase.from("profils_utilisateurs").select("id,prenom,nom,identifiant,actif").eq("actif",true).order("nom");
+        if(error)throw error;
+        return data||[];
+    }catch(_){return []}
 }
 
-function sauvegarderSelectionMenageGarde() {
-    const zones = [...document.querySelectorAll('[data-garde-zone]:checked')].map(x => x.value);
-    const personnes = [...document.querySelectorAll('[data-garde-personne]:checked')].map(x => x.value);
-    localStorage.setItem(cleSelectionMenageGarde(), JSON.stringify({zones,personnes}));
+function initialiserStyleEspaceGardeUtilisateur(){
+    if(document.getElementById("style-espace-garde-utilisateur-v2"))return;
+    const s=document.createElement("style");s.id="style-espace-garde-utilisateur-v2";
+    s.textContent=`
+      .garde-menu-page{padding:20px 18px 110px;max-width:760px;margin:auto}
+      .garde-menu-retour{border:0;background:transparent;font-weight:800;font-size:15px;padding:5px 0 15px;cursor:pointer}
+      .garde-menu-entete small{font-weight:900;letter-spacing:.1em;color:#68727a}.garde-menu-entete h1{margin:5px 0 20px;font-size:29px}
+      .garde-menu-cartes{display:grid;gap:13px}
+      .garde-menu-carte{width:100%;box-sizing:border-box;border:0;border-radius:17px;background:#fff;box-shadow:0 4px 18px rgba(0,0,0,.09);padding:18px;text-align:left;display:flex;align-items:center;gap:15px;cursor:pointer}
+      .garde-menu-carte .ico{width:49px;height:49px;border-radius:14px;background:#e8f4ee;display:grid;place-items:center;font-size:25px;flex:0 0 auto}
+      .garde-menu-carte strong{display:block;font-size:18px;color:#20272b}.garde-menu-carte span{display:block;color:#707980;margin-top:3px;font-size:13px}.garde-menu-carte .fleche{margin-left:auto;font-size:25px;color:#a0a7ac}
+      .garde-section{padding:18px 18px 110px;max-width:760px;margin:auto}.garde-section h1{font-size:27px;margin:3px 0 18px}
+      .garde-zone,.garde-personne-v2{display:flex;align-items:center;gap:11px;background:#fff;border-radius:13px;padding:13px;margin:8px 0;box-shadow:0 2px 10px rgba(0,0,0,.06);font-weight:750}
+      .garde-zone input,.garde-personne-v2 input{width:21px;height:21px;accent-color:#176b45}
+      .garde-sous-titre{margin:23px 0 8px;font-size:19px}
+      .garde-vehicule-v2{background:#fff;border-radius:15px;padding:20px;margin:10px 0;box-shadow:0 3px 13px rgba(0,0,0,.07);font-size:19px;font-weight:900}
+      .garde-planning-img{display:block;width:100%;height:auto;border-radius:12px;background:#fff;box-shadow:0 4px 18px rgba(0,0,0,.10)}
+      .garde-planning-attente{background:#fff;border-radius:14px;padding:18px;color:#667078}
+    `;
+    document.head.appendChild(s);
 }
 
-async function chargerUtilisateursEspaceGarde() {
-    const supabase = obtenirClientSupabase();
-    if (!supabase || !navigator.onLine) return [];
-    const essais = [
-        () => supabase.from("profils_utilisateurs").select("id,prenom,nom,identifiant,actif").eq("actif",true).order("nom"),
-        () => supabase.from("profils_utilisateurs").select("id,prenom,nom,identifiant").order("nom")
-    ];
-    for (const essai of essais) {
-        try {
-            const {data,error} = await essai();
-            if (!error && Array.isArray(data)) return data;
-        } catch (_) {}
-    }
-    return [];
-}
-
-async function afficherEspaceGarde(onglet = "menage") {
-    initialiserStyleGardes();
+function afficherEspaceGarde(){
     initialiserStyleEspaceGardeUtilisateur();
-    ongletEspaceGardeActif = ["menage","inventaire","planning"].includes(onglet) ? onglet : "menage";
-    document.getElementById("app").innerHTML = `
-        <main class="espace-garde-page">
-            <button class="garde-retour" onclick="afficherPortailPrincipal()">← Retour</button>
-            <header class="espace-garde-entete"><small>ESPACE GARDE</small><h1>Ma garde</h1><p>Ménage · inventaire véhicule · planning</p></header>
-            <nav class="espace-garde-onglets">
-                <button class="${ongletEspaceGardeActif==="menage"?"actif":""}" onclick="afficherEspaceGarde('menage')">🧹 Ménage</button>
-                <button class="${ongletEspaceGardeActif==="inventaire"?"actif":""}" onclick="afficherEspaceGarde('inventaire')">🚒 Inventaire</button>
-                <button class="${ongletEspaceGardeActif==="planning"?"actif":""}" onclick="afficherEspaceGarde('planning')">📅 Planning</button>
-            </nav>
-            <div id="contenu-espace-garde"><section class="espace-garde-bloc">Chargement…</section></div>
-        </main>${navigationPrincipale("", "accueil")}`;
+    document.getElementById("app").innerHTML=`
+      <main class="garde-menu-page">
+        <button class="garde-menu-retour" onclick="afficherPortailPrincipal()">← Retour</button>
+        <header class="garde-menu-entete"><small>ESPACE GARDE</small><h1>Ma garde</h1></header>
+        <div class="garde-menu-cartes">
+          <button class="garde-menu-carte" onclick="afficherMenageEspaceGarde()"><span class="ico">🧹</span><span><strong>Ménage</strong><span>Zones nettoyées et personnes présentes</span></span><b class="fleche">›</b></button>
+          <button class="garde-menu-carte" onclick="afficherInventaireVehiculeEspaceGarde()"><span class="ico">🚒</span><span><strong>Inventaire véhicule</strong><span>VSAV · CCRM · VTU · VL · VLHR</span></span><b class="fleche">›</b></button>
+          <button class="garde-menu-carte" onclick="afficherPlanningEspaceGarde()"><span class="ico">📅</span><span><strong>Planning</strong><span>Planning des gardes</span></span><b class="fleche">›</b></button>
+        </div>
+      </main>${navigationPrincipale("","accueil")}`;
+    actualiserInterfaceBureau();window.scrollTo({top:0,behavior:"auto"});
+}
+
+async function afficherMenageEspaceGarde(){
+    initialiserStyleEspaceGardeUtilisateur();
+    if(!utilisateursEspaceGarde.length)utilisateursEspaceGarde=await chargerUtilisateursEspaceGarde();
+    const sel=lireSelectionMenageGarde(),zs=new Set(sel.zones||[]),ps=new Set(sel.personnes||[]);
+    document.getElementById("app").innerHTML=`
+      <main class="garde-section">
+       <button class="garde-menu-retour" onclick="afficherEspaceGarde()">← Espace garde</button>
+       <h1>🧹 Ménage</h1>
+       <h2 class="garde-sous-titre">Zones nettoyées</h2>
+       ${ZONES_MENAGE_GARDE.map(n=>`<label class="garde-zone"><input type="checkbox" data-garde-zone value="${echapperHTML(n)}" ${zs.has(n)?"checked":""} onchange="sauvegarderSelectionMenageGarde()"><span>${echapperHTML(n)}</span></label>`).join("")}
+       <h2 class="garde-sous-titre">Personnes présentes</h2>
+       ${utilisateursEspaceGarde.length?utilisateursEspaceGarde.map(u=>{const n=[u.prenom,u.nom].filter(Boolean).join(" ")||u.identifiant||"Utilisateur";return `<label class="garde-personne-v2"><input type="checkbox" data-garde-personne value="${echapperHTML(u.id)}" ${ps.has(String(u.id))?"checked":""} onchange="sauvegarderSelectionMenageGarde()"><span>${echapperHTML(n)}</span></label>`}).join(""):'<div class="garde-planning-attente">Liste des utilisateurs indisponible.</div>'}
+      </main>${navigationPrincipale("","accueil")}`;
+    actualiserInterfaceBureau();window.scrollTo({top:0,behavior:"auto"});
+}
+
+function afficherInventaireVehiculeEspaceGarde(){
+    initialiserStyleEspaceGardeUtilisateur();
+    document.getElementById("app").innerHTML=`
+      <main class="garde-section"><button class="garde-menu-retour" onclick="afficherEspaceGarde()">← Espace garde</button><h1>🚒 Inventaire véhicule</h1>
+      ${VEHICULES_INVENTAIRE_GARDE.map(v=>`<div class="garde-vehicule-v2">${v}</div>`).join("")}
+      </main>${navigationPrincipale("","accueil")}`;
+    actualiserInterfaceBureau();window.scrollTo({top:0,behavior:"auto"});
+}
+
+/* Le planning est une IMAGE PNG unique, pas un tableau HTML.
+   Elle est générée une fois à partir des données puis affichée comme une photo. */
+async function afficherPlanningEspaceGarde(){
+    initialiserStyleEspaceGardeUtilisateur();
+    document.getElementById("app").innerHTML=`
+      <main class="garde-section"><button class="garde-menu-retour" onclick="afficherEspaceGarde()">← Espace garde</button><h1>📅 Planning</h1>
+      <div id="garde-planning-photo" class="garde-planning-attente">Création du planning…</div></main>${navigationPrincipale("","accueil")}`;
     actualiserInterfaceBureau();
-
-    if (ongletEspaceGardeActif === "menage") await afficherMenageEspaceGarde();
-    else if (ongletEspaceGardeActif === "inventaire") afficherInventaireVehiculeEspaceGarde();
-    else await afficherPlanningEspaceGarde();
-    window.scrollTo({top:0,behavior:"auto"});
-}
-
-async function afficherMenageEspaceGarde() {
-    const zone = document.getElementById("contenu-espace-garde");
-    if (!zone) return;
-    if (!utilisateursEspaceGarde.length) utilisateursEspaceGarde = await chargerUtilisateursEspaceGarde();
-    const selection = lireSelectionMenageGarde();
-    const zonesSelectionnees = new Set(selection.zones || []);
-    const personnesSelectionnees = new Set(selection.personnes || []);
-    const personnesHTML = utilisateursEspaceGarde.map(u => {
-        const nom = [u.prenom,u.nom].filter(Boolean).join(" ") || u.identifiant || "Utilisateur";
-        return `<label class="garde-personne"><input type="checkbox" data-garde-personne value="${echapperHTML(u.id)}" ${personnesSelectionnees.has(String(u.id))?"checked":""} onchange="sauvegarderSelectionMenageGarde()"> <span>${echapperHTML(nom)}</span></label>`;
-    }).join("");
-    zone.innerHTML = `
-        <section class="espace-garde-bloc"><h2>Zones nettoyées</h2><p>Coche les zones qui ont été nettoyées.</p>
-            <div class="garde-check-liste">${ZONES_MENAGE_GARDE.map(nom=>`<label class="garde-check"><input type="checkbox" data-garde-zone value="${echapperHTML(nom)}" ${zonesSelectionnees.has(nom)?"checked":""} onchange="sauvegarderSelectionMenageGarde()"> <span>${echapperHTML(nom)}</span></label>`).join("")}</div>
-        </section>
-        <section class="espace-garde-bloc"><h2>Personnes présentes</h2><p>Sélectionne les personnes présentes pour le ménage.</p>
-            ${personnesHTML ? `<div class="garde-personnes">${personnesHTML}</div>` : `<div class="garde-info">La liste des utilisateurs n'est pas accessible pour le moment.</div>`}
-        </section>`;
-}
-
-function afficherInventaireVehiculeEspaceGarde() {
-    const zone = document.getElementById("contenu-espace-garde");
-    if (!zone) return;
-    zone.innerHTML = `<section class="espace-garde-bloc"><h2>Inventaire véhicule</h2><p>Sélection des véhicules. Le détail des inventaires sera ajouté ensuite.</p><div class="garde-vehicules">${VEHICULES_INVENTAIRE_GARDE.map(v=>`<div class="garde-vehicule">${v}</div>`).join("")}</div></section>`;
-}
-
-async function afficherPlanningEspaceGarde() {
-    const zone = document.getElementById("contenu-espace-garde");
-    if (!zone) return;
-    const supabase = obtenirClientSupabase();
-    if (!supabase || !navigator.onLine) {
-        zone.innerHTML = `<section class="espace-garde-bloc"><div class="garde-info">Une connexion Internet est nécessaire pour afficher le planning.</div></section>`;
-        return;
+    try{
+      const url=await creerPhotoPlanningGarde();
+      const c=document.getElementById("garde-planning-photo");
+      if(c)c.outerHTML=`<img class="garde-planning-img" src="${url}" alt="Planning des gardes">`;
+    }catch(e){
+      const c=document.getElementById("garde-planning-photo");
+      if(c)c.textContent="Le planning n’est pas disponible pour le moment.";
     }
-    const debut = vendrediGardeCourante(new Date());
-    debut.setDate(debut.getDate() - 28);
-    const fin = new Date(debut); fin.setDate(fin.getDate() + 7*12);
-    const {data,error} = await supabase.from("planning_gardes").select("date_debut,equipe_id,equipes_garde(nom)").gte("date_debut",dateISOlocale(debut)).lte("date_debut",dateISOlocale(fin)).order("date_debut");
-    if (error) {
-        zone.innerHTML = `<section class="espace-garde-bloc"><div class="garde-info">Planning momentanément indisponible.</div></section>`;
-        return;
+}
+
+async function creerPhotoPlanningGarde(){
+    const supabase=obtenirClientSupabase();
+    if(!supabase||!navigator.onLine)throw new Error("hors ligne");
+    const [pr,tr,mr]=await Promise.all([
+      supabase.from("planning_gardes").select("date_debut,equipe_id").order("date_debut"),
+      supabase.from("equipes_garde").select("id,nom,actif").order("nom"),
+      supabase.from("equipes_garde_membres").select("equipe_id,utilisateur_id")
+    ]);
+    if(pr.error)throw pr.error;if(tr.error)throw tr.error;if(mr.error)throw mr.error;
+    const planning=pr.data||[],teams=(tr.data||[]).filter(t=>t.actif!==false),members=mr.data||[];
+    if(!planning.length)throw new Error("vide");
+    if(!utilisateursEspaceGarde.length)utilisateursEspaceGarde=await chargerUtilisateursEspaceGarde();
+
+    const byTeam=new Map(teams.map(t=>[String(t.id),t]));
+    const memberNames=new Map();
+    teams.forEach(t=>memberNames.set(String(t.id),members.filter(m=>String(m.equipe_id)===String(t.id)).map(m=>{
+      const u=utilisateursEspaceGarde.find(x=>String(x.id)===String(m.utilisateur_id));
+      return u?([u.prenom,u.nom].filter(Boolean).join(" ")||u.identifiant):"";
+    }).filter(Boolean)));
+
+    const now=new Date(), months=[];
+    for(let k=-1;k<=4;k++)months.push(new Date(now.getFullYear(),now.getMonth()+k,1,12));
+    const monthW=330,rowH=25,headerH=43,top=35,gap=15,maxDays=31;
+    const legendRows=teams.reduce((n,t)=>n+1+Math.max(1,Math.ceil((memberNames.get(String(t.id))||[]).length/3)),0);
+    const canvas=document.createElement("canvas");
+    canvas.width=Math.max(1000,months.length*(monthW+gap)+60);
+    canvas.height=top+headerH+maxDays*rowH+60+legendRows*24+55;
+    const c=canvas.getContext("2d");c.fillStyle="#fff";c.fillRect(0,0,canvas.width,canvas.height);
+    const palette=["#ff5a5a","#92d050","#19a9e5","#ffc000","#9b6bd3","#5ac8c8","#ff8ac6","#70ad47"];
+    const teamColor=new Map(teams.map((t,i)=>[String(t.id),palette[i%palette.length]]));
+    const key=d=>dateISOlocale(d);
+    function guardForDay(d){
+      const x=new Date(d);
+      const delta=(x.getDay()-6+7)%7; // samedi de la période
+      x.setDate(x.getDate()-delta-1); // vendredi 19h enregistré
+      return planning.find(p=>p.date_debut===key(x))||null;
     }
-    const lignes = (data||[]).map(p => {
-        const vendredi = new Date(p.date_debut+"T12:00:00");
-        const samedi = new Date(vendredi); samedi.setDate(samedi.getDate()+1);
-        const equipe = Array.isArray(p.equipes_garde) ? p.equipes_garde[0] : p.equipes_garde;
-        const nomEquipe = equipe?.nom || "Équipe";
-        const jours = [];
-        for (let i=0;i<7;i++) {
-            const d = new Date(samedi); d.setDate(d.getDate()+i);
-            jours.push({date:d, nom:i===6 ? `${nomEquipe}<br><small>Ménage</small>` : nomEquipe, menage:i===6});
-        }
-        return jours;
+    const letters=["D","L","M","M","J","V","S"];
+    months.forEach((m,mi)=>{
+      const x=30+mi*(monthW+gap);
+      c.fillStyle="#888";c.fillRect(x,top,monthW,headerH);
+      c.fillStyle="#fff";c.font="bold 22px Arial";c.textAlign="center";
+      c.fillText(m.toLocaleDateString("fr-FR",{month:"long",year:"numeric"}),x+monthW/2,top+headerH/2+1);
+      const days=new Date(m.getFullYear(),m.getMonth()+1,0).getDate();
+      for(let day=1;day<=days;day++){
+        const d=new Date(m.getFullYear(),m.getMonth(),day,12),y=top+headerH+(day-1)*rowH;
+        c.fillStyle=(d.getDay()===0||d.getDay()===6)?"#e6e6e6":"#f7f7f7";c.fillRect(x,y,105,rowH);
+        c.strokeStyle="#999";c.strokeRect(x,y,52,rowH);c.strokeRect(x+52,y,53,rowH);
+        c.fillStyle="#444";c.font="14px Arial";c.textAlign="center";c.fillText(String(day),x+26,y+rowH/2);c.fillText(letters[d.getDay()],x+78,y+rowH/2);
+        const g=guardForDay(d);c.fillStyle=g?(teamColor.get(String(g.equipe_id))||"#ddd"):"#fff";c.fillRect(x+105,y,monthW-105,rowH);c.strokeRect(x+105,y,monthW-105,rowH);
+        if(g){const t=byTeam.get(String(g.equipe_id));c.fillStyle="#111";c.font="bold 13px Arial";c.textAlign="left";c.fillText((t?.nom||"Équipe")+(d.getDay()===5?"  •  MÉNAGE":""),x+113,y+rowH/2)}
+      }
     });
-    const entetes = ["Samedi","Dimanche","Lundi","Mardi","Mercredi","Jeudi","Vendredi"];
-    zone.innerHTML = `<section class="espace-garde-bloc"><h2>Planning des gardes</h2><p>Affichage du samedi au vendredi, puisque le changement de garde a lieu le vendredi à 19 h.</p>
-        <div class="garde-planning"><table class="garde-planning-table"><thead><tr>${entetes.map(j=>`<th>${j}</th>`).join("")}</tr></thead><tbody>
-        ${lignes.length ? lignes.map(semaine=>`<tr>${semaine.map(j=>`<td class="${j.menage?"menage":"garde-equipe-cell"}">${j.nom}<br><small>${j.date.toLocaleDateString("fr-FR",{day:"2-digit",month:"2-digit"})}</small></td>`).join("")}</tr>`).join("") : `<tr><td colspan="7">Aucun planning enregistré.</td></tr>`}
-        </tbody></table></div>
-        <div class="garde-planning-legende"><span><i class="garde-point equipe"></i>Équipe de garde</span><span><i class="garde-point menage"></i>Vendredi : ménage</span></div>
-    </section>`;
+    let ly=top+headerH+maxDays*rowH+42;c.fillStyle="#111";c.font="bold 21px Arial";c.textAlign="left";c.fillText("Équipes de garde",30,ly);ly+=31;
+    teams.forEach(t=>{
+      c.fillStyle=teamColor.get(String(t.id));c.fillRect(30,ly-11,48,22);c.strokeStyle="#777";c.strokeRect(30,ly-11,48,22);
+      c.fillStyle="#111";c.font="bold 17px Arial";c.fillText(t.nom,92,ly);ly+=24;
+      const names=memberNames.get(String(t.id))||[];c.font="14px Arial";
+      if(!names.length){c.fillStyle="#666";c.fillText("Aucun membre",92,ly);ly+=24}
+      else for(let i=0;i<names.length;i+=3){c.fillStyle="#333";c.fillText(names.slice(i,i+3).join("   •   "),92,ly);ly+=24}
+      ly+=6;
+    });
+    return canvas.toDataURL("image/png");
 }
 
-window.afficherEspaceGarde = afficherEspaceGarde;
-window.afficherMenageEspaceGarde = afficherMenageEspaceGarde;
-window.afficherInventaireVehiculeEspaceGarde = afficherInventaireVehiculeEspaceGarde;
-window.afficherPlanningEspaceGarde = afficherPlanningEspaceGarde;
-window.sauvegarderSelectionMenageGarde = sauvegarderSelectionMenageGarde;
+window.afficherEspaceGarde=afficherEspaceGarde;
+window.afficherMenageEspaceGarde=afficherMenageEspaceGarde;
+window.afficherInventaireVehiculeEspaceGarde=afficherInventaireVehiculeEspaceGarde;
+window.afficherPlanningEspaceGarde=afficherPlanningEspaceGarde;
+window.sauvegarderSelectionMenageGarde=sauvegarderSelectionMenageGarde;
