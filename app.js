@@ -21508,6 +21508,11 @@ async function chargerGardeSemaineCourante() {
     return {date_debut:lundi,equipe,estMembre:!!membre};
 }
 
+try {
+    const ancienneCarte=sessionStorage.getItem("cis_carte_equipe_accueil")||"";
+    if(/indisponible|Chargement de la garde/i.test(ancienneCarte)) sessionStorage.removeItem("cis_carte_equipe_accueil");
+} catch (_) {}
+
 let cacheCarteGardeAccueilHTML = "";
 try { cacheCarteGardeAccueilHTML = sessionStorage.getItem("cis_carte_equipe_accueil") || ""; } catch (_) {}
 
@@ -21526,17 +21531,14 @@ async function actualiserCarteGardeAccueil() {
 
     try {
         // Sécurité : Supabase ne peut plus laisser cette carte charger indéfiniment.
-        const garde=await Promise.race([
-            chargerGardeSemaineCourante(),
-            new Promise(resolve => setTimeout(() => resolve(null), 4500))
-        ]);
+        const garde=await chargerGardeSemaineCourante();
         if(!document.getElementById("carte-garde-accueil")) return;
-        if(!garde){ cacheCarteGardeAccueilHTML=memoriserCarteEquipeAccueil(`<div class="garde-accueil-carte sans-garde"><small>GARDE</small><strong>Planning momentanément indisponible</strong></div>`); zone.innerHTML=cacheCarteGardeAccueilHTML; return; }
+        if(!garde){ if(!cacheCarteGardeAccueilHTML){ zone.innerHTML=`<div class="garde-accueil-carte sans-garde" role="button" onclick="afficherEspaceGarde()"><small>ÉQUIPE</small><strong>ESPACE ÉQUIPE</strong></div>`; } return; }
         if(!garde.equipe){ cacheCarteGardeAccueilHTML=memoriserCarteEquipeAccueil(`<div class="garde-accueil-carte sans-garde"><small>GARDE</small><strong>Aucune équipe programmée cette semaine</strong><span>${echapperHTML(libelleSemaineGarde(garde.date_debut))}</span></div>`); zone.innerHTML=cacheCarteGardeAccueilHTML; return; }
         cacheCarteGardeAccueilHTML=memoriserCarteEquipeAccueil(`<div class="garde-accueil-carte ${garde.estMembre?"ma-garde":"pas-garde"}" role="button" tabindex="0" onclick="afficherEspaceGarde()" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();afficherEspaceGarde();}"><small>ÉQUIPE · ${echapperHTML(garde.equipe.nom || "Équipe")}</small><strong>${garde.estMembre?"TU ES DE GARDE CETTE SEMAINE":"TU N’ES PAS DE GARDE CETTE SEMAINE"}</strong><span>${echapperHTML(libelleSemaineGarde(garde.date_debut))}</span></div>`); zone.innerHTML=cacheCarteGardeAccueilHTML;
     } catch(erreur) {
         console.error("Affichage garde :",erreur);
-        cacheCarteGardeAccueilHTML=memoriserCarteEquipeAccueil(`<div class="garde-accueil-carte sans-garde"><small>ÉQUIPE</small><strong>Planning momentanément indisponible</strong></div>`); zone.innerHTML=cacheCarteGardeAccueilHTML;
+        if(!cacheCarteGardeAccueilHTML){ zone.innerHTML=`<div class="garde-accueil-carte sans-garde" role="button" onclick="afficherEspaceGarde()"><small>ÉQUIPE</small><strong>ESPACE ÉQUIPE</strong></div>`; }
     }
 }
 
@@ -21656,9 +21658,9 @@ function initialiserStyleEspaceGardeUtilisateur(){
       .garde-zone input,.garde-personne-v2 input{width:21px;height:21px;accent-color:#176b45}
       .plan-menage-wrap{background:#fff;border-radius:15px;padding:10px;margin:0 0 18px;box-shadow:0 3px 14px rgba(0,0,0,.08)}
       .plan-menage{position:relative;width:100%;aspect-ratio:1200/850;overflow:hidden;border-radius:9px;background:#fff}
-      .plan-menage img{display:block;width:100%;height:100%;object-fit:contain}
-      .plan-menage-zone{position:absolute;border:3px solid transparent;border-radius:7px;box-sizing:border-box;pointer-events:auto;cursor:pointer;z-index:3;transition:background .15s,border-color .15s}
-      .plan-menage-zone.actif{background:rgba(39,190,82,.72)!important;border-color:#087c2b!important}
+      .plan-menage img{display:block;width:100%;height:100%;object-fit:contain;position:relative;z-index:1}
+      .plan-menage-zone{position:absolute;border:3px solid transparent;border-radius:7px;box-sizing:border-box;pointer-events:auto;cursor:pointer;z-index:10;transition:background .15s,border-color .15s}
+      .plan-menage-zone.actif{background:#58c86b!important;border-color:#087c2b!important;opacity:1!important}
       .pm-reunion{left:4.6%;top:6.5%;width:20.5%;height:44.5%}.pm-foyer{left:26.2%;top:6.5%;width:17.8%;height:21.8%}.pm-pmr{left:45.2%;top:6.5%;width:7.2%;height:21.8%}.pm-femme{left:53.7%;top:6.5%;width:14.1%;height:21.8%}.pm-homme{left:69%;top:6.5%;width:27%;height:21.8%}
       .pm-amical{left:4.6%;top:53%;width:20.5%;height:8%}.pm-radio{left:4.6%;top:62.5%;width:20.5%;height:8%}.pm-bureau{left:4.6%;top:72.5%;width:20.5%;height:21.5%}.pm-remise{left:26.2%;top:30%;width:49%;height:64%}.pm-vsav{left:76.6%;top:30%;width:19.4%;height:64%}
 
