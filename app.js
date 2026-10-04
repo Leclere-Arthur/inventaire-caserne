@@ -21555,7 +21555,7 @@ function memoriserCarteEquipeAccueil(html) {
 
 async function actualiserCarteGardeAccueil() {
     initialiserStyleGardes();
-    const zone=document.getElementById("carte-garde-accueil"); if(!zone) return;
+    const zone=document.getElementById("carte-garde-accueil");
 
     // Au retour de l'Espace équipe, on réaffiche immédiatement la dernière carte
     // au lieu de laisser "Chargement de la garde..." à l'écran.
@@ -21575,7 +21575,7 @@ async function actualiserCarteGardeAccueil() {
         if(zoneActuelle) zoneActuelle.innerHTML=cacheCarteGardeAccueilHTML;
     } catch(erreur) {
         console.error("Affichage garde :",erreur);
-        if(!cacheCarteGardeAccueilHTML){ zone.innerHTML=`<div class="garde-accueil-carte sans-garde" role="button" onclick="afficherEspaceGarde()"><small>ÉQUIPE</small><strong>ESPACE ÉQUIPE</strong></div>`; }
+        if(zone && !cacheCarteGardeAccueilHTML){ zone.innerHTML=`<div class="garde-accueil-carte sans-garde" role="button" onclick="afficherEspaceGarde()"><small>ÉQUIPE</small><strong>ESPACE ÉQUIPE</strong></div>`; }
     }
 }
 
@@ -21645,7 +21645,7 @@ const VEHICULES_INVENTAIRE_GARDE = ["VSAV","CCRM","VTU","VL","VLHR"];
 let utilisateursEspaceGarde = [];
 
 function cleSelectionMenageGarde(){
-    return "cis_garde_menage_" + dateISOlocale(vendrediGardeCourante(new Date()));
+    return "cis_garde_menage_" + dateISOlocale(vendrediReferenceGarde(new Date()));
 }
 function lireSelectionMenageGarde(){
     try{return JSON.parse(localStorage.getItem(cleSelectionMenageGarde())||'{"zones":[],"personnes":[]}')}
@@ -21721,7 +21721,7 @@ function initialiserStyleEspaceGardeUtilisateur(){
       @media (orientation:portrait){.planning-modal-image img{width:100vh;transform:rotate(90deg)}}
       @media (orientation:landscape){.planning-modal-image img{max-width:100%;max-height:100%;object-fit:contain}}
 
-      .garde-planning-scroll{width:100%;overflow-x:auto;background:#fff;border-radius:12px;box-shadow:0 4px 18px rgba(0,0,0,.10)}.garde-planning-img{display:block;width:max(1100px,100%);height:auto;background:#fff}.garde-planning-save{display:block;width:100%;box-sizing:border-box;margin-top:14px;padding:15px;border-radius:13px;background:#176b45;color:#fff;text-align:center;text-decoration:none;font-weight:900}
+      .garde-planning-scroll{width:100%;overflow-x:auto;background:#fff;border-radius:12px;box-shadow:0 4px 18px rgba(0,0,0,.10)}.garde-planning-img{display:block;width:max(1100px,100%);height:auto;background:#fff}.garde-planning-save{border:0;display:block;width:100%;box-sizing:border-box;margin-top:14px;padding:15px;border-radius:13px;background:#176b45;color:#fff;text-align:center;text-decoration:none;font-weight:900}
       .garde-planning-attente{background:#fff;border-radius:14px;padding:18px;color:#667078}
     `;
     document.head.appendChild(s);
@@ -21756,7 +21756,7 @@ async function afficherMenageEspaceGarde(){
        <button class="retour-button" onclick="afficherEspaceGarde()">← Espace équipe</button>
        <h1>🧹 Ménage</h1>
        <div class="plan-menage-wrap"><div class="plan-menage">
-         <img src="./plan-caserne.png?v=12" alt="Plan de la caserne">
+         <img src="./plan-caserne.png?v=13" alt="Plan de la caserne">
          <button type="button" class="plan-menage-zone pm-reunion" data-plan-zone="Salle de cour" aria-label="Salle de cour" onclick="basculerZoneDepuisPlanGarde(this.dataset.planZone)"></button>
          <button type="button" class="plan-menage-zone pm-foyer" data-plan-zone="Foyer" aria-label="Foyer" onclick="basculerZoneDepuisPlanGarde(this.dataset.planZone)"></button>
          <button type="button" class="plan-menage-zone pm-pmr" data-plan-zone="Toilettes PMR" aria-label="Toilettes PMR" onclick="basculerZoneDepuisPlanGarde(this.dataset.planZone)"></button>
@@ -21877,6 +21877,22 @@ async function creerPhotoPlanningGarde(){
 }
 
 
+async function enregistrerPhotoPlanningEquipe(url){
+    try{
+        const rep=await fetch(url);
+        const blob=await rep.blob();
+        const fichier=new File([blob],"planning-gardes-cis-le-chesne.png",{type:"image/png"});
+        if(navigator.share && (!navigator.canShare || navigator.canShare({files:[fichier]}))){
+            await navigator.share({files:[fichier],title:"Planning des gardes"});
+            return;
+        }
+        const a=document.createElement("a");a.href=url;a.download="planning-gardes-cis-le-chesne.png";document.body.appendChild(a);a.click();a.remove();
+        alert("Le planning a été téléchargé.");
+    }catch(e){
+        if(e?.name!=="AbortError") alert("Impossible d’enregistrer la photo : "+(e?.message||"erreur inconnue"));
+    }
+}
+
 function ouvrirPlanningEquipeGrand(url){
     document.getElementById("planning-modal-equipe")?.remove();
     const div=document.createElement("div");div.id="planning-modal-equipe";div.className="planning-modal";
@@ -21950,6 +21966,7 @@ async function afficherDetailMenageEquipe(id){
 }
 
 window.ouvrirPlanningEquipeGrand=ouvrirPlanningEquipeGrand;
+window.enregistrerPhotoPlanningEquipe=enregistrerPhotoPlanningEquipe;
 window.enregistrerMenageEquipe=enregistrerMenageEquipe;
 window.afficherAdminMenageEquipe=afficherAdminMenageEquipe;
 window.afficherDetailMenageEquipe=afficherDetailMenageEquipe;
