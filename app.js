@@ -930,7 +930,7 @@ let minuteurVerificationMiseAJour =
  * Elle permet de détecter une nouvelle version même si seul app.js change.
  */
 const VERSION_APPLICATION_JS =
-    "2026-10-04-espace-equipe-v16";
+    "2026-10-04-espace-equipe-v17";
 
 async function verifierNouvelleVersionAppJs() {
 
@@ -2218,7 +2218,9 @@ async function chargerProfilUtilisateurDepuisSupabase(
                     acces_administratif,
                     acces_administratif_admin,
                     acces_entretien_individuel,
-                    acces_entretien_individuel_admin
+                    acces_entretien_individuel_admin,
+                    acces_admin_menage,
+                    acces_admin_heures
                 )
             `)
             .eq(
@@ -21725,6 +21727,8 @@ function initialiserStyleEspaceGardeUtilisateur(){
 
       .garde-planning-scroll{width:100%;overflow-x:auto;background:#fff;border-radius:12px;box-shadow:0 4px 18px rgba(0,0,0,.10)}.garde-planning-img{display:block;width:max(1100px,100%);height:auto;background:#fff}.garde-planning-save{border:0;display:block;width:100%;box-sizing:border-box;margin-top:14px;padding:15px;border-radius:13px;background:#176b45;color:#fff;text-align:center;text-decoration:none;font-weight:900}
       .garde-planning-attente{background:#fff;border-radius:14px;padding:18px;color:#667078}
+
+      .heures-form{display:grid;gap:14px}.heures-form label{display:grid;gap:7px}.heures-input{width:100%;box-sizing:border-box;padding:13px;border:1px solid #c8d0d5;border-radius:11px;background:#fff;font:inherit}.heures-recherche-wrap{position:relative}.heures-resultats{display:none;position:absolute;z-index:50;left:0;right:0;top:100%;background:#fff;border:1px solid #ccd4d8;border-radius:10px;box-shadow:0 8px 22px rgba(0,0,0,.15);overflow:hidden}.heures-resultats.ouvert{display:block}.heures-resultat{display:block;width:100%;border:0;border-bottom:1px solid #eee;background:#fff;text-align:left;padding:12px;font:inherit}.heures-vide{padding:12px;color:#667078}.heures-chips{display:flex;flex-wrap:wrap;gap:7px;min-height:36px}.heures-chip{display:inline-flex;align-items:center;gap:5px;background:#e8f3ed;border:1px solid #9cc8ad;border-radius:999px;padding:7px 10px;font-weight:800}.heures-chip button{border:0;background:transparent;font-size:18px;line-height:1;cursor:pointer}.heures-chip small{font-weight:600}
     `;
     document.head.appendChild(s);
 }
@@ -21745,6 +21749,8 @@ function afficherEspaceGarde(){
           <button class="garde-menu-carte" onclick="afficherInventaireVehiculeEspaceGarde()"><span class="ico">🚒</span><span><strong>Inventaire véhicule</strong></span><b class="fleche">›</b></button>
           <button class="garde-menu-carte" onclick="afficherPlanningEspaceGarde()"><span class="ico">📅</span><span><strong>Planning</strong></span><b class="fleche">›</b></button>
           ${utilisateurAPermission("acces_admin_menage")?`<button class="garde-menu-carte" onclick="afficherAdminMenageEquipe()"><span class="ico">⚙️</span><span><strong>Administration ménage</strong></span><b class="fleche">›</b></button>`:""}
+          <button class="garde-menu-carte" onclick="afficherEnregistrerHeuresEquipe()"><span class="ico">⏱️</span><span><strong>Enregistrer des heures</strong></span><b class="fleche">›</b></button>
+          ${utilisateurAPermission("acces_admin_heures")?`<button class="garde-menu-carte" onclick="afficherHistoriqueHeuresEquipe()"><span class="ico">📊</span><span><strong>Historique des heures</strong></span><b class="fleche">›</b></button>`:""}
         </div>
       </main>${navigationPrincipale("","accueil")}`;
     actualiserInterfaceBureau();window.scrollTo({top:0,behavior:"auto"});
@@ -22004,6 +22010,50 @@ async function afficherDetailMenageEquipe(id){
     <div class="garde-admin-card"><strong>Enregistrement créé par</strong><p>${echapperHTML(nom(r.enregistre_par))}</p><strong>Date</strong><p>${new Date(r.date_menage).toLocaleString("fr-FR")}</p><strong>Temps passé</strong><p>${r.duree_minutes||0} min</p><strong>Zones nettoyées</strong><p>${(r.zones_nettoyees||[]).map(echapperHTML).join(" · ")}</p><strong>Personnes présentes</strong><p>${(r.personnes_presentes||[]).map(x=>echapperHTML(nom(x))).join(" · ")}</p></div></main>${navigationPrincipale("","accueil")}`;
     actualiserInterfaceBureau();
 }
+
+
+let personnesHeuresSelectionnees=new Set();
+let personnesHeuresCache=[];
+function libelleDureeHeures(minutes){const h=Math.floor(minutes/60),m=minutes%60;return h?`${h}h${m?String(m).padStart(2,"0"):"00"}`:`${m} min`}
+function nomPersonnelHeures(u){return [u?.prenom,u?.nom].filter(Boolean).join(" ")||u?.identifiant||"Utilisateur"}
+function actualiserPersonnesHeures(){
+ const zone=document.getElementById("heures-personnes-selectionnees");if(!zone)return;
+ zone.innerHTML=[...personnesHeuresSelectionnees].map(id=>{const u=personnesHeuresCache.find(x=>String(x.id)===String(id));const obligatoire=String(id)===String(profilUtilisateurConnecte?.id);return `<span class="heures-chip">${echapperHTML(nomPersonnelHeures(u))}${obligatoire?' <small>(toi)</small>':` <button type="button" onclick="retirerPersonneHeures('${id}')">×</button>`}</span>`}).join("");
+}
+function rechercherPersonnesHeures(){
+ const q=(document.getElementById("heures-recherche")?.value||"").trim().toLocaleLowerCase("fr");const box=document.getElementById("heures-resultats");if(!box)return;
+ if(!q){box.innerHTML="";box.classList.remove("ouvert");return}
+ const r=personnesHeuresCache.filter(u=>!personnesHeuresSelectionnees.has(String(u.id))&&nomPersonnelHeures(u).toLocaleLowerCase("fr").includes(q)).slice(0,8);
+ box.innerHTML=r.length?r.map(u=>`<button type="button" class="heures-resultat" onclick="ajouterPersonneHeures('${u.id}')">${echapperHTML(nomPersonnelHeures(u))}</button>`).join(""):`<div class="heures-vide">Aucune personne trouvée.</div>`;box.classList.add("ouvert");
+}
+function ajouterPersonneHeures(id){personnesHeuresSelectionnees.add(String(id));const i=document.getElementById("heures-recherche");if(i)i.value="";const b=document.getElementById("heures-resultats");if(b){b.innerHTML="";b.classList.remove("ouvert")}actualiserPersonnesHeures()}
+function retirerPersonneHeures(id){if(String(id)===String(profilUtilisateurConnecte?.id))return;personnesHeuresSelectionnees.delete(String(id));actualiserPersonnesHeures()}
+function verifierMotifHeures(){const s=document.getElementById("heures-motif"),d=document.getElementById("heures-details");if(!s||!d)return;const opt=s.options[s.selectedIndex];const autre=opt?.dataset?.autre==="1";d.required=autre;d.placeholder=autre?"Détail obligatoire pour le motif Autre":"Détails (facultatif)"}
+async function afficherEnregistrerHeuresEquipe(){
+ initialiserStyleEspaceGardeUtilisateur();document.getElementById("app").innerHTML=`<main class="garde-section"><button class="retour-button" onclick="afficherEspaceGarde()">← Espace équipe</button><h1>⏱️ Enregistrer des heures</h1><div class="garde-planning-attente">Chargement…</div></main>${navigationPrincipale("","accueil")}`;actualiserInterfaceBureau();
+ const sb=obtenirClientSupabase();const [motifs,personnes]=await Promise.all([sb.from("motifs_heures").select("id,nom,est_autre").eq("actif",true).order("nom"),chargerUtilisateursEspaceGarde()]);
+ if(!document.querySelector('.garde-section'))return;if(motifs.error){alert("Impossible de charger les motifs : "+motifs.error.message);return}
+ personnesHeuresCache=personnes||[];personnesHeuresSelectionnees=new Set([String(profilUtilisateurConnecte?.id)]);
+ const durees=[];for(let m=30;m<=720;m+=30)durees.push(`<option value="${m}">${libelleDureeHeures(m)}</option>`);
+ document.getElementById("app").innerHTML=`<main class="garde-section"><button class="retour-button" onclick="afficherEspaceGarde()">← Espace équipe</button><h1>⏱️ Enregistrer des heures</h1>
+ <div class="heures-form"><label><strong>Personnes concernées</strong></label><div id="heures-personnes-selectionnees" class="heures-chips"></div><div class="heures-recherche-wrap"><input id="heures-recherche" class="heures-input" placeholder="Écris les premières lettres d’un nom…" oninput="rechercherPersonnesHeures()" autocomplete="off"><div id="heures-resultats" class="heures-resultats"></div></div>
+ <label><strong>Motif</strong><select id="heures-motif" class="heures-input" onchange="verifierMotifHeures()">${(motifs.data||[]).map(m=>`<option value="${m.id}" data-autre="${m.est_autre?1:0}">${echapperHTML(m.nom)}</option>`).join("")}</select></label>
+ <label><strong>Durée</strong><select id="heures-duree" class="heures-input">${durees.join("")}</select></label>
+ <label><strong>Détails</strong><textarea id="heures-details" class="heures-input" rows="4" placeholder="Détails (facultatif)"></textarea></label>
+ <button type="button" class="garde-menage-enregistrer" onclick="enregistrerHeuresEquipe()">Enregistrer les heures</button><div id="heures-statut" class="garde-menage-statut"></div></div></main>${navigationPrincipale("","accueil")}`;actualiserInterfaceBureau();actualiserPersonnesHeures();verifierMotifHeures();window.scrollTo({top:0,behavior:"auto"});
+}
+async function enregistrerHeuresEquipe(){
+ const st=document.getElementById("heures-statut"),btn=document.querySelector(".garde-menage-enregistrer"),motif=document.getElementById("heures-motif"),details=(document.getElementById("heures-details")?.value||"").trim(),duree=Number(document.getElementById("heures-duree")?.value||0);const autre=motif?.options[motif.selectedIndex]?.dataset?.autre==="1";
+ if(autre&&!details){if(st){st.textContent="Le détail est obligatoire avec le motif Autre.";st.className="garde-menage-statut err"}return}
+ try{btn.disabled=true;btn.textContent="Enregistrement…";const sb=obtenirClientSupabase();const ids=[...personnesHeuresSelectionnees];if(!ids.includes(String(profilUtilisateurConnecte?.id)))ids.unshift(String(profilUtilisateurConnecte.id));const {error}=await sb.from("heures_equipe").insert({enregistre_par:profilUtilisateurConnecte.id,motif_id:motif.value,duree_minutes:duree,details:details||null,personnes_concernees:ids});if(error)throw error;st.textContent="✓ Heures enregistrées.";st.className="garde-menage-statut ok";setTimeout(()=>afficherEspaceGarde(),700)}catch(e){st.textContent="Échec : "+(e?.message||"erreur inconnue");st.className="garde-menage-statut err"}finally{if(btn){btn.disabled=false;btn.textContent="Enregistrer les heures"}}
+}
+async function afficherHistoriqueHeuresEquipe(){
+ if(!utilisateurAPermission("acces_admin_heures")){alert("Accès non autorisé.");return}initialiserStyleEspaceGardeUtilisateur();document.getElementById("app").innerHTML=`<main class="garde-section"><button class="retour-button" onclick="afficherEspaceGarde()">← Espace équipe</button><h1>📊 Historique des heures</h1><div id="heures-hist" class="garde-planning-attente">Chargement…</div></main>${navigationPrincipale("","accueil")}`;actualiserInterfaceBureau();
+ const sb=obtenirClientSupabase();const {data,error}=await sb.from("heures_equipe").select("id,created_at,duree_minutes,details,enregistre_par,personnes_concernees,motifs_heures(nom)").order("created_at",{ascending:false});if(error){document.getElementById("heures-hist").textContent="Historique indisponible : "+error.message;return}if(!utilisateursEspaceGarde.length)utilisateursEspaceGarde=await chargerUtilisateursEspaceGarde();const nom=id=>nomPersonnelHeures(utilisateursEspaceGarde.find(x=>String(x.id)===String(id)));
+ document.getElementById("heures-hist").outerHTML=`<div>${(data||[]).map(r=>`<div class="garde-admin-card"><strong>${new Date(r.created_at).toLocaleString("fr-FR")}</strong><p><b>${echapperHTML(r.motifs_heures?.nom||"Motif")}</b> · ${libelleDureeHeures(r.duree_minutes)}</p><p>${(r.personnes_concernees||[]).map(id=>echapperHTML(nom(id))).join(" · ")}</p>${r.details?`<p>${echapperHTML(r.details)}</p>`:""}<small>Enregistré par ${echapperHTML(nom(r.enregistre_par))}</small></div>`).join("")||"Aucune heure enregistrée."}</div>`;
+}
+window.afficherEnregistrerHeuresEquipe=afficherEnregistrerHeuresEquipe;window.enregistrerHeuresEquipe=enregistrerHeuresEquipe;window.rechercherPersonnesHeures=rechercherPersonnesHeures;window.ajouterPersonneHeures=ajouterPersonneHeures;window.retirerPersonneHeures=retirerPersonneHeures;window.verifierMotifHeures=verifierMotifHeures;window.afficherHistoriqueHeuresEquipe=afficherHistoriqueHeuresEquipe;
+
 window.ouvrirPlanningEquipeGrand=ouvrirPlanningEquipeGrand;
 window.enregistrerPhotoPlanningEquipe=enregistrerPhotoPlanningEquipe;
 window.enregistrerMenageEquipe=enregistrerMenageEquipe;
