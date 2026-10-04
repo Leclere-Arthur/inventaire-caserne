@@ -21701,6 +21701,9 @@ function initialiserStyleEspaceGardeUtilisateur(){
       .garde-section{padding:18px 18px 110px;max-width:760px;margin:0 auto;box-sizing:border-box}.garde-section h1{font-size:27px;margin:3px 0 18px}
       .garde-zone,.garde-personne-v2{display:flex;align-items:center;gap:11px;background:#fff;border-radius:13px;padding:13px;margin:8px 0;box-shadow:0 2px 10px rgba(0,0,0,.06);font-weight:750}
       .garde-zone input,.garde-personne-v2 input{width:21px;height:21px;accent-color:#176b45}
+      .garde-personnes-plus{width:100%;border:0;border-radius:12px;padding:12px;margin:7px 0 12px;background:#e8ecef;color:#263238;font-weight:900;cursor:pointer}
+      .garde-personne-cachee{display:none!important}
+      .garde-personnes-toutes .garde-personne-cachee{display:flex!important}
       .plan-menage-wrap{background:#fff;border-radius:15px;padding:10px;margin:0 0 18px;box-shadow:0 3px 14px rgba(0,0,0,.08)}
       .plan-menage{position:relative;width:100%;aspect-ratio:1200/850;overflow:hidden;border-radius:9px;background:#fff}
       .plan-menage img,.plan-menage canvas{display:block;width:100%;height:100%;object-fit:contain;position:relative;z-index:1}
@@ -21767,6 +21770,15 @@ async function afficherMenageEspaceGarde(){
       if(!document.getElementById("menage-garde-chargement"))return;
     }
     const sel=lireSelectionMenageGarde(),zs=new Set(sel.zones||[]),ps=new Set(sel.personnes||[]);
+    // Classe les personnels selon leur nombre réel de participations aux ménages.
+    // Ceux qui participent le plus apparaissent en premier.
+    try{
+      const supabase=obtenirClientSupabase();
+      const {data:histPresence}=await supabase.from("menages_garde").select("personnes_presentes");
+      const compte=new Map();
+      (histPresence||[]).forEach(r=>(r.personnes_presentes||[]).forEach(id=>compte.set(String(id),(compte.get(String(id))||0)+1)));
+      utilisateursEspaceGarde=[...utilisateursEspaceGarde].sort((a,b)=>(compte.get(String(b.id))||0)-(compte.get(String(a.id))||0)||([a.prenom,a.nom].filter(Boolean).join(" ")).localeCompare([b.prenom,b.nom].filter(Boolean).join(" "),"fr"));
+    }catch(_){}
     document.getElementById("app").innerHTML=`
       <main class="garde-section">
        <button class="retour-button" onclick="afficherEspaceGarde()">← Espace équipe</button>
@@ -21787,7 +21799,8 @@ async function afficherMenageEspaceGarde(){
        <h2 class="garde-sous-titre">Zones</h2>
        ${ZONES_MENAGE_GARDE.map(n=>`<label class="garde-zone"><input type="checkbox" data-garde-zone value="${echapperHTML(n)}" ${zs.has(n)?"checked":""} onchange="sauvegarderSelectionMenageGarde()"><span>${echapperHTML(n)}</span></label>`).join("")}
        <h2 class="garde-sous-titre">Présents</h2>
-       ${utilisateursEspaceGarde.length?utilisateursEspaceGarde.map(u=>{const n=[u.prenom,u.nom].filter(Boolean).join(" ")||u.identifiant||"Utilisateur";return `<label class="garde-personne-v2"><input type="checkbox" data-garde-personne value="${echapperHTML(u.id)}" ${ps.has(String(u.id))?"checked":""} onchange="sauvegarderSelectionMenageGarde()"><span>${echapperHTML(n)}</span></label>`}).join(""):'<div class="garde-planning-attente">Liste des utilisateurs indisponible.</div>'}
+       <div id="garde-personnes-liste">${utilisateursEspaceGarde.length?utilisateursEspaceGarde.map((u,i)=>{const n=[u.prenom,u.nom].filter(Boolean).join(" ")||u.identifiant||"Utilisateur";return `<label class="garde-personne-v2 ${i>=6?"garde-personne-cachee":""}"><input type="checkbox" data-garde-personne value="${echapperHTML(u.id)}" ${ps.has(String(u.id))?"checked":""} onchange="sauvegarderSelectionMenageGarde()"><span>${echapperHTML(n)}</span></label>`}).join(""):'<div class="garde-planning-attente">Liste des utilisateurs indisponible.</div>'}</div>
+       ${utilisateursEspaceGarde.length>6?'<button type="button" id="garde-personnes-plus" class="garde-personnes-plus" onclick="basculerToutesPersonnesMenage()">Voir plus</button>':""}
        <h2 class="garde-sous-titre">Temps passé</h2>
        <select id="garde-menage-duree" class="garde-menage-duree">
          <option value="">Sélectionner</option><option value="15">15 min</option><option value="30">30 min</option><option value="45">45 min</option>
@@ -21797,6 +21810,14 @@ async function afficherMenageEspaceGarde(){
        <button type="button" class="garde-menage-enregistrer" onclick="enregistrerMenageEquipe()">Enregistrer la saisie</button>
       </main>${navigationPrincipale("","accueil")}`;
     actualiserInterfaceBureau();actualiserPlanMenageGarde();window.scrollTo({top:0,behavior:"auto"});
+}
+
+
+function basculerToutesPersonnesMenage(){
+    const liste=document.getElementById("garde-personnes-liste"),bouton=document.getElementById("garde-personnes-plus");
+    if(!liste||!bouton)return;
+    const ouvert=liste.classList.toggle("garde-personnes-toutes");
+    bouton.textContent=ouvert?"Voir moins":"Voir plus";
 }
 
 function afficherInventaireVehiculeEspaceGarde(){
@@ -21982,15 +22003,14 @@ async function afficherAdminMenageEquipe(){
     const zones=[...new Set([...ZONES_MENAGE_GARDE,...rows.flatMap(r=>r.zones_nettoyees||[])])];
     const zoneStats=zones.map(z=>{const r=rows.find(x=>(x.zones_nettoyees||[]).includes(z));return {z,date:r?.date_menage}});
     const presence=new Map();rows.forEach(r=>(r.personnes_presentes||[]).forEach(id=>presence.set(String(id),(presence.get(String(id))||0)+1)));
-    const attendues=new Map();
-    rows.forEach(r=>{if(!r.equipe_id)return;membresEquipe.filter(m=>String(m.equipe_id)===String(r.equipe_id)).forEach(m=>{const id=String(m.utilisateur_id);attendues.set(id,(attendues.get(id)||0)+1)})});
-    const personnes=[...new Set([...presence.keys(),...attendues.keys()])];
+    const totalPresences=[...presence.values()].reduce((a,b)=>a+b,0);
+    const personnes=[...presence.keys()];
     document.getElementById("app").innerHTML=`<main class="garde-section">
       <button class="retour-button" onclick="afficherEspaceGarde()">← Espace équipe</button><h1>Administration ménage</h1>
       <h2 class="garde-sous-titre">Dernier nettoyage par zone</h2>
       ${zoneStats.map(s=>`<div class="garde-stat-ligne"><strong>${echapperHTML(s.z)}</strong><small class="${classeDateMenage(s.date)}">${s.date?formaterDateMenageLongue(s.date):"Jamais"}</small></div>`).join("")}
       <h2 class="garde-sous-titre">Présences</h2>
-      ${personnes.sort((a,b)=>(presence.get(b)||0)-(presence.get(a)||0)).map(id=>{const n=presence.get(id)||0,d=attendues.get(id)||0,p=d?Math.round(n/d*100):0;return `<div class="garde-stat-ligne garde-stat-ligne-flex"><div><strong>${echapperHTML(nom(id))}</strong><small>${n} présence${n>1?"s":""} sur ${d} ménage${d>1?"s":""} de son équipe</small></div><span class="garde-presence-pct">${p}%</span></div>`}).join("")||'<div class="garde-stat-ligne">Aucune présence enregistrée.</div>'}
+      ${personnes.sort((a,b)=>(presence.get(b)||0)-(presence.get(a)||0)).map(id=>{const n=presence.get(id)||0,p=totalPresences?Math.round(n/totalPresences*100):0;return `<div class="garde-stat-ligne garde-stat-ligne-flex"><div><strong>${echapperHTML(nom(id))}</strong><small>${n} participation${n>1?"s":""} au ménage</small></div><span class="garde-presence-pct">${p}%</span></div>`}).join("")||'<div class="garde-stat-ligne">Aucune présence enregistrée.</div>'}
       <h2 class="garde-sous-titre">Historique</h2>
       ${rows.map(r=>`<div class="garde-admin-card"><button onclick="afficherDetailMenageEquipe('${r.id}')"><strong>${new Date(r.date_menage).toLocaleString("fr-FR")}</strong><br><small>${(r.zones_nettoyees||[]).length} zone(s) · ${r.duree_minutes||0} min</small></button></div>`).join("")||"<div>Aucun ménage enregistré.</div>"}
     </main>${navigationPrincipale("","accueil")}`;actualiserInterfaceBureau();window.scrollTo({top:0,behavior:"auto"});
