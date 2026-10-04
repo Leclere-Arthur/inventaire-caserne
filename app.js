@@ -21707,6 +21707,20 @@ function initialiserStyleEspaceGardeUtilisateur(){
 
       .garde-sous-titre{margin:23px 0 8px;font-size:19px}
       .garde-vehicule-v2{background:#fff;border-radius:15px;padding:20px;margin:10px 0;box-shadow:0 3px 13px rgba(0,0,0,.07);font-size:19px;font-weight:900}
+      .garde-menage-duree{width:100%;box-sizing:border-box;padding:14px;border:1px solid #d7dde1;border-radius:12px;background:#fff;font-size:16px;margin-bottom:12px}
+      .garde-menage-enregistrer,.garde-menage-admin{width:100%;border:0;border-radius:13px;padding:15px;margin-top:10px;font-size:16px;font-weight:900;cursor:pointer}
+      .garde-menage-enregistrer{background:#176b45;color:#fff}.garde-menage-admin{background:#e8ecef;color:#263238}
+      .garde-admin-card{background:#fff;border-radius:14px;padding:15px;margin:10px 0;box-shadow:0 2px 10px rgba(0,0,0,.07)}
+      .garde-admin-card button{width:100%;border:0;background:transparent;text-align:left;font:inherit;padding:0;cursor:pointer}
+      .garde-stat-ligne{background:#fff;border-radius:12px;padding:12px;margin:7px 0}.garde-stat-ligne strong{display:block}.garde-stat-ligne small{color:#687078}
+      .planning-photo-cliquable{cursor:zoom-in}
+      .planning-modal{position:fixed;inset:0;z-index:99999;background:#111;display:flex;flex-direction:column}
+      .planning-modal-bar{display:flex;gap:8px;padding:10px;background:#111}.planning-modal-bar button,.planning-modal-bar a{border:0;border-radius:9px;background:#fff;color:#111;padding:10px 13px;font-weight:850;text-decoration:none}
+      .planning-modal-image{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;overflow:auto}
+      .planning-modal-image img{max-width:none;height:auto;width:auto}
+      @media (orientation:portrait){.planning-modal-image img{width:100vh;transform:rotate(90deg)}}
+      @media (orientation:landscape){.planning-modal-image img{max-width:100%;max-height:100%;object-fit:contain}}
+
       .garde-planning-img{display:block;width:100%;height:auto;border-radius:12px;background:#fff;box-shadow:0 4px 18px rgba(0,0,0,.10)}
       .garde-planning-attente{background:#fff;border-radius:14px;padding:18px;color:#667078}
     `;
@@ -21758,6 +21772,13 @@ async function afficherMenageEspaceGarde(){
        ${ZONES_MENAGE_GARDE.map(n=>`<label class="garde-zone"><input type="checkbox" data-garde-zone value="${echapperHTML(n)}" ${zs.has(n)?"checked":""} onchange="sauvegarderSelectionMenageGarde()"><span>${echapperHTML(n)}</span></label>`).join("")}
        <h2 class="garde-sous-titre">Présents</h2>
        ${utilisateursEspaceGarde.length?utilisateursEspaceGarde.map(u=>{const n=[u.prenom,u.nom].filter(Boolean).join(" ")||u.identifiant||"Utilisateur";return `<label class="garde-personne-v2"><input type="checkbox" data-garde-personne value="${echapperHTML(u.id)}" ${ps.has(String(u.id))?"checked":""} onchange="sauvegarderSelectionMenageGarde()"><span>${echapperHTML(n)}</span></label>`}).join(""):'<div class="garde-planning-attente">Liste des utilisateurs indisponible.</div>'}
+       <h2 class="garde-sous-titre">Temps passé</h2>
+       <select id="garde-menage-duree" class="garde-menage-duree">
+         <option value="">Sélectionner</option><option value="15">15 min</option><option value="30">30 min</option><option value="45">45 min</option>
+         <option value="60">1 h</option><option value="90">1 h 30</option><option value="120">2 h</option><option value="150">2 h 30</option><option value="180">3 h</option>
+       </select>
+       <button type="button" class="garde-menage-enregistrer" onclick="enregistrerMenageEquipe()">Enregistrer la saisie</button>
+       ${utilisateurAPermission("acces_admin_menage")?`<button type="button" class="garde-menage-admin" onclick="afficherAdminMenageEquipe()">Administration ménage</button>`:""}
       </main>${navigationPrincipale("","accueil")}`;
     actualiserInterfaceBureau();actualiserPlanMenageGarde();window.scrollTo({top:0,behavior:"auto"});
 }
@@ -21782,7 +21803,7 @@ async function afficherPlanningEspaceGarde(){
     try{
       const url=await creerPhotoPlanningGarde();
       const c=document.getElementById("garde-planning-photo");
-      if(c)c.outerHTML=`<img class="garde-planning-img" src="${url}" alt="Planning des gardes">`;
+      if(c)c.outerHTML=`<img class="garde-planning-img planning-photo-cliquable" src="${url}" alt="Planning des gardes" onclick="ouvrirPlanningEquipeGrand('${url}')">`;
     }catch(e){
       const c=document.getElementById("garde-planning-photo");
       if(c)c.textContent="Le planning n’est pas disponible pour le moment.";
@@ -21854,6 +21875,70 @@ async function creerPhotoPlanningGarde(){
     return canvas.toDataURL("image/png");
 }
 
+
+function ouvrirPlanningEquipeGrand(url){
+    document.getElementById("planning-modal-equipe")?.remove();
+    const div=document.createElement("div");div.id="planning-modal-equipe";div.className="planning-modal";
+    div.innerHTML=`<div class="planning-modal-bar"><button type="button" onclick="document.getElementById('planning-modal-equipe')?.remove()">← Retour</button><a href="${url}" download="planning-gardes-cis-le-chesne.png">Enregistrer la photo</a></div><div class="planning-modal-image"><img src="${url}" alt="Planning des gardes"></div>`;
+    document.body.appendChild(div);
+}
+
+async function enregistrerMenageEquipe(){
+    const zones=[...document.querySelectorAll("[data-garde-zone]:checked")].map(x=>x.value);
+    const personnes=[...document.querySelectorAll("[data-garde-personne]:checked")].map(x=>x.value);
+    const duree=Number(document.getElementById("garde-menage-duree")?.value||0);
+    if(!zones.length){alert("Sélectionne au moins une zone nettoyée.");return}
+    if(!personnes.length){alert("Sélectionne au moins une personne présente.");return}
+    if(!duree){alert("Sélectionne le temps passé.");return}
+    const supabase=obtenirClientSupabase();
+    const garde=await chargerGardeSemaineCourante();
+    const {error}=await supabase.from("menages_garde").insert({
+        date_menage:new Date().toISOString(),date_garde:garde?.date_debut||dateISOlocale(vendrediReferenceGarde(new Date())),
+        equipe_id:garde?.equipe?.id||null,zones_nettoyees:zones,personnes_presentes:personnes,
+        duree_minutes:duree,enregistre_par:profilUtilisateurConnecte?.id||null
+    });
+    if(error){alert("Impossible d’enregistrer le ménage. Vérifie que la table Supabase menages_garde a bien été créée.");return}
+    localStorage.removeItem(cleSelectionMenageGarde());
+    alert("Ménage enregistré.");
+    afficherEspaceGarde();
+}
+
+async function afficherAdminMenageEquipe(){
+    if(!utilisateurAPermission("acces_admin_menage")){alert("Accès non autorisé.");return}
+    const supabase=obtenirClientSupabase();
+    const {data,error}=await supabase.from("menages_garde").select("*").order("date_menage",{ascending:false});
+    if(error){alert("Historique ménage indisponible.");return}
+    const rows=data||[];
+    if(!utilisateursEspaceGarde.length)utilisateursEspaceGarde=await chargerUtilisateursEspaceGarde();
+    const nom=id=>{const u=utilisateursEspaceGarde.find(x=>String(x.id)===String(id));return u?([u.prenom,u.nom].filter(Boolean).join(" ")||u.identifiant):"Utilisateur"};
+    const zones=[...new Set(rows.flatMap(r=>r.zones_nettoyees||[]))];
+    const zoneStats=zones.map(z=>{const r=rows.find(x=>(x.zones_nettoyees||[]).includes(z));return {z,date:r?.date_menage}});
+    const presence=new Map();rows.forEach(r=>(r.personnes_presentes||[]).forEach(id=>presence.set(String(id),(presence.get(String(id))||0)+1)));
+    document.getElementById("app").innerHTML=`<main class="garde-section">
+      <button class="retour-button" onclick="afficherMenageEspaceGarde()">← Retour</button><h1>Administration ménage</h1>
+      <h2 class="garde-sous-titre">Dernier nettoyage par zone</h2>
+      ${zoneStats.map(s=>`<div class="garde-stat-ligne"><strong>${echapperHTML(s.z)}</strong><small>${s.date?new Date(s.date).toLocaleString("fr-FR"):"Jamais"}</small></div>`).join("")}
+      <h2 class="garde-sous-titre">Présences</h2>
+      ${[...presence.entries()].sort((a,b)=>b[1]-a[1]).map(([id,n])=>`<div class="garde-stat-ligne"><strong>${echapperHTML(nom(id))}</strong><small>${n} présence${n>1?"s":""}</small></div>`).join("")}
+      <h2 class="garde-sous-titre">Historique</h2>
+      ${rows.map(r=>`<div class="garde-admin-card"><button onclick="afficherDetailMenageEquipe('${r.id}')"><strong>${new Date(r.date_menage).toLocaleString("fr-FR")}</strong><br><small>${(r.zones_nettoyees||[]).length} zone(s) · ${r.duree_minutes||0} min</small></button></div>`).join("")||"<div>Aucun ménage enregistré.</div>"}
+    </main>${navigationPrincipale("","accueil")}`;actualiserInterfaceBureau();window.scrollTo({top:0,behavior:"auto"});
+}
+
+async function afficherDetailMenageEquipe(id){
+    const supabase=obtenirClientSupabase();const {data:r,error}=await supabase.from("menages_garde").select("*").eq("id",id).single();
+    if(error||!r){alert("Détail indisponible.");return}
+    if(!utilisateursEspaceGarde.length)utilisateursEspaceGarde=await chargerUtilisateursEspaceGarde();
+    const nom=id=>{const u=utilisateursEspaceGarde.find(x=>String(x.id)===String(id));return u?([u.prenom,u.nom].filter(Boolean).join(" ")||u.identifiant):"Utilisateur"};
+    document.getElementById("app").innerHTML=`<main class="garde-section"><button class="retour-button" onclick="afficherAdminMenageEquipe()">← Retour</button><h1>Détail du ménage</h1>
+    <div class="garde-admin-card"><strong>Date</strong><p>${new Date(r.date_menage).toLocaleString("fr-FR")}</p><strong>Temps passé</strong><p>${r.duree_minutes||0} min</p><strong>Zones nettoyées</strong><p>${(r.zones_nettoyees||[]).map(echapperHTML).join(" · ")}</p><strong>Personnes présentes</strong><p>${(r.personnes_presentes||[]).map(x=>echapperHTML(nom(x))).join(" · ")}</p></div></main>${navigationPrincipale("","accueil")}`;
+    actualiserInterfaceBureau();
+}
+
+window.ouvrirPlanningEquipeGrand=ouvrirPlanningEquipeGrand;
+window.enregistrerMenageEquipe=enregistrerMenageEquipe;
+window.afficherAdminMenageEquipe=afficherAdminMenageEquipe;
+window.afficherDetailMenageEquipe=afficherDetailMenageEquipe;
 window.retourAccueilDepuisEspaceEquipe=retourAccueilDepuisEspaceEquipe;
 window.afficherEspaceGarde=afficherEspaceGarde;
 window.afficherMenageEspaceGarde=afficherMenageEspaceGarde;
