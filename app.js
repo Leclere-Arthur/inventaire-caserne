@@ -21654,14 +21654,14 @@ function sauvegarderSelectionMenageGarde(){
 let imagePlanMenageGarde=null;
 function dessinerPlanMenageGarde(){
  const canvas=document.getElementById("canvas-plan-menage");if(!canvas)return;
- if(!imagePlanMenageGarde){imagePlanMenageGarde=new Image();imagePlanMenageGarde.onload=dessinerPlanMenageGarde;imagePlanMenageGarde.src="./plan-caserne.png?v=9";return;}
+ if(!imagePlanMenageGarde){imagePlanMenageGarde=new Image();imagePlanMenageGarde.onload=dessinerPlanMenageGarde;imagePlanMenageGarde.src="./plan-caserne.png?v=11";return;}
  if(!imagePlanMenageGarde.complete||!imagePlanMenageGarde.naturalWidth)return;
  canvas.width=imagePlanMenageGarde.naturalWidth;canvas.height=imagePlanMenageGarde.naturalHeight;
- const c=canvas.getContext("2d");c.drawImage(imagePlanMenageGarde,0,0,canvas.width,canvas.height);
+ const c=canvas.getContext("2d",{willReadFrequently:true});c.drawImage(imagePlanMenageGarde,0,0,canvas.width,canvas.height);
  const zones=new Set([...document.querySelectorAll("[data-garde-zone]:checked")].map(x=>x.value));
  const R={"Salle de cour":[.046,.065,.205,.445],"Foyer":[.262,.065,.178,.218],"Toilettes PMR":[.452,.065,.072,.218],"Vestiaire femme":[.537,.065,.141,.218],"Vestiaire homme":[.690,.065,.270,.218],"Amical":[.046,.530,.205,.080],"Salle radio":[.046,.625,.205,.080],"Bureau":[.046,.725,.205,.215],"Remise à engin":[.262,.300,.490,.640],"Local VSAV":[.766,.300,.194,.640]};
- c.save();c.fillStyle="#20c75a";c.globalAlpha=.88;
- zones.forEach(n=>{const r=R[n];if(r)c.fillRect(r[0]*canvas.width,r[1]*canvas.height,r[2]*canvas.width,r[3]*canvas.height)});c.restore();
+ // Nouvelle méthode : on recolore uniquement le bleu réel du plan. Les murs rouges et les textes restent intacts.
+ zones.forEach(n=>{const r=R[n];if(!r)return;const x=Math.max(0,Math.floor(r[0]*canvas.width)),y=Math.max(0,Math.floor(r[1]*canvas.height)),w=Math.min(canvas.width-x,Math.ceil(r[2]*canvas.width)),h=Math.min(canvas.height-y,Math.ceil(r[3]*canvas.height));const im=c.getImageData(x,y,w,h),d=im.data;for(let i=0;i<d.length;i+=4){if(Math.abs(d[i]-194)<10&&Math.abs(d[i+1]-205)<10&&Math.abs(d[i+2]-255)<10){d[i]=157;d[i+1]=230;d[i+2]=173;}}c.putImageData(im,x,y);});
  document.querySelectorAll("[data-plan-zone]").forEach(el=>{const a=zones.has(el.dataset.planZone);el.classList.toggle("actif",a);el.setAttribute("aria-pressed",a?"true":"false")});
 }
 function actualiserPlanMenageGarde(){dessinerPlanMenageGarde();}
@@ -21899,8 +21899,13 @@ async function enregistrerMenageEquipe(){
     });
     if(error){alert("Impossible d’enregistrer le ménage. Vérifie que la table Supabase menages_garde a bien été créée.");return}
     localStorage.removeItem(cleSelectionMenageGarde());
-    alert("Ménage enregistré.");
-    afficherEspaceGarde();
+    document.querySelectorAll("[data-garde-zone],[data-garde-personne]").forEach(x=>x.checked=false);
+    const dureeEl=document.getElementById("garde-menage-duree");if(dureeEl)dureeEl.value="";
+    actualiserPlanMenageGarde();
+    let ok=document.getElementById("garde-menage-confirmation");
+    if(!ok){ok=document.createElement("div");ok.id="garde-menage-confirmation";ok.style.cssText="margin:12px 0;padding:14px;border-radius:12px;background:#dff6e7;color:#075d2b;font-weight:900;text-align:center";document.querySelector(".garde-menage-enregistrer")?.insertAdjacentElement("beforebegin",ok);}
+    ok.textContent="✓ Ménage enregistré avec succès";
+    window.scrollTo({top:0,behavior:"smooth"});
 }
 
 async function afficherAdminMenageEquipe(){
