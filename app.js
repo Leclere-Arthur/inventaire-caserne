@@ -21468,7 +21468,7 @@ function initialiserStyleGardes() {
     const style = document.createElement("style");
     style.id = "style-gestion-gardes";
     style.textContent = `
-        .garde-accueil-zone{margin:22px 0 110px}.garde-accueil-carte{box-sizing:border-box;width:100%;padding:20px;border-radius:18px;background:#171d24;color:#fff;box-shadow:0 8px 24px rgba(0,0,0,.12)}
+        .garde-accueil-zone{margin:22px 0 110px}.garde-accueil-carte{box-sizing:border-box;width:100%;padding:20px;cursor:pointer;border-radius:18px;background:#171d24;color:#fff;box-shadow:0 8px 24px rgba(0,0,0,.12)}
         .garde-accueil-carte small{display:block;font-size:12px;font-weight:900;letter-spacing:.12em;opacity:.7;margin-bottom:8px}.garde-accueil-carte strong{display:block;font-size:20px;line-height:1.25}.garde-accueil-carte span{display:block;margin-top:7px;font-size:14px;opacity:.88}.garde-accueil-carte.ma-garde{background:#176b45}.garde-accueil-carte.pas-garde{background:#29313a}.garde-accueil-carte.sans-garde{background:#5b6168}
         .gestion-gardes-page{padding-bottom:110px}.gardes-bloc{margin:16px 0;padding:16px;border-radius:16px;background:#fff;box-shadow:0 4px 18px rgba(0,0,0,.08)}.gardes-bloc h3{margin:0 0 12px}.gardes-form-ligne{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.gardes-form-ligne input,.gardes-form-ligne select{min-height:44px;padding:9px 11px;border:1px solid #d5d9de;border-radius:10px;font:inherit;box-sizing:border-box}.gardes-form-ligne input{flex:1;min-width:170px}.gardes-form-ligne button,.garde-equipe-actions button,.garde-semaine button{min-height:42px;border:0;border-radius:10px;padding:9px 13px;font:inherit;font-weight:800;cursor:pointer}.gardes-form-ligne button{background:#1f6f4a;color:#fff}
         .garde-equipe{margin-top:12px;padding:14px;border:1px solid #e2e5e8;border-radius:13px}.garde-equipe-entete{display:flex;align-items:center;justify-content:space-between;gap:10px}.garde-equipe-entete strong{font-size:16px}.garde-equipe-actions{display:flex;gap:6px}.garde-equipe-actions button{min-height:36px;padding:7px 9px;background:#eef1f3}.garde-equipe-actions .danger{background:#fbe8e8;color:#9f2832}.garde-membres{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:7px;margin-top:12px}.garde-membres label{display:flex;gap:8px;align-items:center;padding:8px 9px;border-radius:9px;background:#f6f7f8;font-size:14px}.garde-membres input{width:18px;height:18px}.garde-enregistrer-membres{margin-top:10px;background:#171d24!important;color:#fff}
@@ -21519,7 +21519,7 @@ async function actualiserCarteGardeAccueil() {
         if(!document.getElementById("carte-garde-accueil")) return;
         if(!garde){ zone.innerHTML=`<div class="garde-accueil-carte sans-garde"><small>GARDE</small><strong>Planning indisponible hors connexion</strong></div>`; return; }
         if(!garde.equipe){ zone.innerHTML=`<div class="garde-accueil-carte sans-garde"><small>GARDE</small><strong>Aucune équipe programmée cette semaine</strong><span>${echapperHTML(libelleSemaineGarde(garde.date_debut))}</span></div>`; return; }
-        zone.innerHTML=`<div class="garde-accueil-carte ${garde.estMembre?"ma-garde":"pas-garde"}"><small>GARDE · ${echapperHTML(garde.equipe.nom || "Équipe")}</small><strong>${garde.estMembre?"TU ES DE GARDE CETTE SEMAINE":"TU N’ES PAS DE GARDE CETTE SEMAINE"}</strong><span>${echapperHTML(libelleSemaineGarde(garde.date_debut))}</span></div>`;
+        zone.innerHTML=`<div class="garde-accueil-carte ${garde.estMembre?"ma-garde":"pas-garde"}" role="button" tabindex="0" onclick="afficherEspaceGarde()" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();afficherEspaceGarde();}"><small>GARDE · ${echapperHTML(garde.equipe.nom || "Équipe")}</small><strong>${garde.estMembre?"TU ES DE GARDE CETTE SEMAINE":"TU N’ES PAS DE GARDE CETTE SEMAINE"}</strong><span>${echapperHTML(libelleSemaineGarde(garde.date_debut))}</span></div>`;
     } catch(erreur) {
         console.error("Affichage garde :",erreur);
         zone.innerHTML=`<div class="garde-accueil-carte sans-garde"><small>GARDE</small><strong>Planning momentanément indisponible</strong></div>`;
@@ -21576,3 +21576,171 @@ window.renommerEquipeGarde=renommerEquipeGarde;
 window.supprimerEquipeGarde=supprimerEquipeGarde;
 window.enregistrerMembresEquipeGarde=enregistrerMembresEquipeGarde;
 window.attribuerEquipeSemaineGarde=attribuerEquipeSemaineGarde;
+
+
+/* =========================================================
+   ESPACE GARDE UTILISATEUR
+   Ménage / Inventaire véhicule / Planning
+   ========================================================= */
+
+const ZONES_MENAGE_GARDE = [
+    "Remise à engin",
+    "Local VSAV",
+    "Vestiaire homme",
+    "Vestiaire femme",
+    "Toilettes PMR",
+    "Foyer",
+    "Salle de cour",
+    "Salle radio",
+    "Poubelle de trie"
+];
+
+const VEHICULES_INVENTAIRE_GARDE = ["VSAV", "CCRM", "VTU", "VL", "VLHR"];
+
+function initialiserStyleEspaceGardeUtilisateur() {
+    if (document.getElementById("style-espace-garde-utilisateur")) return;
+    const style = document.createElement("style");
+    style.id = "style-espace-garde-utilisateur";
+    style.textContent = `
+        .espace-garde-page{padding:18px 18px 115px;max-width:820px;margin:0 auto;box-sizing:border-box}
+        .espace-garde-entete{margin:6px 0 18px}.espace-garde-entete small{font-size:12px;font-weight:900;letter-spacing:.12em;color:#176b45}.espace-garde-entete h1{margin:5px 0 3px;font-size:28px}.espace-garde-entete p{margin:0;color:#66707a}
+        .espace-garde-onglets{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:18px}
+        .espace-garde-onglets button{border:1px solid #d8dde1;background:#fff;border-radius:12px;padding:12px 8px;font-weight:850;font-size:13px;cursor:pointer}.espace-garde-onglets button.actif{background:#176b45;color:#fff;border-color:#176b45}
+        .espace-garde-bloc{background:#fff;border-radius:16px;padding:16px;box-shadow:0 5px 20px rgba(0,0,0,.08);margin-bottom:14px}.espace-garde-bloc h2{margin:0 0 5px;font-size:20px}.espace-garde-bloc>p{margin:0 0 15px;color:#68717a;font-size:14px}
+        .garde-check-liste{display:grid;gap:9px}.garde-check{display:flex;align-items:center;gap:11px;padding:12px;border:1px solid #e0e4e7;border-radius:12px;background:#f8f9fa;font-weight:750}.garde-check input{width:21px;height:21px;accent-color:#176b45}
+        .garde-personnes{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:8px}.garde-personne{display:flex;align-items:center;gap:9px;padding:10px;border-radius:10px;background:#f4f6f7}.garde-personne input{width:19px;height:19px;accent-color:#176b45}
+        .garde-vehicules{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px}.garde-vehicule{border:1px solid #dce1e4;border-radius:14px;padding:18px 12px;background:#f7f8f9;text-align:center;font-size:18px;font-weight:900}
+        .garde-planning{overflow:auto}.garde-planning-table{width:100%;min-width:650px;border-collapse:separate;border-spacing:4px}.garde-planning-table th{padding:9px 5px;font-size:12px;text-transform:uppercase;color:#4d5860}.garde-planning-table td{height:68px;border-radius:10px;padding:8px;text-align:center;font-weight:850;background:#eef1f3}.garde-planning-table td.menage{background:#fff0bf;color:#765500}.garde-planning-table td.garde-equipe-cell{background:#dcefe5;color:#155c3c}.garde-planning-legende{display:flex;gap:12px;flex-wrap:wrap;margin-top:12px;font-size:12px;font-weight:750;color:#5d666d}
+        .garde-point{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:5px;vertical-align:-1px}.garde-point.equipe{background:#dcefe5}.garde-point.menage{background:#fff0bf}
+        .garde-retour{border:0;background:#eef1f3;border-radius:10px;padding:10px 13px;font-weight:800;cursor:pointer;margin-bottom:12px}
+        .garde-info{padding:12px;border-radius:11px;background:#f3f5f6;color:#5f6971;font-size:13px}
+        @media(max-width:520px){.espace-garde-page{padding:14px 14px 110px}.espace-garde-onglets{gap:5px}.espace-garde-onglets button{padding:11px 5px;font-size:12px}.espace-garde-entete h1{font-size:25px}}
+    `;
+    document.head.appendChild(style);
+}
+
+let ongletEspaceGardeActif = "menage";
+let utilisateursEspaceGarde = [];
+
+function cleSelectionMenageGarde() {
+    return "cis_garde_menage_" + dateISOlocale(vendrediGardeCourante(new Date()));
+}
+
+function lireSelectionMenageGarde() {
+    try { return JSON.parse(localStorage.getItem(cleSelectionMenageGarde()) || '{"zones":[],"personnes":[]}'); }
+    catch (_) { return {zones:[],personnes:[]}; }
+}
+
+function sauvegarderSelectionMenageGarde() {
+    const zones = [...document.querySelectorAll('[data-garde-zone]:checked')].map(x => x.value);
+    const personnes = [...document.querySelectorAll('[data-garde-personne]:checked')].map(x => x.value);
+    localStorage.setItem(cleSelectionMenageGarde(), JSON.stringify({zones,personnes}));
+}
+
+async function chargerUtilisateursEspaceGarde() {
+    const supabase = obtenirClientSupabase();
+    if (!supabase || !navigator.onLine) return [];
+    const essais = [
+        () => supabase.from("profils_utilisateurs").select("id,prenom,nom,identifiant,actif").eq("actif",true).order("nom"),
+        () => supabase.from("profils_utilisateurs").select("id,prenom,nom,identifiant").order("nom")
+    ];
+    for (const essai of essais) {
+        try {
+            const {data,error} = await essai();
+            if (!error && Array.isArray(data)) return data;
+        } catch (_) {}
+    }
+    return [];
+}
+
+async function afficherEspaceGarde(onglet = "menage") {
+    initialiserStyleGardes();
+    initialiserStyleEspaceGardeUtilisateur();
+    ongletEspaceGardeActif = ["menage","inventaire","planning"].includes(onglet) ? onglet : "menage";
+    document.getElementById("app").innerHTML = `
+        <main class="espace-garde-page">
+            <button class="garde-retour" onclick="afficherPortailPrincipal()">← Retour</button>
+            <header class="espace-garde-entete"><small>ESPACE GARDE</small><h1>Ma garde</h1><p>Ménage · inventaire véhicule · planning</p></header>
+            <nav class="espace-garde-onglets">
+                <button class="${ongletEspaceGardeActif==="menage"?"actif":""}" onclick="afficherEspaceGarde('menage')">🧹 Ménage</button>
+                <button class="${ongletEspaceGardeActif==="inventaire"?"actif":""}" onclick="afficherEspaceGarde('inventaire')">🚒 Inventaire</button>
+                <button class="${ongletEspaceGardeActif==="planning"?"actif":""}" onclick="afficherEspaceGarde('planning')">📅 Planning</button>
+            </nav>
+            <div id="contenu-espace-garde"><section class="espace-garde-bloc">Chargement…</section></div>
+        </main>${navigationPrincipale("", "accueil")}`;
+    actualiserInterfaceBureau();
+
+    if (ongletEspaceGardeActif === "menage") await afficherMenageEspaceGarde();
+    else if (ongletEspaceGardeActif === "inventaire") afficherInventaireVehiculeEspaceGarde();
+    else await afficherPlanningEspaceGarde();
+    window.scrollTo({top:0,behavior:"auto"});
+}
+
+async function afficherMenageEspaceGarde() {
+    const zone = document.getElementById("contenu-espace-garde");
+    if (!zone) return;
+    if (!utilisateursEspaceGarde.length) utilisateursEspaceGarde = await chargerUtilisateursEspaceGarde();
+    const selection = lireSelectionMenageGarde();
+    const zonesSelectionnees = new Set(selection.zones || []);
+    const personnesSelectionnees = new Set(selection.personnes || []);
+    const personnesHTML = utilisateursEspaceGarde.map(u => {
+        const nom = [u.prenom,u.nom].filter(Boolean).join(" ") || u.identifiant || "Utilisateur";
+        return `<label class="garde-personne"><input type="checkbox" data-garde-personne value="${echapperHTML(u.id)}" ${personnesSelectionnees.has(String(u.id))?"checked":""} onchange="sauvegarderSelectionMenageGarde()"> <span>${echapperHTML(nom)}</span></label>`;
+    }).join("");
+    zone.innerHTML = `
+        <section class="espace-garde-bloc"><h2>Zones nettoyées</h2><p>Coche les zones qui ont été nettoyées.</p>
+            <div class="garde-check-liste">${ZONES_MENAGE_GARDE.map(nom=>`<label class="garde-check"><input type="checkbox" data-garde-zone value="${echapperHTML(nom)}" ${zonesSelectionnees.has(nom)?"checked":""} onchange="sauvegarderSelectionMenageGarde()"> <span>${echapperHTML(nom)}</span></label>`).join("")}</div>
+        </section>
+        <section class="espace-garde-bloc"><h2>Personnes présentes</h2><p>Sélectionne les personnes présentes pour le ménage.</p>
+            ${personnesHTML ? `<div class="garde-personnes">${personnesHTML}</div>` : `<div class="garde-info">La liste des utilisateurs n'est pas accessible pour le moment.</div>`}
+        </section>`;
+}
+
+function afficherInventaireVehiculeEspaceGarde() {
+    const zone = document.getElementById("contenu-espace-garde");
+    if (!zone) return;
+    zone.innerHTML = `<section class="espace-garde-bloc"><h2>Inventaire véhicule</h2><p>Sélection des véhicules. Le détail des inventaires sera ajouté ensuite.</p><div class="garde-vehicules">${VEHICULES_INVENTAIRE_GARDE.map(v=>`<div class="garde-vehicule">${v}</div>`).join("")}</div></section>`;
+}
+
+async function afficherPlanningEspaceGarde() {
+    const zone = document.getElementById("contenu-espace-garde");
+    if (!zone) return;
+    const supabase = obtenirClientSupabase();
+    if (!supabase || !navigator.onLine) {
+        zone.innerHTML = `<section class="espace-garde-bloc"><div class="garde-info">Une connexion Internet est nécessaire pour afficher le planning.</div></section>`;
+        return;
+    }
+    const debut = vendrediGardeCourante(new Date());
+    debut.setDate(debut.getDate() - 28);
+    const fin = new Date(debut); fin.setDate(fin.getDate() + 7*12);
+    const {data,error} = await supabase.from("planning_gardes").select("date_debut,equipe_id,equipes_garde(nom)").gte("date_debut",dateISOlocale(debut)).lte("date_debut",dateISOlocale(fin)).order("date_debut");
+    if (error) {
+        zone.innerHTML = `<section class="espace-garde-bloc"><div class="garde-info">Planning momentanément indisponible.</div></section>`;
+        return;
+    }
+    const lignes = (data||[]).map(p => {
+        const vendredi = new Date(p.date_debut+"T12:00:00");
+        const samedi = new Date(vendredi); samedi.setDate(samedi.getDate()+1);
+        const equipe = Array.isArray(p.equipes_garde) ? p.equipes_garde[0] : p.equipes_garde;
+        const nomEquipe = equipe?.nom || "Équipe";
+        const jours = [];
+        for (let i=0;i<7;i++) {
+            const d = new Date(samedi); d.setDate(d.getDate()+i);
+            jours.push({date:d, nom:i===6 ? `${nomEquipe}<br><small>Ménage</small>` : nomEquipe, menage:i===6});
+        }
+        return jours;
+    });
+    const entetes = ["Samedi","Dimanche","Lundi","Mardi","Mercredi","Jeudi","Vendredi"];
+    zone.innerHTML = `<section class="espace-garde-bloc"><h2>Planning des gardes</h2><p>Affichage du samedi au vendredi, puisque le changement de garde a lieu le vendredi à 19 h.</p>
+        <div class="garde-planning"><table class="garde-planning-table"><thead><tr>${entetes.map(j=>`<th>${j}</th>`).join("")}</tr></thead><tbody>
+        ${lignes.length ? lignes.map(semaine=>`<tr>${semaine.map(j=>`<td class="${j.menage?"menage":"garde-equipe-cell"}">${j.nom}<br><small>${j.date.toLocaleDateString("fr-FR",{day:"2-digit",month:"2-digit"})}</small></td>`).join("")}</tr>`).join("") : `<tr><td colspan="7">Aucun planning enregistré.</td></tr>`}
+        </tbody></table></div>
+        <div class="garde-planning-legende"><span><i class="garde-point equipe"></i>Équipe de garde</span><span><i class="garde-point menage"></i>Vendredi : ménage</span></div>
+    </section>`;
+}
+
+window.afficherEspaceGarde = afficherEspaceGarde;
+window.afficherMenageEspaceGarde = afficherMenageEspaceGarde;
+window.afficherInventaireVehiculeEspaceGarde = afficherInventaireVehiculeEspaceGarde;
+window.afficherPlanningEspaceGarde = afficherPlanningEspaceGarde;
+window.sauvegarderSelectionMenageGarde = sauvegarderSelectionMenageGarde;
