@@ -7744,9 +7744,9 @@ function afficherPortailPrincipal() {
                 ${peutPharmacie ? `<button type="button" class="portail-cis-carte portail-cis-pharmacie" onclick="afficherAccueil()"><span class="portail-cis-titre">Espace Pharmacie</span><span class="portail-cis-fleche">›</span></button>` : ""}
             </section>
             <section id="carte-garde-accueil" class="garde-accueil-zone">
-                <div class="garde-accueil-carte garde-chargement">
-                    <small>GARDE</small>
-                    <strong>Chargement de la garde…</strong>
+                <div class="garde-accueil-carte sans-garde" role="button" tabindex="0" onclick="afficherEspaceGarde()">
+                    <small>ÉQUIPE</small>
+                    <strong>ESPACE ÉQUIPE</strong>
                 </div>
             </section>
         </main>${navigationPrincipale("accueil", "accueil")}`;
@@ -21519,10 +21519,6 @@ async function actualiserCarteGardeAccueil() {
 
     // Au retour de l'Espace équipe, on réaffiche immédiatement la dernière carte
     // au lieu de laisser "Chargement de la garde..." à l'écran.
-    if (cacheCarteGardeAccueilHTML) {
-        zone.innerHTML = cacheCarteGardeAccueilHTML;
-        return;
-    }
 
     try {
         // Sécurité : Supabase ne peut plus laisser cette carte charger indéfiniment.
@@ -21599,7 +21595,8 @@ window.attribuerEquipeSemaineGarde=attribuerEquipeSemaineGarde;
 
 const ZONES_MENAGE_GARDE = [
     "Remise à engin","Local VSAV","Vestiaire homme","Vestiaire femme",
-    "Toilettes PMR","Foyer","Salle de cour","Salle radio","Poubelle de trie"
+    "Toilettes PMR","Foyer","Salle de cour","Salle radio","Poubelle de trie",
+    "Bureau","Amical"
 ];
 const VEHICULES_INVENTAIRE_GARDE = ["VSAV","CCRM","VTU","VL","VLHR"];
 let utilisateursEspaceGarde = [];
@@ -21615,6 +21612,11 @@ function sauvegarderSelectionMenageGarde(){
     const zones=[...document.querySelectorAll("[data-garde-zone]:checked")].map(x=>x.value);
     const personnes=[...document.querySelectorAll("[data-garde-personne]:checked")].map(x=>x.value);
     localStorage.setItem(cleSelectionMenageGarde(),JSON.stringify({zones,personnes}));
+    actualiserPlanMenageGarde();
+}
+function actualiserPlanMenageGarde(){
+    const zones=new Set([...document.querySelectorAll("[data-garde-zone]:checked")].map(x=>x.value));
+    document.querySelectorAll("[data-plan-zone]").forEach(el=>el.classList.toggle("actif",zones.has(el.dataset.planZone)));
 }
 async function chargerUtilisateursEspaceGarde(){
     const supabase=obtenirClientSupabase();
@@ -21640,6 +21642,14 @@ function initialiserStyleEspaceGardeUtilisateur(){
       .garde-section{padding:18px 18px 110px;max-width:760px;margin:0 auto;box-sizing:border-box}.garde-section h1{font-size:27px;margin:3px 0 18px}
       .garde-zone,.garde-personne-v2{display:flex;align-items:center;gap:11px;background:#fff;border-radius:13px;padding:13px;margin:8px 0;box-shadow:0 2px 10px rgba(0,0,0,.06);font-weight:750}
       .garde-zone input,.garde-personne-v2 input{width:21px;height:21px;accent-color:#176b45}
+      .plan-menage-wrap{background:#fff;border-radius:15px;padding:10px;margin:0 0 18px;box-shadow:0 3px 14px rgba(0,0,0,.08)}
+      .plan-menage{position:relative;width:100%;aspect-ratio:1200/850;overflow:hidden;border-radius:9px;background:#fff}
+      .plan-menage img{display:block;width:100%;height:100%;object-fit:contain}
+      .plan-menage-zone{position:absolute;border:3px solid transparent;border-radius:7px;box-sizing:border-box;pointer-events:none}
+      .plan-menage-zone.actif{background:rgba(58,190,92,.62);border-color:#138a38}
+      .pm-reunion{left:4.6%;top:6.5%;width:20.5%;height:44.5%}.pm-foyer{left:26.2%;top:6.5%;width:17.8%;height:21.8%}.pm-pmr{left:45.2%;top:6.5%;width:7.2%;height:21.8%}.pm-femme{left:53.7%;top:6.5%;width:14.1%;height:21.8%}.pm-homme{left:69%;top:6.5%;width:27%;height:21.8%}
+      .pm-amical{left:4.6%;top:53%;width:20.5%;height:8%}.pm-radio{left:4.6%;top:62.5%;width:20.5%;height:8%}.pm-bureau{left:4.6%;top:72.5%;width:20.5%;height:21.5%}.pm-remise{left:26.2%;top:30%;width:49%;height:64%}.pm-vsav{left:76.6%;top:30%;width:19.4%;height:64%}
+
       .garde-sous-titre{margin:23px 0 8px;font-size:19px}
       .garde-vehicule-v2{background:#fff;border-radius:15px;padding:20px;margin:10px 0;box-shadow:0 3px 13px rgba(0,0,0,.07);font-size:19px;font-weight:900}
       .garde-planning-img{display:block;width:100%;height:auto;border-radius:12px;background:#fff;box-shadow:0 4px 18px rgba(0,0,0,.10)}
@@ -21671,12 +21681,25 @@ async function afficherMenageEspaceGarde(){
       <main class="garde-section">
        <button class="retour-button" onclick="afficherEspaceGarde()">← Espace équipe</button>
        <h1>🧹 Ménage</h1>
+       <div class="plan-menage-wrap"><div class="plan-menage">
+         <img src="./plan-caserne.png" alt="Plan de la caserne">
+         <span class="plan-menage-zone pm-reunion" data-plan-zone="Salle de cour"></span>
+         <span class="plan-menage-zone pm-foyer" data-plan-zone="Foyer"></span>
+         <span class="plan-menage-zone pm-pmr" data-plan-zone="Toilettes PMR"></span>
+         <span class="plan-menage-zone pm-femme" data-plan-zone="Vestiaire femme"></span>
+         <span class="plan-menage-zone pm-homme" data-plan-zone="Vestiaire homme"></span>
+         <span class="plan-menage-zone pm-amical" data-plan-zone="Amical"></span>
+         <span class="plan-menage-zone pm-radio" data-plan-zone="Salle radio"></span>
+         <span class="plan-menage-zone pm-bureau" data-plan-zone="Bureau"></span>
+         <span class="plan-menage-zone pm-remise" data-plan-zone="Remise à engin"></span>
+         <span class="plan-menage-zone pm-vsav" data-plan-zone="Local VSAV"></span>
+       </div></div>
        <h2 class="garde-sous-titre">Zones</h2>
        ${ZONES_MENAGE_GARDE.map(n=>`<label class="garde-zone"><input type="checkbox" data-garde-zone value="${echapperHTML(n)}" ${zs.has(n)?"checked":""} onchange="sauvegarderSelectionMenageGarde()"><span>${echapperHTML(n)}</span></label>`).join("")}
        <h2 class="garde-sous-titre">Présents</h2>
        ${utilisateursEspaceGarde.length?utilisateursEspaceGarde.map(u=>{const n=[u.prenom,u.nom].filter(Boolean).join(" ")||u.identifiant||"Utilisateur";return `<label class="garde-personne-v2"><input type="checkbox" data-garde-personne value="${echapperHTML(u.id)}" ${ps.has(String(u.id))?"checked":""} onchange="sauvegarderSelectionMenageGarde()"><span>${echapperHTML(n)}</span></label>`}).join(""):'<div class="garde-planning-attente">Liste des utilisateurs indisponible.</div>'}
       </main>${navigationPrincipale("","accueil")}`;
-    actualiserInterfaceBureau();window.scrollTo({top:0,behavior:"auto"});
+    actualiserInterfaceBureau();actualiserPlanMenageGarde();window.scrollTo({top:0,behavior:"auto"});
 }
 
 function afficherInventaireVehiculeEspaceGarde(){
