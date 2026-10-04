@@ -21742,6 +21742,7 @@ function afficherEspaceGarde(){
           <button class="garde-menu-carte" onclick="afficherMenageEspaceGarde()"><span class="ico">🧹</span><span><strong>Ménage</strong></span><b class="fleche">›</b></button>
           <button class="garde-menu-carte" onclick="afficherInventaireVehiculeEspaceGarde()"><span class="ico">🚒</span><span><strong>Inventaire véhicule</strong></span><b class="fleche">›</b></button>
           <button class="garde-menu-carte" onclick="afficherPlanningEspaceGarde()"><span class="ico">📅</span><span><strong>Planning</strong></span><b class="fleche">›</b></button>
+          ${utilisateurAPermission("acces_admin_menage")?`<button class="garde-menu-carte" onclick="afficherAdminMenageEquipe()"><span class="ico">⚙️</span><span><strong>Administration ménage</strong></span><b class="fleche">›</b></button>`:""}
         </div>
       </main>${navigationPrincipale("","accueil")}`;
     actualiserInterfaceBureau();window.scrollTo({top:0,behavior:"auto"});
@@ -21779,7 +21780,6 @@ async function afficherMenageEspaceGarde(){
        </select>
        <div id="garde-menage-statut" class="garde-menage-statut" aria-live="polite"></div>
        <button type="button" class="garde-menage-enregistrer" onclick="enregistrerMenageEquipe()">Enregistrer la saisie</button>
-       ${utilisateurAPermission("acces_admin_menage")?`<button type="button" class="garde-menage-admin" onclick="afficherAdminMenageEquipe()">Administration ménage</button>`:""}
       </main>${navigationPrincipale("","accueil")}`;
     actualiserInterfaceBureau();actualiserPlanMenageGarde();window.scrollTo({top:0,behavior:"auto"});
 }
@@ -21804,7 +21804,7 @@ async function afficherPlanningEspaceGarde(){
     try{
       const url=await creerPhotoPlanningGarde();
       const c=document.getElementById("garde-planning-photo");
-      if(c)c.outerHTML=`<div><div class="garde-planning-scroll"><img class="garde-planning-img planning-photo-cliquable" src="${url}" alt="Planning des gardes" onclick="ouvrirPlanningEquipeGrand('${url}')"></div><a class="garde-planning-save" href="${url}" download="planning-gardes-cis-le-chesne.png">Enregistrer le planning dans les photos</a></div>`;
+      if(c)c.outerHTML=`<div><div class="garde-planning-scroll"><img class="garde-planning-img planning-photo-cliquable" src="${url}" alt="Planning des gardes" onclick="ouvrirPlanningEquipeGrand('${url}')"></div><button type="button" class="garde-planning-save" onclick="enregistrerPhotoPlanningEquipe('${url}')">Enregistrer le planning dans les photos</button></div>`;
     }catch(e){
       const c=document.getElementById("garde-planning-photo");
       if(c)c.textContent="Le planning n’est pas disponible pour le moment.";
@@ -21896,7 +21896,7 @@ async function enregistrerPhotoPlanningEquipe(url){
 function ouvrirPlanningEquipeGrand(url){
     document.getElementById("planning-modal-equipe")?.remove();
     const div=document.createElement("div");div.id="planning-modal-equipe";div.className="planning-modal";
-    div.innerHTML=`<div class="planning-modal-bar"><button type="button" onclick="document.getElementById('planning-modal-equipe')?.remove()">← Retour</button><a href="${url}" download="planning-gardes-cis-le-chesne.png">Enregistrer la photo</a></div><div class="planning-modal-image"><img src="${url}" alt="Planning des gardes"></div>`;
+    div.innerHTML=`<div class="planning-modal-bar"><button type="button" onclick="document.getElementById('planning-modal-equipe')?.remove()">← Retour</button><button type="button" onclick="enregistrerPhotoPlanningEquipe('${url}')">Enregistrer la photo</button></div><div class="planning-modal-image"><img src="${url}" alt="Planning des gardes"></div>`;
     document.body.appendChild(div);
 }
 
@@ -21945,7 +21945,7 @@ async function afficherAdminMenageEquipe(){
     const zoneStats=zones.map(z=>{const r=rows.find(x=>(x.zones_nettoyees||[]).includes(z));return {z,date:r?.date_menage}});
     const presence=new Map();rows.forEach(r=>(r.personnes_presentes||[]).forEach(id=>presence.set(String(id),(presence.get(String(id))||0)+1)));
     document.getElementById("app").innerHTML=`<main class="garde-section">
-      <button class="retour-button" onclick="afficherMenageEspaceGarde()">← Retour</button><h1>Administration ménage</h1>
+      <button class="retour-button" onclick="afficherEspaceGarde()">← Espace équipe</button><h1>Administration ménage</h1>
       <h2 class="garde-sous-titre">Dernier nettoyage par zone</h2>
       ${zoneStats.map(s=>`<div class="garde-stat-ligne"><strong>${echapperHTML(s.z)}</strong><small>${s.date?new Date(s.date).toLocaleString("fr-FR"):"Jamais"}</small></div>`).join("")}
       <h2 class="garde-sous-titre">Présences</h2>
