@@ -776,6 +776,12 @@ function retourPagePrecedente() {
     actualiserInterfaceBureau();
     synchroniserApparencePWACaserne();
 
+    // Si le retour restaure l'accueil depuis l'historique interne,
+    // la carte de garde doit être recalculée (et pas seulement restaurée en HTML).
+    if (document.getElementById("carte-garde-accueil")) {
+        requestAnimationFrame(() => requestAnimationFrame(() => void actualiserCarteGardeAccueil()));
+    }
+
     requestAnimationFrame(() => {
         window.scrollTo({
             left: precedent.scrollX || 0,
@@ -930,7 +936,7 @@ let minuteurVerificationMiseAJour =
  * Elle permet de détecter une nouvelle version même si seul app.js change.
  */
 const VERSION_APPLICATION_JS =
-    "2026-10-04-espace-equipe-v17";
+    "2026-10-04-espace-equipe-v17-3-retour-garde";
 
 async function verifierNouvelleVersionAppJs() {
 
