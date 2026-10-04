@@ -930,7 +930,7 @@ let minuteurVerificationMiseAJour =
  * Elle permet de détecter une nouvelle version même si seul app.js change.
  */
 const VERSION_APPLICATION_JS =
-    "2026-10-04-espace-equipe-v15";
+    "2026-10-04-espace-equipe-v16";
 
 async function verifierNouvelleVersionAppJs() {
 
@@ -21677,9 +21677,11 @@ async function chargerUtilisateursEspaceGarde(){
     const supabase=obtenirClientSupabase();
     if(!supabase||!navigator.onLine)return [];
     try{
-        const {data,error}=await supabase.from("profils_utilisateurs").select("id,prenom,nom,identifiant,actif").eq("actif",true).order("nom");
+        // Fonction dédiée : permet à tout utilisateur connecté de voir uniquement
+        // la liste minimale des personnels actifs nécessaire au ménage.
+        const {data,error}=await supabase.rpc("lister_utilisateurs_menage");
         if(error)throw error;
-        return data||[];
+        return (data||[]).filter(u=>u.actif!==false);
     }catch(_){return []}
 }
 
@@ -21750,6 +21752,8 @@ function afficherEspaceGarde(){
 
 async function afficherMenageEspaceGarde(){
     initialiserStyleEspaceGardeUtilisateur();
+    // Chaque nouvelle entrée dans l’onglet Ménage repart d’une saisie vide.
+    try{localStorage.removeItem(cleSelectionMenageGarde())}catch(_){}
     if(!utilisateursEspaceGarde.length){
       document.getElementById("app").innerHTML=`<main class="garde-section"><button class="retour-button" onclick="afficherEspaceGarde()">← Espace équipe</button><h1>🧹 Ménage</h1><div id="menage-garde-chargement" class="garde-planning-attente">Chargement…</div></main>${navigationPrincipale("","accueil")}`;
       actualiserInterfaceBureau();
@@ -21950,7 +21954,7 @@ function classeDateMenage(v){
 function htmlPlanMenageHistorique(zones){
     const z=new Set(zones||[]);
     const defs=[["pm-reunion","Salle de cour"],["pm-foyer","Foyer"],["pm-pmr","Toilettes PMR"],["pm-femme","Vestiaire femme"],["pm-homme","Vestiaire homme"],["pm-amical","Amical"],["pm-radio","Salle radio"],["pm-bureau","Bureau"],["pm-remise","Remise à engin"],["pm-vsav","Local VSAV"]];
-    return `<div class="plan-menage-wrap"><div class="plan-menage plan-menage-detail"><img src="./plan-caserne.png?v=15" alt="Plan des zones nettoyées">${defs.map(([c,n])=>`<span class="plan-menage-zone ${c} ${z.has(n)?"actif":""}"></span>`).join("")}</div></div>`;
+    return `<div class="plan-menage-wrap"><div class="plan-menage plan-menage-detail"><img src="./plan-caserne.png?v=16" alt="Plan des zones nettoyées">${defs.map(([c,n])=>`<span class="plan-menage-zone ${c} ${z.has(n)?"actif":""}"></span>`).join("")}</div></div>`;
 }
 
 async function afficherAdminMenageEquipe(){
@@ -21997,7 +22001,7 @@ async function afficherDetailMenageEquipe(id){
     const nom=id=>{const u=utilisateursEspaceGarde.find(x=>String(x.id)===String(id));return u?([u.prenom,u.nom].filter(Boolean).join(" ")||u.identifiant):"Utilisateur"};
     document.getElementById("app").innerHTML=`<main class="garde-section"><button class="retour-button" onclick="afficherAdminMenageEquipe()">← Retour</button><h1>Détail du ménage</h1>
     ${htmlPlanMenageHistorique(r.zones_nettoyees||[])}
-    <div class="garde-admin-card"><strong>Date</strong><p>${new Date(r.date_menage).toLocaleString("fr-FR")}</p><strong>Temps passé</strong><p>${r.duree_minutes||0} min</p><strong>Zones nettoyées</strong><p>${(r.zones_nettoyees||[]).map(echapperHTML).join(" · ")}</p><strong>Personnes présentes</strong><p>${(r.personnes_presentes||[]).map(x=>echapperHTML(nom(x))).join(" · ")}</p></div></main>${navigationPrincipale("","accueil")}`;
+    <div class="garde-admin-card"><strong>Enregistrement créé par</strong><p>${echapperHTML(nom(r.enregistre_par))}</p><strong>Date</strong><p>${new Date(r.date_menage).toLocaleString("fr-FR")}</p><strong>Temps passé</strong><p>${r.duree_minutes||0} min</p><strong>Zones nettoyées</strong><p>${(r.zones_nettoyees||[]).map(echapperHTML).join(" · ")}</p><strong>Personnes présentes</strong><p>${(r.personnes_presentes||[]).map(x=>echapperHTML(nom(x))).join(" · ")}</p></div></main>${navigationPrincipale("","accueil")}`;
     actualiserInterfaceBureau();
 }
 window.ouvrirPlanningEquipeGrand=ouvrirPlanningEquipeGrand;
