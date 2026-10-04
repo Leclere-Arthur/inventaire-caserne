@@ -21616,14 +21616,14 @@ function initialiserStyleEspaceGardeUtilisateur(){
     if(document.getElementById("style-espace-garde-utilisateur-v2"))return;
     const s=document.createElement("style");s.id="style-espace-garde-utilisateur-v2";
     s.textContent=`
-      .garde-menu-page{padding:20px 18px 110px;max-width:760px;margin:auto}
-      .garde-menu-retour{border:0;background:transparent;font-weight:800;font-size:15px;padding:5px 0 15px;cursor:pointer}
+      .garde-menu-page{padding:20px 18px 110px;max-width:760px;margin:0 auto;box-sizing:border-box}.garde-menu-page:before,.garde-section:before{content:"";position:fixed;inset:0;background:#f4f6f7;z-index:-1}
+      
       .garde-menu-entete small{font-weight:900;letter-spacing:.1em;color:#68727a}.garde-menu-entete h1{margin:5px 0 20px;font-size:29px}
       .garde-menu-cartes{display:grid;gap:13px}
       .garde-menu-carte{width:100%;box-sizing:border-box;border:0;border-radius:17px;background:#fff;box-shadow:0 4px 18px rgba(0,0,0,.09);padding:18px;text-align:left;display:flex;align-items:center;gap:15px;cursor:pointer}
       .garde-menu-carte .ico{width:49px;height:49px;border-radius:14px;background:#e8f4ee;display:grid;place-items:center;font-size:25px;flex:0 0 auto}
       .garde-menu-carte strong{display:block;font-size:18px;color:#20272b}.garde-menu-carte span{display:block;color:#707980;margin-top:3px;font-size:13px}.garde-menu-carte .fleche{margin-left:auto;font-size:25px;color:#a0a7ac}
-      .garde-section{padding:18px 18px 110px;max-width:760px;margin:auto}.garde-section h1{font-size:27px;margin:3px 0 18px}
+      .garde-section{padding:18px 18px 110px;max-width:760px;margin:0 auto;box-sizing:border-box}.garde-section h1{font-size:27px;margin:3px 0 18px}
       .garde-zone,.garde-personne-v2{display:flex;align-items:center;gap:11px;background:#fff;border-radius:13px;padding:13px;margin:8px 0;box-shadow:0 2px 10px rgba(0,0,0,.06);font-weight:750}
       .garde-zone input,.garde-personne-v2 input{width:21px;height:21px;accent-color:#176b45}
       .garde-sous-titre{margin:23px 0 8px;font-size:19px}
@@ -21638,12 +21638,12 @@ function afficherEspaceGarde(){
     initialiserStyleEspaceGardeUtilisateur();
     document.getElementById("app").innerHTML=`
       <main class="garde-menu-page">
-        <button class="garde-menu-retour" onclick="afficherPortailPrincipal()">← Retour</button>
+        <button class="retour-button" onclick="afficherPortailPrincipal()">← Retour</button>
         <header class="garde-menu-entete"><small>ESPACE GARDE</small><h1>Ma garde</h1></header>
         <div class="garde-menu-cartes">
-          <button class="garde-menu-carte" onclick="afficherMenageEspaceGarde()"><span class="ico">🧹</span><span><strong>Ménage</strong><span>Zones nettoyées et personnes présentes</span></span><b class="fleche">›</b></button>
-          <button class="garde-menu-carte" onclick="afficherInventaireVehiculeEspaceGarde()"><span class="ico">🚒</span><span><strong>Inventaire véhicule</strong><span>VSAV · CCRM · VTU · VL · VLHR</span></span><b class="fleche">›</b></button>
-          <button class="garde-menu-carte" onclick="afficherPlanningEspaceGarde()"><span class="ico">📅</span><span><strong>Planning</strong><span>Planning des gardes</span></span><b class="fleche">›</b></button>
+          <button class="garde-menu-carte" onclick="afficherMenageEspaceGarde()"><span class="ico">🧹</span><span><strong>Ménage</strong></span><b class="fleche">›</b></button>
+          <button class="garde-menu-carte" onclick="afficherInventaireVehiculeEspaceGarde()"><span class="ico">🚒</span><span><strong>Inventaire véhicule</strong></span><b class="fleche">›</b></button>
+          <button class="garde-menu-carte" onclick="afficherPlanningEspaceGarde()"><span class="ico">📅</span><span><strong>Planning</strong></span><b class="fleche">›</b></button>
         </div>
       </main>${navigationPrincipale("","accueil")}`;
     actualiserInterfaceBureau();window.scrollTo({top:0,behavior:"auto"});
@@ -21655,11 +21655,11 @@ async function afficherMenageEspaceGarde(){
     const sel=lireSelectionMenageGarde(),zs=new Set(sel.zones||[]),ps=new Set(sel.personnes||[]);
     document.getElementById("app").innerHTML=`
       <main class="garde-section">
-       <button class="garde-menu-retour" onclick="afficherEspaceGarde()">← Espace garde</button>
+       <button class="retour-button" onclick="afficherEspaceGarde()">← Espace garde</button>
        <h1>🧹 Ménage</h1>
-       <h2 class="garde-sous-titre">Zones nettoyées</h2>
+       <h2 class="garde-sous-titre">Zones</h2>
        ${ZONES_MENAGE_GARDE.map(n=>`<label class="garde-zone"><input type="checkbox" data-garde-zone value="${echapperHTML(n)}" ${zs.has(n)?"checked":""} onchange="sauvegarderSelectionMenageGarde()"><span>${echapperHTML(n)}</span></label>`).join("")}
-       <h2 class="garde-sous-titre">Personnes présentes</h2>
+       <h2 class="garde-sous-titre">Présents</h2>
        ${utilisateursEspaceGarde.length?utilisateursEspaceGarde.map(u=>{const n=[u.prenom,u.nom].filter(Boolean).join(" ")||u.identifiant||"Utilisateur";return `<label class="garde-personne-v2"><input type="checkbox" data-garde-personne value="${echapperHTML(u.id)}" ${ps.has(String(u.id))?"checked":""} onchange="sauvegarderSelectionMenageGarde()"><span>${echapperHTML(n)}</span></label>`}).join(""):'<div class="garde-planning-attente">Liste des utilisateurs indisponible.</div>'}
       </main>${navigationPrincipale("","accueil")}`;
     actualiserInterfaceBureau();window.scrollTo({top:0,behavior:"auto"});
@@ -21668,7 +21668,7 @@ async function afficherMenageEspaceGarde(){
 function afficherInventaireVehiculeEspaceGarde(){
     initialiserStyleEspaceGardeUtilisateur();
     document.getElementById("app").innerHTML=`
-      <main class="garde-section"><button class="garde-menu-retour" onclick="afficherEspaceGarde()">← Espace garde</button><h1>🚒 Inventaire véhicule</h1>
+      <main class="garde-section"><button class="retour-button" onclick="afficherEspaceGarde()">← Espace garde</button><h1>🚒 Inventaire véhicule</h1>
       ${VEHICULES_INVENTAIRE_GARDE.map(v=>`<div class="garde-vehicule-v2">${v}</div>`).join("")}
       </main>${navigationPrincipale("","accueil")}`;
     actualiserInterfaceBureau();window.scrollTo({top:0,behavior:"auto"});
@@ -21679,7 +21679,7 @@ function afficherInventaireVehiculeEspaceGarde(){
 async function afficherPlanningEspaceGarde(){
     initialiserStyleEspaceGardeUtilisateur();
     document.getElementById("app").innerHTML=`
-      <main class="garde-section"><button class="garde-menu-retour" onclick="afficherEspaceGarde()">← Espace garde</button><h1>📅 Planning</h1>
+      <main class="garde-section"><button class="retour-button" onclick="afficherEspaceGarde()">← Espace garde</button><h1>📅 Planning</h1>
       <div id="garde-planning-photo" class="garde-planning-attente">Création du planning…</div></main>${navigationPrincipale("","accueil")}`;
     actualiserInterfaceBureau();
     try{
