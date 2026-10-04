@@ -7744,10 +7744,7 @@ function afficherPortailPrincipal() {
                 ${peutPharmacie ? `<button type="button" class="portail-cis-carte portail-cis-pharmacie" onclick="afficherAccueil()"><span class="portail-cis-titre">Espace Pharmacie</span><span class="portail-cis-fleche">›</span></button>` : ""}
             </section>
             <section id="carte-garde-accueil" class="garde-accueil-zone">
-                <div class="garde-accueil-carte sans-garde" role="button" tabindex="0" onclick="afficherEspaceGarde()">
-                    <small>ÉQUIPE</small>
-                    <strong>ESPACE ÉQUIPE</strong>
-                </div>
+                ${cacheCarteGardeAccueilHTML || `<div class="garde-accueil-carte sans-garde" role="button" tabindex="0" onclick="afficherEspaceGarde()"><small>ÉQUIPE</small><strong>ESPACE ÉQUIPE</strong></div>`}
             </section>
         </main>${navigationPrincipale("accueil", "accueil")}`;
     actualiserInterfaceBureau();
@@ -21512,6 +21509,13 @@ async function chargerGardeSemaineCourante() {
 }
 
 let cacheCarteGardeAccueilHTML = "";
+try { cacheCarteGardeAccueilHTML = sessionStorage.getItem("cis_carte_equipe_accueil") || ""; } catch (_) {}
+
+function memoriserCarteEquipeAccueil(html) {
+    cacheCarteGardeAccueilHTML = html || "";
+    try { if (html) sessionStorage.setItem("cis_carte_equipe_accueil", html); } catch (_) {}
+    return cacheCarteGardeAccueilHTML;
+}
 
 async function actualiserCarteGardeAccueil() {
     initialiserStyleGardes();
@@ -21527,12 +21531,12 @@ async function actualiserCarteGardeAccueil() {
             new Promise(resolve => setTimeout(() => resolve(null), 4500))
         ]);
         if(!document.getElementById("carte-garde-accueil")) return;
-        if(!garde){ cacheCarteGardeAccueilHTML=`<div class="garde-accueil-carte sans-garde"><small>GARDE</small><strong>Planning momentanément indisponible</strong></div>`; zone.innerHTML=cacheCarteGardeAccueilHTML; return; }
-        if(!garde.equipe){ cacheCarteGardeAccueilHTML=`<div class="garde-accueil-carte sans-garde"><small>GARDE</small><strong>Aucune équipe programmée cette semaine</strong><span>${echapperHTML(libelleSemaineGarde(garde.date_debut))}</span></div>`; zone.innerHTML=cacheCarteGardeAccueilHTML; return; }
-        cacheCarteGardeAccueilHTML=`<div class="garde-accueil-carte ${garde.estMembre?"ma-garde":"pas-garde"}" role="button" tabindex="0" onclick="afficherEspaceGarde()" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();afficherEspaceGarde();}"><small>ÉQUIPE · ${echapperHTML(garde.equipe.nom || "Équipe")}</small><strong>${garde.estMembre?"TU ES DE GARDE CETTE SEMAINE":"TU N’ES PAS DE GARDE CETTE SEMAINE"}</strong><span>${echapperHTML(libelleSemaineGarde(garde.date_debut))}</span></div>`; zone.innerHTML=cacheCarteGardeAccueilHTML;
+        if(!garde){ cacheCarteGardeAccueilHTML=memoriserCarteEquipeAccueil(`<div class="garde-accueil-carte sans-garde"><small>GARDE</small><strong>Planning momentanément indisponible</strong></div>`); zone.innerHTML=cacheCarteGardeAccueilHTML; return; }
+        if(!garde.equipe){ cacheCarteGardeAccueilHTML=memoriserCarteEquipeAccueil(`<div class="garde-accueil-carte sans-garde"><small>GARDE</small><strong>Aucune équipe programmée cette semaine</strong><span>${echapperHTML(libelleSemaineGarde(garde.date_debut))}</span></div>`); zone.innerHTML=cacheCarteGardeAccueilHTML; return; }
+        cacheCarteGardeAccueilHTML=memoriserCarteEquipeAccueil(`<div class="garde-accueil-carte ${garde.estMembre?"ma-garde":"pas-garde"}" role="button" tabindex="0" onclick="afficherEspaceGarde()" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();afficherEspaceGarde();}"><small>ÉQUIPE · ${echapperHTML(garde.equipe.nom || "Équipe")}</small><strong>${garde.estMembre?"TU ES DE GARDE CETTE SEMAINE":"TU N’ES PAS DE GARDE CETTE SEMAINE"}</strong><span>${echapperHTML(libelleSemaineGarde(garde.date_debut))}</span></div>`); zone.innerHTML=cacheCarteGardeAccueilHTML;
     } catch(erreur) {
         console.error("Affichage garde :",erreur);
-        cacheCarteGardeAccueilHTML=`<div class="garde-accueil-carte sans-garde"><small>ÉQUIPE</small><strong>Planning momentanément indisponible</strong></div>`; zone.innerHTML=cacheCarteGardeAccueilHTML;
+        cacheCarteGardeAccueilHTML=memoriserCarteEquipeAccueil(`<div class="garde-accueil-carte sans-garde"><small>ÉQUIPE</small><strong>Planning momentanément indisponible</strong></div>`); zone.innerHTML=cacheCarteGardeAccueilHTML;
     }
 }
 
@@ -21618,6 +21622,14 @@ function actualiserPlanMenageGarde(){
     const zones=new Set([...document.querySelectorAll("[data-garde-zone]:checked")].map(x=>x.value));
     document.querySelectorAll("[data-plan-zone]").forEach(el=>el.classList.toggle("actif",zones.has(el.dataset.planZone)));
 }
+
+function basculerZoneDepuisPlanGarde(nomZone){
+    const cases=[...document.querySelectorAll("[data-garde-zone]")];
+    const cible=cases.find(x=>x.value===nomZone);
+    if(!cible)return;
+    cible.checked=!cible.checked;
+    sauvegarderSelectionMenageGarde();
+}
 async function chargerUtilisateursEspaceGarde(){
     const supabase=obtenirClientSupabase();
     if(!supabase||!navigator.onLine)return [];
@@ -21645,8 +21657,8 @@ function initialiserStyleEspaceGardeUtilisateur(){
       .plan-menage-wrap{background:#fff;border-radius:15px;padding:10px;margin:0 0 18px;box-shadow:0 3px 14px rgba(0,0,0,.08)}
       .plan-menage{position:relative;width:100%;aspect-ratio:1200/850;overflow:hidden;border-radius:9px;background:#fff}
       .plan-menage img{display:block;width:100%;height:100%;object-fit:contain}
-      .plan-menage-zone{position:absolute;border:3px solid transparent;border-radius:7px;box-sizing:border-box;pointer-events:none}
-      .plan-menage-zone.actif{background:rgba(58,190,92,.62);border-color:#138a38}
+      .plan-menage-zone{position:absolute;border:3px solid transparent;border-radius:7px;box-sizing:border-box;pointer-events:auto;cursor:pointer;z-index:3;transition:background .15s,border-color .15s}
+      .plan-menage-zone.actif{background:rgba(39,190,82,.72)!important;border-color:#087c2b!important}
       .pm-reunion{left:4.6%;top:6.5%;width:20.5%;height:44.5%}.pm-foyer{left:26.2%;top:6.5%;width:17.8%;height:21.8%}.pm-pmr{left:45.2%;top:6.5%;width:7.2%;height:21.8%}.pm-femme{left:53.7%;top:6.5%;width:14.1%;height:21.8%}.pm-homme{left:69%;top:6.5%;width:27%;height:21.8%}
       .pm-amical{left:4.6%;top:53%;width:20.5%;height:8%}.pm-radio{left:4.6%;top:62.5%;width:20.5%;height:8%}.pm-bureau{left:4.6%;top:72.5%;width:20.5%;height:21.5%}.pm-remise{left:26.2%;top:30%;width:49%;height:64%}.pm-vsav{left:76.6%;top:30%;width:19.4%;height:64%}
 
@@ -21683,16 +21695,16 @@ async function afficherMenageEspaceGarde(){
        <h1>🧹 Ménage</h1>
        <div class="plan-menage-wrap"><div class="plan-menage">
          <img src="./plan-caserne.png" alt="Plan de la caserne">
-         <span class="plan-menage-zone pm-reunion" data-plan-zone="Salle de cour"></span>
-         <span class="plan-menage-zone pm-foyer" data-plan-zone="Foyer"></span>
-         <span class="plan-menage-zone pm-pmr" data-plan-zone="Toilettes PMR"></span>
-         <span class="plan-menage-zone pm-femme" data-plan-zone="Vestiaire femme"></span>
-         <span class="plan-menage-zone pm-homme" data-plan-zone="Vestiaire homme"></span>
-         <span class="plan-menage-zone pm-amical" data-plan-zone="Amical"></span>
-         <span class="plan-menage-zone pm-radio" data-plan-zone="Salle radio"></span>
-         <span class="plan-menage-zone pm-bureau" data-plan-zone="Bureau"></span>
-         <span class="plan-menage-zone pm-remise" data-plan-zone="Remise à engin"></span>
-         <span class="plan-menage-zone pm-vsav" data-plan-zone="Local VSAV"></span>
+         <span class="plan-menage-zone pm-reunion" data-plan-zone="Salle de cour" onclick="basculerZoneDepuisPlanGarde(this.dataset.planZone)"></span>
+         <span class="plan-menage-zone pm-foyer" data-plan-zone="Foyer" onclick="basculerZoneDepuisPlanGarde(this.dataset.planZone)"></span>
+         <span class="plan-menage-zone pm-pmr" data-plan-zone="Toilettes PMR" onclick="basculerZoneDepuisPlanGarde(this.dataset.planZone)"></span>
+         <span class="plan-menage-zone pm-femme" data-plan-zone="Vestiaire femme" onclick="basculerZoneDepuisPlanGarde(this.dataset.planZone)"></span>
+         <span class="plan-menage-zone pm-homme" data-plan-zone="Vestiaire homme" onclick="basculerZoneDepuisPlanGarde(this.dataset.planZone)"></span>
+         <span class="plan-menage-zone pm-amical" data-plan-zone="Amical" onclick="basculerZoneDepuisPlanGarde(this.dataset.planZone)"></span>
+         <span class="plan-menage-zone pm-radio" data-plan-zone="Salle radio" onclick="basculerZoneDepuisPlanGarde(this.dataset.planZone)"></span>
+         <span class="plan-menage-zone pm-bureau" data-plan-zone="Bureau" onclick="basculerZoneDepuisPlanGarde(this.dataset.planZone)"></span>
+         <span class="plan-menage-zone pm-remise" data-plan-zone="Remise à engin" onclick="basculerZoneDepuisPlanGarde(this.dataset.planZone)"></span>
+         <span class="plan-menage-zone pm-vsav" data-plan-zone="Local VSAV" onclick="basculerZoneDepuisPlanGarde(this.dataset.planZone)"></span>
        </div></div>
        <h2 class="garde-sous-titre">Zones</h2>
        ${ZONES_MENAGE_GARDE.map(n=>`<label class="garde-zone"><input type="checkbox" data-garde-zone value="${echapperHTML(n)}" ${zs.has(n)?"checked":""} onchange="sauvegarderSelectionMenageGarde()"><span>${echapperHTML(n)}</span></label>`).join("")}
@@ -21799,3 +21811,4 @@ window.afficherMenageEspaceGarde=afficherMenageEspaceGarde;
 window.afficherInventaireVehiculeEspaceGarde=afficherInventaireVehiculeEspaceGarde;
 window.afficherPlanningEspaceGarde=afficherPlanningEspaceGarde;
 window.sauvegarderSelectionMenageGarde=sauvegarderSelectionMenageGarde;
+window.basculerZoneDepuisPlanGarde=basculerZoneDepuisPlanGarde;
