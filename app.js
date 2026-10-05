@@ -776,12 +776,6 @@ function retourPagePrecedente() {
     actualiserInterfaceBureau();
     synchroniserApparencePWACaserne();
 
-    // Si le retour restaure l'accueil depuis l'historique interne,
-    // la carte de garde doit être recalculée (et pas seulement restaurée en HTML).
-    if (document.getElementById("carte-garde-accueil")) {
-        requestAnimationFrame(() => requestAnimationFrame(() => void actualiserCarteGardeAccueil()));
-    }
-
     requestAnimationFrame(() => {
         window.scrollTo({
             left: precedent.scrollX || 0,
@@ -936,7 +930,7 @@ let minuteurVerificationMiseAJour =
  * Elle permet de détecter une nouvelle version même si seul app.js change.
  */
 const VERSION_APPLICATION_JS =
-    "2026-10-04-tutoriel-permissions-v18";
+    "2026-10-05-agenda-general-v19";
 
 async function verifierNouvelleVersionAppJs() {
 
@@ -9381,7 +9375,40 @@ function carteEntretienPasseActualitesCaserne(entretien, dateReference) {
     </article>`;
 }
 
+
+function initialiserStyleAgendaGeneralCaserne(){
+ if(document.getElementById("style-agenda-general-caserne"))return;
+ const st=document.createElement("style");st.id="style-agenda-general-caserne";st.textContent=`
+ .caserne-actu-card.caserne-actu-present{border:3px solid #178447!important;background:#e8f7ee!important;box-shadow:0 5px 18px rgba(23,132,71,.18)!important}
+ .caserne-actu-card.caserne-actu-present:before{content:"PRÉSENT";display:inline-block;margin-bottom:9px;padding:5px 9px;border-radius:999px;background:#178447;color:white;font-size:11px;font-weight:950}
+ .agenda-general-page{padding-bottom:115px}.agenda-general-controles{display:flex;align-items:center;gap:8px;margin:14px 0 20px}.agenda-general-controles button{border:0;border-radius:10px;padding:10px 14px;font-weight:900}.agenda-general-mois{flex:1;text-align:center;font-size:19px;font-weight:950;text-transform:capitalize}
+ .agenda-general-jour{margin:16px 0 6px;padding-bottom:7px;border-bottom:2px solid #e2e6e8;font-size:17px}.agenda-general-ligne{display:grid;grid-template-columns:58px 1fr;gap:10px;padding:12px;margin:6px 0;border-radius:12px;background:#fff;box-shadow:0 2px 9px rgba(0,0,0,.06);cursor:pointer}.agenda-general-ligne.present{background:#e8f7ee;border:2px solid #178447}.agenda-general-heure{font-weight:900}.agenda-general-info strong,.agenda-general-info small{display:block}.agenda-general-info small{color:#687078;margin-top:3px}.agenda-general-present{display:inline-block!important;width:max-content!important;background:#178447;color:#fff!important;border-radius:999px;padding:3px 7px;font-weight:900}.agenda-general-vide{padding:20px;background:#fff;border-radius:13px;text-align:center}
+ `;document.head.appendChild(st);
+}
+let agendaGeneralMoisCaserne=null;
+async function afficherAgendaGeneralCaserne(decalage=0){
+ initialiserStyleEspaceCaserne();initialiserStyleAgendaGeneralCaserne();
+ if(!agendaGeneralMoisCaserne){const n=new Date();agendaGeneralMoisCaserne=new Date(n.getFullYear(),n.getMonth(),1,12)}
+ if(decalage)agendaGeneralMoisCaserne=new Date(agendaGeneralMoisCaserne.getFullYear(),agendaGeneralMoisCaserne.getMonth()+decalage,1,12);
+ document.getElementById("app").innerHTML=`<main class="caserne-shell agenda-general-page"><header class="caserne-top caserne-top-simple"><small>ESPACE CASERNE</small><h1>Agenda général</h1><p>Toutes les activités visibles avec tes permissions.</p></header><div class="garde-planning-attente">Chargement de l’agenda…</div></main>${navigationCaserne("caserne")}`;actualiserInterfaceBureau();
+ let pubs=await chargerPublicationsCaserne();
+ pubs=pubs.filter(p=>p.type_publication!=="entretien_individuel"&&p.type_publication!=="administratif"&&p.date_evenement);
+ // Respecte les permissions de rubrique en plus des règles RLS Supabase.
+ const rubriques=new Map(obtenirRubriquesCaserne().map(r=>[r[0],r]));
+ pubs=pubs.filter(p=>{const r=rubriques.get(p.type_publication);return r?utilisateurPeutVoirRubriqueCaserne(r):false});
+ pubs=await chargerDetailsPublicationsCaserne(pubs);
+ const debut=new Date(agendaGeneralMoisCaserne.getFullYear(),agendaGeneralMoisCaserne.getMonth(),1),fin=new Date(agendaGeneralMoisCaserne.getFullYear(),agendaGeneralMoisCaserne.getMonth()+1,1);
+ const items=[];pubs.forEach(p=>{const d=new Date(p.date_evenement);if(d>=debut&&d<fin)items.push({d,p,ctx:"evenement"});if(p.date_preparation){const x=new Date(p.date_preparation);if(x>=debut&&x<fin)items.push({d:x,p,ctx:"preparation"})}});
+ items.sort((a,b)=>a.d-b.d);const groupes=new Map();items.forEach(x=>{const k=dateISOlocale(x.d);if(!groupes.has(k))groupes.set(k,[]);groupes.get(k).push(x)});
+ const uid=String(utilisateurConnecte?.id||"");
+ const contenu=[...groupes.values()].map(g=>{const date=g[0].d,jour=date.toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long"});return `<section><h2 class="agenda-general-jour">${echapperHTML(jour.charAt(0).toUpperCase()+jour.slice(1))}</h2>${g.map(x=>{const present=(x.p.reponses||[]).some(r=>r.contexte===x.ctx&&String(r.user_id)===uid&&r.reponse==="present");const titre=(x.p.titre||obtenirConfigurationPublicationCaserne(x.p.type_publication).titre)+(x.ctx==="preparation"?" · Préparation":"");return `<div class="agenda-general-ligne ${present?"present":""}" onclick="afficherRubriqueCaserne('${x.p.type_publication}')"><div class="agenda-general-heure">${x.d.toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"})}</div><div class="agenda-general-info"><strong>${echapperHTML(titre)}</strong><small>${echapperHTML(obtenirLibelleTypeCaserne(x.p.type_publication))}</small>${present?'<small class="agenda-general-present">Présent</small>':""}</div></div>`}).join("")}</section>`}).join("");
+ const mois=agendaGeneralMoisCaserne.toLocaleDateString("fr-FR",{month:"long",year:"numeric"});
+ document.getElementById("app").innerHTML=`<main class="caserne-shell agenda-general-page"><button class="caserne-retour-actualites" onclick="afficherActualitesCaserne()">← Retour aux informations</button><header class="caserne-top caserne-top-simple"><small>ESPACE CASERNE</small><h1>Agenda général</h1></header><div class="agenda-general-controles"><button onclick="afficherAgendaGeneralCaserne(-1)">‹</button><div class="agenda-general-mois">${echapperHTML(mois)}</div><button onclick="afficherAgendaGeneralCaserne(1)">›</button></div>${contenu||'<div class="agenda-general-vide">Aucune activité ce mois-ci.</div>'}</main>${navigationCaserne("caserne")}`;actualiserInterfaceBureau();window.scrollTo({top:0,behavior:"auto"});
+}
+window.afficherAgendaGeneralCaserne=afficherAgendaGeneralCaserne;
+
 async function afficherActualitesCaserne(synchronisationDejaFaite = false) {
+    initialiserStyleAgendaGeneralCaserne();
     if (!synchronisationDejaFaite) await synchroniserCaserneAvantNavigation();
     await nettoyerEvenementsCaserneAnciens();
 
@@ -9449,8 +9476,7 @@ async function afficherActualitesCaserne(synchronisationDejaFaite = false) {
             </header>
 
             <section class="caserne-raccourcis-publics" aria-label="Raccourcis">
-                <button type="button" class="caserne-raccourci" onclick="ouvrirMenuCaserne()"><span>☰</span><strong>Voir les rubriques</strong></button>
-                ${accesEntretien}
+                <button type="button" class="caserne-raccourci" onclick="afficherAgendaGeneralCaserne()"><strong>Agenda général</strong></button>
             </section>
 
             <div class="caserne-titre-section"><strong>À venir</strong><span>${aVenir.length + sansDate.length ? `${aVenir.length + sansDate.length} élément${aVenir.length + sansDate.length > 1 ? "s" : ""}` : ""}</span></div>
@@ -21403,7 +21429,7 @@ function initialiserStyleTutorielApplication() {
     style.textContent = `
         .tutoriel-voile{position:fixed;inset:0;z-index:250000;background:rgba(8,12,16,.76);pointer-events:auto}
         .tutoriel-cible{position:relative!important;z-index:250002!important;isolation:isolate;border-radius:14px;box-shadow:0 0 0 4px rgba(255,255,255,.96),0 8px 30px rgba(0,0,0,.28)!important;pointer-events:auto!important}
-        .tutoriel-bulle{position:fixed;z-index:250003;left:18px;right:18px;bottom:calc(118px + env(safe-area-inset-bottom,0px));max-width:460px;margin:0 auto;padding:15px 17px;box-sizing:border-box;border-radius:18px;background:#fff;color:#202124;box-shadow:0 14px 45px rgba(0,0,0,.32)}
+        .tutoriel-bulle{position:fixed;z-index:250003;left:18px;right:18px;bottom:calc(105px + env(safe-area-inset-bottom,0px));max-width:460px;margin:0 auto;padding:15px 17px;box-sizing:border-box;border-radius:18px;background:#fff;color:#202124;box-shadow:0 14px 45px rgba(0,0,0,.32)}
         .tutoriel-bulle strong{display:block;font-size:18px;margin-bottom:5px}.tutoriel-bulle p{margin:0;font-size:15px;line-height:1.4}.tutoriel-indication{display:block;margin-top:8px;font-size:12px;font-weight:850;color:#7d2425}.tutoriel-actions{display:flex;justify-content:flex-end;margin-top:12px}.tutoriel-actions button{min-height:40px;border:0;border-radius:11px;padding:8px 13px;font:inherit;font-weight:800;background:#eceff1;color:#333}
         .tutoriel-evenement-factice{border:2px dashed #8b3437!important}.tutoriel-evenement-factice .caserne-badge-tuto{display:inline-flex;margin-bottom:8px;padding:5px 8px;border-radius:999px;background:#f4e1dc;color:#74292b;font-size:11px;font-weight:900}
         @media(min-width:900px){.tutoriel-bulle{bottom:30px}}
@@ -21436,133 +21462,19 @@ function afficherDetailEvenementFacticeTutoriel(){const app=document.getElementB
 function afficherBulleTutoriel(titre,texte,cible,apresClic,options={}){if(!tutorielApplicationActif||!cible)return false;nettoyerEtapeTutorielApplication();cible.classList.add("tutoriel-cible");cible.scrollIntoView({behavior:"smooth",block:"center"});const voile=document.createElement("div");voile.className="tutoriel-voile";const bulle=document.createElement("div");bulle.className="tutoriel-bulle";bulle.innerHTML=`<strong>${echapperHTML(titre)}</strong><p>${echapperHTML(texte)}</p><span class="tutoriel-indication">Appuie sur le bouton éclairé pour continuer.</span><div class="tutoriel-actions"><button type="button" onclick="quitterTutorielApplication()">Quitter le tutoriel</button></div>`;document.body.appendChild(voile);document.body.appendChild(bulle);const gestionClic=(event)=>{if(options.empecherAction===true){event.preventDefault();event.stopImmediatePropagation();}cible.removeEventListener("click",gestionClic,true);tutorielApplicationNettoyageClic=null;nettoyerEtapeTutorielApplication();if(options.selectionPresent===true){cible.classList.add("selectionne","present");cible.textContent="✓ Présent sélectionné";}setTimeout(()=>apresClic?.(),options.delai||180);};cible.addEventListener("click",gestionClic,true);tutorielApplicationNettoyageClic=()=>cible.removeEventListener("click",gestionClic,true);return true;}
 function boutonNavigationTutoriel(libelle){return [...document.querySelectorAll(".caserne-nav-bas button")].find(b=>String(b.textContent||"").toLowerCase().includes(libelle.toLowerCase()));}
 function boutonMenuPharmacieTutoriel(libelle){return [...document.querySelectorAll(".menu-button,.caserne-menu-liste-simple>button")].find(b=>String(b.textContent||"").toLowerCase().includes(libelle.toLowerCase()));}
-async function afficherEtapeTutorielApplication(numero){
-    if(!tutorielApplicationActif)return;
-    tutorielApplicationEtape=numero;
-    const attendre=ms=>new Promise(r=>setTimeout(r,ms));
-    const suivant=n=>afficherEtapeTutorielApplication(n);
-    const permission=p=>utilisateurAPermission(p);
+async function afficherEtapeTutorielApplication(numero){if(!tutorielApplicationActif)return;tutorielApplicationEtape=numero;
+if(numero===0){afficherPortailPrincipal();await new Promise(r=>setTimeout(r,100));const cible=document.querySelector(".portail-cis-caserne");if(!cible)return afficherEtapeTutorielApplication(4);return afficherBulleTutoriel("Espace Caserne","Tu retrouves ici les actualités et événements de la caserne.",cible,()=>afficherEtapeTutorielApplication(1),{delai:600});}
+if(numero===1){await new Promise(r=>setTimeout(r,450));ajouterEvenementFacticeTutoriel();const cible=document.querySelector(".tutoriel-voir-detail");if(!cible)return afficherEtapeTutorielApplication(3);return afficherBulleTutoriel("Un événement","Ouvre l'événement pour lire la date, l'horaire et les informations avant de répondre.",cible,()=>{afficherDetailEvenementFacticeTutoriel();afficherEtapeTutorielApplication(2);},{empecherAction:true,delai:180});}
+if(numero===2){await new Promise(r=>setTimeout(r,120));const cible=document.querySelector(".tutoriel-present-factice");return afficherBulleTutoriel("Répondre à l'événement","Tu as maintenant toutes les informations. Indique ta présence. Cet exemple n'enregistre rien.",cible,()=>afficherEtapeTutorielApplication(3),{empecherAction:true,selectionPresent:true,delai:300});}
+if(numero===3){const cible=boutonNavigationTutoriel("Accueil");if(!cible){afficherPortailPrincipal();return afficherEtapeTutorielApplication(4);}return afficherBulleTutoriel("Retour à l'accueil","Pour changer d'espace, reviens d'abord à l'accueil général.",cible,()=>afficherEtapeTutorielApplication(4),{delai:450});}
+if(numero===4){await new Promise(r=>setTimeout(r,180));const cible=document.querySelector(".portail-cis-pharmacie");if(!cible)return afficherEtapeTutorielApplication(9);return afficherBulleTutoriel("Espace Pharmacie","Ouvre maintenant l'Espace Pharmacie.",cible,()=>afficherEtapeTutorielApplication(5),{delai:450});}
+if(numero===5){await new Promise(r=>setTimeout(r,220));const cible=boutonMenuPharmacieTutoriel("Inventaire");if(!cible)return afficherEtapeTutorielApplication(7);return afficherBulleTutoriel("Inventaire","L'inventaire sert à rechercher le matériel et à vérifier les quantités disponibles.",cible,()=>afficherEtapeTutorielApplication(6),{delai:450});}
+if(numero===6){await new Promise(r=>setTimeout(r,250));const cible=document.querySelector(".retour-button");if(!cible)return afficherEtapeTutorielApplication(7);return afficherBulleTutoriel("Dans l'inventaire","Tu peux parcourir les catégories, rechercher un matériel et voir son stock. Appuie sur Retour.",cible,()=>afficherEtapeTutorielApplication(7),{delai:400});}
+if(numero===7){await new Promise(r=>setTimeout(r,220));const cible=boutonMenuPharmacieTutoriel("Retour d'intervention");if(!cible)return afficherEtapeTutorielApplication(9);return afficherBulleTutoriel("Retour d'intervention","Après une intervention, ouvre cet outil pour déclarer le matériel consommé.",cible,()=>afficherEtapeTutorielApplication(8),{delai:450});}
+if(numero===8){await new Promise(r=>setTimeout(r,250));const cible=document.querySelector(".retour-button");if(!cible)return afficherEtapeTutorielApplication(9);return afficherBulleTutoriel("Remplir le retour","Renseigne la date, le numéro d'intervention et les quantités utilisées. Appuie sur Retour.",cible,()=>afficherEtapeTutorielApplication(9),{delai:400});}
+if(numero===9){await new Promise(r=>setTimeout(r,180));const cible=boutonNavigationTutoriel("Accueil");if(!cible){afficherPortailPrincipal();return afficherEtapeTutorielApplication(10);}return afficherBulleTutoriel("Accueil général","Reviens à l'accueil général.",cible,()=>afficherEtapeTutorielApplication(10),{delai:350});}
+if(numero===10){await new Promise(r=>setTimeout(r,180));const cible=boutonNavigationTutoriel("Profil");if(!cible)return quitterTutorielApplication(true);return afficherBulleTutoriel("Ton profil","Ton profil permet de gérer ton compte, tes notifications, le tutoriel et les mises à jour.",cible,()=>quitterTutorielApplication(true),{delai:350});}quitterTutorielApplication(true);}
 
-    // 0 — accueil / Caserne, uniquement si l'utilisateur y a accès.
-    if(numero===0){
-        afficherPortailPrincipal();await attendre(140);
-        const cible=document.querySelector(".portail-cis-caserne");
-        if(!cible)return suivant(4);
-        return afficherBulleTutoriel("Espace Caserne","Cet espace regroupe les actualités et les événements auxquels ton compte a accès.",cible,()=>suivant(1),{delai:600});
-    }
-    if(numero===1){
-        await attendre(450);ajouterEvenementFacticeTutoriel();
-        const cible=document.querySelector(".tutoriel-voir-detail");
-        if(!cible)return suivant(3);
-        return afficherBulleTutoriel("Un événement","Ouvre un événement pour consulter sa date, son horaire et ses informations.",cible,()=>{afficherDetailEvenementFacticeTutoriel();suivant(2);},{empecherAction:true,delai:180});
-    }
-    if(numero===2){
-        await attendre(120);const cible=document.querySelector(".tutoriel-present-factice");
-        if(!cible)return suivant(3);
-        return afficherBulleTutoriel("Répondre à l'événement","Tu peux indiquer ta présence directement dans l'événement. Cet exemple n'enregistre rien.",cible,()=>suivant(3),{empecherAction:true,selectionPresent:true,delai:300});
-    }
-    if(numero===3){
-        const cible=boutonNavigationTutoriel("Accueil");
-        if(!cible){afficherPortailPrincipal();return suivant(4)}
-        return afficherBulleTutoriel("Barre du bas — Accueil","La barre en bas reste disponible pour naviguer. Accueil te ramène à l'écran principal.",cible,()=>suivant(4),{delai:450});
-    }
-
-    // 4 — Pharmacie, uniquement avec au moins une permission pharmacie.
-    if(numero===4){
-        await attendre(180);const cible=document.querySelector(".portail-cis-pharmacie");
-        if(!cible)return suivant(11);
-        return afficherBulleTutoriel("Espace Pharmacie","Cet espace affiche uniquement les outils autorisés par tes permissions.",cible,()=>suivant(5),{delai:450});
-    }
-    if(numero===5){
-        await attendre(250);
-        const menu=boutonNavigationTutoriel("Menu");
-        if(menu)return afficherBulleTutoriel("Barre du bas — Menu","Le bouton Menu, à droite de la barre du bas, ouvre les fonctions disponibles dans l'espace actuel.",menu,()=>suivant(6),{delai:450});
-        ouvrirMenuPharmacie();return suivant(6);
-    }
-    if(numero===6){
-        await attendre(250);
-        const cible=permission("acces_inventaire")?boutonMenuPharmacieTutoriel("Inventaire"):null;
-        if(!cible)return suivant(8);
-        return afficherBulleTutoriel("Inventaire","Tu as accès à l'inventaire : il permet de rechercher le matériel et de vérifier les quantités.",cible,()=>suivant(7),{delai:450});
-    }
-    if(numero===7){
-        await attendre(250);const cible=document.querySelector(".retour-button");
-        if(!cible){ouvrirMenuPharmacie();return suivant(8)}
-        return afficherBulleTutoriel("Dans l'inventaire","Tu peux parcourir les catégories, rechercher un matériel et consulter son stock. Utilise Retour pour revenir.",cible,()=>suivant(8),{delai:400});
-    }
-    if(numero===8){
-        await attendre(250);
-        if(!document.querySelector(".menu-navigation-pharmacie"))ouvrirMenuPharmacie();
-        await attendre(120);
-        const cible=permission("acces_retour_intervention")?boutonMenuPharmacieTutoriel("Retour d'intervention"):null;
-        if(!cible)return suivant(10);
-        return afficherBulleTutoriel("Retour d'intervention","Cet outil permet de déclarer le matériel consommé après une intervention.",cible,()=>suivant(9),{delai:450});
-    }
-    if(numero===9){
-        await attendre(250);const cible=document.querySelector(".retour-button");
-        if(!cible)return suivant(10);
-        return afficherBulleTutoriel("Remplir le retour","Renseigne les informations de l'intervention et les quantités utilisées. Le tutoriel ne valide aucune saisie.",cible,()=>suivant(10),{delai:400});
-    }
-    if(numero===10){
-        await attendre(220);
-        // Présente aussi les autres outils autorisés sans forcer d'action sensible.
-        if(!document.querySelector(".menu-navigation-pharmacie"))ouvrirMenuPharmacie();
-        await attendre(100);
-        const extras=[
-          ["acces_historique","Historique","Historique","Tu peux consulter ici les mouvements et consommations enregistrés."],
-          ["acces_administration","Administration pharmacie","Administration pharmacie","Ton compte possède aussi les outils d'administration de la pharmacie."]
-        ];
-        const extra=extras.find(([perm,lib])=>permission(perm)&&boutonMenuPharmacieTutoriel(lib));
-        if(extra){
-          const cible=boutonMenuPharmacieTutoriel(extra[1]);
-          // Une simple étape d'information : clic intercepté pour ne pas lancer une action d'administration.
-          return afficherBulleTutoriel(extra[2],extra[3],cible,()=>suivant(11),{empecherAction:true,delai:250});
-        }
-        return suivant(11);
-    }
-
-    // 11 — Espace équipe / garde, nouveauté accessible à tous les utilisateurs connectés.
-    if(numero===11){
-        afficherPortailPrincipal();await attendre(180);
-        const cible=document.querySelector("#carte-garde-accueil .garde-accueil-carte");
-        if(!cible)return suivant(16);
-        return afficherBulleTutoriel("Espace équipe","Cette carte indique ta garde de la semaine et donne accès aux outils de l'équipe.",cible,()=>suivant(12),{delai:450});
-    }
-    if(numero===12){
-        await attendre(220);
-        const cible=[...document.querySelectorAll(".garde-menu-carte")].find(b=>String(b.textContent||"").includes("Ménage"));
-        if(!cible)return suivant(13);
-        return afficherBulleTutoriel("Ménage","Tu peux sélectionner les zones nettoyées, les personnes présentes et le temps passé.",cible,()=>suivant(13),{empecherAction:true,delai:250});
-    }
-    if(numero===13){
-        const cible=[...document.querySelectorAll(".garde-menu-carte")].find(b=>String(b.textContent||"").includes("Planning"));
-        if(!cible)return suivant(14);
-        return afficherBulleTutoriel("Planning","Le planning permet de consulter la répartition des gardes et d'enregistrer l'image du planning.",cible,()=>suivant(14),{empecherAction:true,delai:250});
-    }
-    if(numero===14){
-        const cible=[...document.querySelectorAll(".garde-menu-carte")].find(b=>String(b.textContent||"").includes("Enregistrer des heures"));
-        if(!cible)return suivant(15);
-        return afficherBulleTutoriel("Enregistrer des heures","Tu peux enregistrer une durée, un motif et les personnes concernées. Le motif Autre demande un détail.",cible,()=>suivant(15),{empecherAction:true,delai:250});
-    }
-    if(numero===15){
-        const adminMenage=permission("acces_admin_menage")?[...document.querySelectorAll(".garde-menu-carte")].find(b=>String(b.textContent||"").includes("Administration ménage")):null;
-        const histHeures=permission("acces_admin_heures")?[...document.querySelectorAll(".garde-menu-carte")].find(b=>String(b.textContent||"").includes("Historique des heures")):null;
-        const cible=adminMenage||histHeures;
-        if(!cible)return suivant(16);
-        const titre=adminMenage?"Administration ménage":"Historique des heures";
-        const texte=adminMenage?"Cette rubrique apparaît parce que ton compte possède la permission Ménage Admin.":"Cette rubrique apparaît parce que ton compte possède la permission d'historique des heures.";
-        return afficherBulleTutoriel(titre,texte,cible,()=>suivant(16),{empecherAction:true,delai:250});
-    }
-
-    // 16 — barre de navigation basse et profil.
-    if(numero===16){
-        afficherPortailPrincipal();await attendre(180);
-        const cible=boutonNavigationTutoriel("Profil");
-        if(!cible)return quitterTutorielApplication(true);
-        return afficherBulleTutoriel("Barre du bas — Profil","La barre du bas s'adapte elle aussi à tes permissions. Profil permet de gérer ton compte, les notifications, le tutoriel et les mises à jour.",cible,()=>quitterTutorielApplication(true),{delai:350});
-    }
-    quitterTutorielApplication(true);
-}
 
 function demarrerTutorielApplication() {
     initialiserStyleTutorielApplication();
@@ -21820,7 +21732,7 @@ function initialiserStyleEspaceGardeUtilisateur(){
       .garde-menu-carte strong{display:block;font-size:18px;color:#20272b}.garde-menu-carte span{display:block;color:#707980;margin-top:3px;font-size:13px}.garde-menu-carte .fleche{margin-left:auto;font-size:25px;color:#a0a7ac}
       .garde-section{padding:18px 18px 110px;max-width:760px;margin:0 auto;box-sizing:border-box}.garde-section h1{font-size:27px;margin:3px 0 18px}
       .garde-zone,.garde-personne-v2{display:flex;align-items:center;gap:11px;background:#fff;border-radius:13px;padding:13px;margin:8px 0;box-shadow:0 2px 10px rgba(0,0,0,.06);font-weight:750}
-      .garde-zone input,.garde-personne-v2 input{width:21px;height:21px;accent-color:#176b45}
+      .garde-zone input,.garde-personne-v2 input{width:21px;height:21px;accent-color:#176b45}.garde-zone-poubelle{background:#fff2a8!important;border:1px solid #e1bd2e}
       .garde-personnes-plus{width:100%;border:0;border-radius:12px;padding:12px;margin:7px 0 12px;background:#e8ecef;color:#263238;font-weight:900;cursor:pointer}
       .garde-personne-cachee{display:none!important}
       .garde-personnes-toutes .garde-personne-cachee{display:flex!important}
@@ -21866,14 +21778,14 @@ function afficherEspaceGarde(){
     document.getElementById("app").innerHTML=`
       <main class="garde-menu-page">
         <button class="retour-button" onclick="retourAccueilDepuisEspaceEquipe()">← Retour</button>
-        <header class="garde-menu-entete"><small>ESPACE ÉQUIPE</small><h1>Espace équipe</h1></header>
+        <header class="garde-menu-entete"><h1>Espace équipe</h1></header>
         <div class="garde-menu-cartes">
-          <button class="garde-menu-carte" onclick="afficherMenageEspaceGarde()"><span class="ico">🧹</span><span><strong>Ménage</strong></span><b class="fleche">›</b></button>
-          <button class="garde-menu-carte" onclick="afficherInventaireVehiculeEspaceGarde()"><span class="ico">🚒</span><span><strong>Inventaire véhicule</strong></span><b class="fleche">›</b></button>
-          <button class="garde-menu-carte" onclick="afficherPlanningEspaceGarde()"><span class="ico">📅</span><span><strong>Planning</strong></span><b class="fleche">›</b></button>
-          ${utilisateurAPermission("acces_admin_menage")?`<button class="garde-menu-carte" onclick="afficherAdminMenageEquipe()"><span class="ico">⚙️</span><span><strong>Administration ménage</strong></span><b class="fleche">›</b></button>`:""}
-          <button class="garde-menu-carte" onclick="afficherEnregistrerHeuresEquipe()"><span class="ico">⏱️</span><span><strong>Enregistrer des heures</strong></span><b class="fleche">›</b></button>
-          ${utilisateurAPermission("acces_admin_heures")?`<button class="garde-menu-carte" onclick="afficherHistoriqueHeuresEquipe()"><span class="ico">📊</span><span><strong>Historique des heures</strong></span><b class="fleche">›</b></button>`:""}
+          <button class="garde-menu-carte" onclick="afficherMenageEspaceGarde()"><span><strong>Ménage</strong></span><b class="fleche">›</b></button>
+          <button class="garde-menu-carte" onclick="afficherInventaireVehiculeEspaceGarde()"><span><strong>Inventaire véhicule</strong></span><b class="fleche">›</b></button>
+          <button class="garde-menu-carte" onclick="afficherPlanningEspaceGarde()"><span><strong>Planning</strong></span><b class="fleche">›</b></button>
+          ${utilisateurAPermission("acces_admin_menage")?`<button class="garde-menu-carte" onclick="afficherAdminMenageEquipe()"><span><strong>Administration ménage</strong></span><b class="fleche">›</b></button>`:""}
+          <button class="garde-menu-carte" onclick="afficherEnregistrerHeuresEquipe()"><span><strong>Enregistrer des heures</strong></span><b class="fleche">›</b></button>
+          ${utilisateurAPermission("acces_admin_heures")?`<button class="garde-menu-carte" onclick="afficherHistoriqueHeuresEquipe()"><span><strong>Historique des heures</strong></span><b class="fleche">›</b></button>`:""}
         </div>
       </main>${navigationPrincipale("","accueil")}`;
     actualiserInterfaceBureau();window.scrollTo({top:0,behavior:"auto"});
@@ -21884,7 +21796,7 @@ async function afficherMenageEspaceGarde(){
     // Chaque nouvelle entrée dans l’onglet Ménage repart d’une saisie vide.
     try{localStorage.removeItem(cleSelectionMenageGarde())}catch(_){}
     if(!utilisateursEspaceGarde.length){
-      document.getElementById("app").innerHTML=`<main class="garde-section"><button class="retour-button" onclick="afficherEspaceGarde()">← Espace équipe</button><h1>🧹 Ménage</h1><div id="menage-garde-chargement" class="garde-planning-attente">Chargement…</div></main>${navigationPrincipale("","accueil")}`;
+      document.getElementById("app").innerHTML=`<main class="garde-section"><button class="retour-button" onclick="afficherEspaceGarde()">← Espace équipe</button><h1>Ménage</h1><div id="menage-garde-chargement" class="garde-planning-attente">Chargement…</div></main>${navigationPrincipale("","accueil")}`;
       actualiserInterfaceBureau();
       utilisateursEspaceGarde=await chargerUtilisateursEspaceGarde();
       if(!document.getElementById("menage-garde-chargement"))return;
@@ -21902,7 +21814,7 @@ async function afficherMenageEspaceGarde(){
     document.getElementById("app").innerHTML=`
       <main class="garde-section">
        <button class="retour-button" onclick="afficherEspaceGarde()">← Espace équipe</button>
-       <h1>🧹 Ménage</h1>
+       <h1>Ménage</h1>
        <div class="plan-menage-wrap"><div class="plan-menage">
          <img src="./plan-caserne.png?v=13" alt="Plan de la caserne">
          <button type="button" class="plan-menage-zone pm-reunion" data-plan-zone="Salle de cour" aria-label="Salle de cour" onclick="basculerZoneDepuisPlanGarde(this.dataset.planZone)"></button>
@@ -21943,7 +21855,7 @@ function basculerToutesPersonnesMenage(){
 function afficherInventaireVehiculeEspaceGarde(){
     initialiserStyleEspaceGardeUtilisateur();
     document.getElementById("app").innerHTML=`
-      <main class="garde-section"><button class="retour-button" onclick="afficherEspaceGarde()">← Espace équipe</button><h1>🚒 Inventaire véhicule</h1>
+      <main class="garde-section"><button class="retour-button" onclick="afficherEspaceGarde()">← Espace équipe</button><h1>Inventaire véhicule</h1>
       ${VEHICULES_INVENTAIRE_GARDE.map(v=>`<div class="garde-vehicule-v2">${v}</div>`).join("")}
       </main>${navigationPrincipale("","accueil")}`;
     actualiserInterfaceBureau();window.scrollTo({top:0,behavior:"auto"});
@@ -21954,7 +21866,7 @@ function afficherInventaireVehiculeEspaceGarde(){
 async function afficherPlanningEspaceGarde(){
     initialiserStyleEspaceGardeUtilisateur();
     document.getElementById("app").innerHTML=`
-      <main class="garde-section"><button class="retour-button" onclick="afficherEspaceGarde()">← Espace équipe</button><h1>📅 Planning</h1>
+      <main class="garde-section"><button class="retour-button" onclick="afficherEspaceGarde()">← Espace équipe</button><h1>Planning</h1>
       <div id="garde-planning-photo" class="garde-planning-attente">Création du planning…</div></main>${navigationPrincipale("","accueil")}`;
     actualiserInterfaceBureau();
     try{
@@ -22170,12 +22082,12 @@ function ajouterPersonneHeures(id){personnesHeuresSelectionnees.add(String(id));
 function retirerPersonneHeures(id){if(String(id)===String(profilUtilisateurConnecte?.id))return;personnesHeuresSelectionnees.delete(String(id));actualiserPersonnesHeures()}
 function verifierMotifHeures(){const s=document.getElementById("heures-motif"),d=document.getElementById("heures-details");if(!s||!d)return;const opt=s.options[s.selectedIndex];const autre=opt?.dataset?.autre==="1";d.required=autre;d.placeholder=autre?"Détail obligatoire pour le motif Autre":"Détails (facultatif)"}
 async function afficherEnregistrerHeuresEquipe(){
- initialiserStyleEspaceGardeUtilisateur();document.getElementById("app").innerHTML=`<main class="garde-section"><button class="retour-button" onclick="afficherEspaceGarde()">← Espace équipe</button><h1>⏱️ Enregistrer des heures</h1><div class="garde-planning-attente">Chargement…</div></main>${navigationPrincipale("","accueil")}`;actualiserInterfaceBureau();
+ initialiserStyleEspaceGardeUtilisateur();document.getElementById("app").innerHTML=`<main class="garde-section"><button class="retour-button" onclick="afficherEspaceGarde()">← Espace équipe</button><h1>Enregistrer des heures</h1><div class="garde-planning-attente">Chargement…</div></main>${navigationPrincipale("","accueil")}`;actualiserInterfaceBureau();
  const sb=obtenirClientSupabase();const [motifs,personnes]=await Promise.all([sb.from("motifs_heures").select("id,nom,est_autre").eq("actif",true).order("nom"),chargerUtilisateursEspaceGarde()]);
  if(!document.querySelector('.garde-section'))return;if(motifs.error){alert("Impossible de charger les motifs : "+motifs.error.message);return}
  personnesHeuresCache=personnes||[];personnesHeuresSelectionnees=new Set([String(profilUtilisateurConnecte?.id)]);
  const durees=[];for(let m=30;m<=720;m+=30)durees.push(`<option value="${m}">${libelleDureeHeures(m)}</option>`);
- document.getElementById("app").innerHTML=`<main class="garde-section"><button class="retour-button" onclick="afficherEspaceGarde()">← Espace équipe</button><h1>⏱️ Enregistrer des heures</h1>
+ document.getElementById("app").innerHTML=`<main class="garde-section"><button class="retour-button" onclick="afficherEspaceGarde()">← Espace équipe</button><h1>Enregistrer des heures</h1>
  <div class="heures-form"><label><strong>Personnes concernées</strong></label><div id="heures-personnes-selectionnees" class="heures-chips"></div><div class="heures-recherche-wrap"><input id="heures-recherche" class="heures-input" placeholder="Écris les premières lettres d’un nom…" oninput="rechercherPersonnesHeures()" autocomplete="off"><div id="heures-resultats" class="heures-resultats"></div></div>
  <label><strong>Motif</strong><select id="heures-motif" class="heures-input" onchange="verifierMotifHeures()">${(motifs.data||[]).map(m=>`<option value="${m.id}" data-autre="${m.est_autre?1:0}">${echapperHTML(m.nom)}</option>`).join("")}</select></label>
  <label><strong>Durée</strong><select id="heures-duree" class="heures-input">${durees.join("")}</select></label>
@@ -22188,7 +22100,7 @@ async function enregistrerHeuresEquipe(){
  try{btn.disabled=true;btn.textContent="Enregistrement…";const sb=obtenirClientSupabase();const ids=[...personnesHeuresSelectionnees];if(!ids.includes(String(profilUtilisateurConnecte?.id)))ids.unshift(String(profilUtilisateurConnecte.id));const {error}=await sb.from("heures_equipe").insert({enregistre_par:profilUtilisateurConnecte.id,motif_id:motif.value,duree_minutes:duree,details:details||null,personnes_concernees:ids});if(error)throw error;st.textContent="✓ Heures enregistrées.";st.className="garde-menage-statut ok";setTimeout(()=>afficherEspaceGarde(),700)}catch(e){st.textContent="Échec : "+(e?.message||"erreur inconnue");st.className="garde-menage-statut err"}finally{if(btn){btn.disabled=false;btn.textContent="Enregistrer les heures"}}
 }
 async function afficherHistoriqueHeuresEquipe(){
- if(!utilisateurAPermission("acces_admin_heures")){alert("Accès non autorisé.");return}initialiserStyleEspaceGardeUtilisateur();document.getElementById("app").innerHTML=`<main class="garde-section"><button class="retour-button" onclick="afficherEspaceGarde()">← Espace équipe</button><h1>📊 Historique des heures</h1><div id="heures-hist" class="garde-planning-attente">Chargement…</div></main>${navigationPrincipale("","accueil")}`;actualiserInterfaceBureau();
+ if(!utilisateurAPermission("acces_admin_heures")){alert("Accès non autorisé.");return}initialiserStyleEspaceGardeUtilisateur();document.getElementById("app").innerHTML=`<main class="garde-section"><button class="retour-button" onclick="afficherEspaceGarde()">← Espace équipe</button><h1>Historique des heures</h1><div id="heures-hist" class="garde-planning-attente">Chargement…</div></main>${navigationPrincipale("","accueil")}`;actualiserInterfaceBureau();
  const sb=obtenirClientSupabase();const {data,error}=await sb.from("heures_equipe").select("id,created_at,duree_minutes,details,enregistre_par,personnes_concernees,motifs_heures(nom)").order("created_at",{ascending:false});if(error){document.getElementById("heures-hist").textContent="Historique indisponible : "+error.message;return}if(!utilisateursEspaceGarde.length)utilisateursEspaceGarde=await chargerUtilisateursEspaceGarde();const nom=id=>nomPersonnelHeures(utilisateursEspaceGarde.find(x=>String(x.id)===String(id)));
  document.getElementById("heures-hist").outerHTML=`<div>${(data||[]).map(r=>`<div class="garde-admin-card"><strong>${new Date(r.created_at).toLocaleString("fr-FR")}</strong><p><b>${echapperHTML(r.motifs_heures?.nom||"Motif")}</b> · ${libelleDureeHeures(r.duree_minutes)}</p><p>${(r.personnes_concernees||[]).map(id=>echapperHTML(nom(id))).join(" · ")}</p>${r.details?`<p>${echapperHTML(r.details)}</p>`:""}<small>Enregistré par ${echapperHTML(nom(r.enregistre_par))}</small></div>`).join("")||"Aucune heure enregistrée."}</div>`;
 }
