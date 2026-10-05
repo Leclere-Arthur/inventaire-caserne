@@ -930,7 +930,7 @@ let minuteurVerificationMiseAJour =
  * Elle permet de détecter une nouvelle version même si seul app.js change.
  */
 const VERSION_APPLICATION_JS =
-    "2026-10-05-agenda-general-v19";
+    "2026-10-05-menu-grille-3-v20";
 
 async function verifierNouvelleVersionAppJs() {
 
@@ -7927,7 +7927,7 @@ function ouvrirMenuPrincipal() {
             caserne.push({
                 libelle: rubrique[1],
                 aide: presentation.aide,
-                icone: "•",
+                icone: presentation.icone,
                 action: `afficherRubriqueCaserne('${rubrique[0]}')`
             });
         }
@@ -9594,7 +9594,13 @@ function initialiserStyleEspaceCaserne() {
         .caserne-retour-actualites{width:100%;min-height:52px;margin:0 0 16px;border:1px solid #d7c5c0;background:#fff;color:#542326;border-radius:14px;padding:12px 16px;text-align:left;font-size:16px;font-weight:900;box-shadow:0 3px 10px rgba(70,20,20,.05)}
         .caserne-raccourcis-publics{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:0 0 22px}.caserne-raccourci{min-height:70px;border:0;border-radius:17px;background:#fff;color:#542326;padding:13px 14px;display:flex;align-items:center;gap:11px;text-align:left;box-shadow:0 5px 16px rgba(70,20,20,.08)}.caserne-raccourci span{font-size:25px}.caserne-raccourci strong{font-size:15px;line-height:1.2}.caserne-raccourci-secondaire{background:#efe0dc}
         .caserne-titre-section{display:flex;align-items:center;justify-content:space-between;margin:0 2px 10px}.caserne-titre-section strong{font-size:21px}.caserne-titre-section span{font-size:12px;color:#79635e;font-weight:800}
-        .caserne-menu-liste-simple{display:grid;gap:10px}.caserne-menu-liste-simple>button{width:100%;min-height:82px;border:1px solid #e0cfca;background:#fff;border-radius:17px;padding:13px 14px;display:grid;grid-template-columns:46px 1fr 24px;gap:10px;align-items:center;text-align:left;color:#2b1716;box-shadow:0 4px 13px rgba(80,40,30,.05)}.caserne-menu-icone{font-size:28px;text-align:center}.caserne-menu-texte{display:grid;gap:4px}.caserne-menu-texte strong{font-size:18px}.caserne-menu-texte small{font-size:13px;line-height:1.35;color:#71605b}.caserne-menu-fleche{font-size:32px;color:#8a3436;text-align:right}.menu-navigation-section-titre{margin:22px 2px 9px;font-size:13px;font-weight:900;text-transform:uppercase;letter-spacing:1.1px;color:#6d5651}.menu-navigation-pharmacie .menu-top-pharmacie{background:linear-gradient(145deg,#1f6a45,#2e8a5c)}.menu-navigation-principal .menu-top-principal{background:linear-gradient(145deg,#242424,#3a3a3a)}.menu-navigation-pharmacie .caserne-menu-fleche{color:#237448}.menu-navigation-pharmacie .caserne-menu-liste-simple>button{border-color:#cee1d6}
+        .caserne-menu-liste-simple{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.caserne-menu-liste-simple>button{width:100%;min-width:0;min-height:112px;border:1px solid #e0cfca;background:#fff;border-radius:18px;padding:12px 7px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;text-align:center;color:#2b1716;box-shadow:0 4px 13px rgba(80,40,30,.05)}.caserne-menu-icone{font-size:29px;line-height:1;text-align:center}.caserne-menu-texte{display:block;min-width:0;width:100%}.caserne-menu-texte strong{display:block;font-size:13px;line-height:1.18;overflow-wrap:anywhere}.caserne-menu-texte small{display:none}.caserne-menu-fleche{display:none}.menu-navigation-section-titre{margin:22px 2px 9px;font-size:13px;font-weight:900;text-transform:uppercase;letter-spacing:1.1px;color:#6d5651}.menu-navigation-pharmacie .menu-top-pharmacie{background:linear-gradient(145deg,#1f6a45,#2e8a5c)}.menu-navigation-principal .menu-top-principal{background:linear-gradient(145deg,#242424,#3a3a3a)}.menu-navigation-pharmacie .caserne-menu-fleche{color:#237448}.menu-navigation-pharmacie .caserne-menu-liste-simple>button{border-color:#cee1d6}
+        /* Menu visuel : 3 rubriques par ligne sur Accueil, Caserne et Pharmacie. */
+        .caserne-menu-page .caserne-menu-liste-simple{grid-template-columns:repeat(3,minmax(0,1fr))}
+        .caserne-menu-page .caserne-menu-liste-simple>button{aspect-ratio:1/1;min-height:0}
+        .caserne-menu-page .caserne-menu-icone{font-size:30px}
+        .caserne-menu-page .caserne-menu-texte strong{font-size:12px}
+
         .caserne-public-simple .caserne-actu-card{padding:17px;border-radius:17px}.caserne-public-simple .caserne-actu-meta{display:grid;grid-template-columns:1fr;margin-bottom:10px;gap:4px}.caserne-public-simple .caserne-actu-meta span{font-size:12px}.caserne-public-simple .caserne-actu-meta time{text-align:left;color:#4e3b37;font-size:16px;font-weight:900}.caserne-public-simple .caserne-actu-card h2{font-size:22px;line-height:1.2;margin-bottom:10px}.caserne-public-simple .caserne-actu-card p{font-size:16px;line-height:1.55}
         /* Repères visuels très marqués dans le fil d'actualité : pas d'emoji, une couleur fixe par rubrique */
         .caserne-public-simple .caserne-actu-card[class*="caserne-type-"]{position:relative;overflow:hidden;border-left:9px solid var(--caserne-type-couleur,#7d2425);box-shadow:0 6px 18px rgba(80,40,30,.06);padding-top:18px}
