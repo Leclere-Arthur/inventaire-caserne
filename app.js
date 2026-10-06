@@ -930,7 +930,7 @@ let minuteurVerificationMiseAJour =
  * Elle permet de détecter une nouvelle version même si seul app.js change.
  */
 const VERSION_APPLICATION_JS =
-    "2026-10-05-menu-grille-3-v20";
+    "2026-10-06-correctifs-raccourcis-v21";
 
 async function verifierNouvelleVersionAppJs() {
 
@@ -3584,6 +3584,13 @@ async function afficherProfilUtilisateur() {
 
             </section>
 
+
+            <section class="profil-carte">
+                <h3>Raccourcis rapides</h3>
+                <small class="profil-mise-a-jour-texte">Optionnel : choisis jusqu’à 2 raccourcis à afficher sur l’accueil général.</small>
+                <div style="margin:10px 0 14px">${(()=>{const selection=new Set(lireRaccourcisAccueil());return optionsRaccourcisAccueil().map(x=>`<label style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid rgba(0,0,0,.06)"><input type="checkbox" data-raccourci-profil value="${echapperHTML(x.id)}" ${selection.has(x.id)?"checked":""} onchange="verifierRaccourcisProfil(this)" style="width:20px;height:20px"><span>${x.icone} ${echapperHTML(x.libelle)}</span></label>`).join("")})()}</div>
+                <button class="profil-bouton-principal" type="button" onclick="enregistrerRaccourcisProfil()">Enregistrer mes raccourcis</button>
+            </section>
 
             <section class="profil-carte">
 
@@ -7729,6 +7736,24 @@ function utilisateurPeutAccederPharmacie() {
     return obtenirOngletsPharmacieAccessibles().length > 0;
 }
 
+const CLE_RACCOURCIS_ACCUEIL = "cis_raccourcis_accueil_v1";
+function optionsRaccourcisAccueil(){
+ const o=[];
+ if(utilisateurAPermission("acces_espace_caserne")){o.push({id:"caserne",libelle:"Espace Caserne",icone:"🏠",action:"afficherEspaceCaserne()"});o.push({id:"agenda",libelle:"Agenda général",icone:"📅",action:"afficherAgendaGeneralCaserne()"});}
+ if(utilisateurPeutAccederPharmacie())o.push({id:"pharmacie",libelle:"Espace Pharmacie",icone:"💊",action:"afficherAccueil()"});
+ o.push({id:"equipe",libelle:"Espace équipe",icone:"🚒",action:"afficherEspaceGarde()"});
+ for(const x of obtenirOngletsPharmacieAccessibles())o.push({id:"pharma_"+x.libelle.toLowerCase().replace(/[^a-z0-9]+/g,"_"),libelle:x.libelle,icone:x.icone,action:x.action});
+ return o;
+}
+function lireRaccourcisAccueil(){try{const k=CLE_RACCOURCIS_ACCUEIL+"_"+String(profilUtilisateurConnecte?.id||"");const v=JSON.parse(localStorage.getItem(k)||"[]");return Array.isArray(v)?v.slice(0,2):[]}catch(_){return []}}
+function enregistrerRaccourcisProfil(){
+ const cases=[...document.querySelectorAll("[data-raccourci-profil]:checked")];
+ if(cases.length>2){alert("Tu peux choisir au maximum 2 raccourcis.");return}
+ try{const k=CLE_RACCOURCIS_ACCUEIL+"_"+String(profilUtilisateurConnecte?.id||"");localStorage.setItem(k,JSON.stringify(cases.map(x=>x.value)));alert("Raccourcis enregistrés.")}catch(_){alert("Impossible d’enregistrer les raccourcis.")}
+}
+function verifierRaccourcisProfil(el){const c=[...document.querySelectorAll("[data-raccourci-profil]:checked")];if(c.length>2){el.checked=false;alert("Tu peux choisir au maximum 2 raccourcis.")}}
+function htmlRaccourcisAccueil(){const ids=lireRaccourcisAccueil(),opts=optionsRaccourcisAccueil();const a=ids.map(id=>opts.find(x=>x.id===id)).filter(Boolean);if(!a.length)return "";return `<section class="raccourcis-accueil-rapides">${a.map(x=>`<button type="button" onclick="${x.action}"><span>${x.icone}</span><strong>${echapperHTML(x.libelle)}</strong></button>`).join("")}</section>`}
+
 function afficherPortailPrincipal() {
     initialiserStyleConnexion();
     initialiserStyleEspaceCaserne();
@@ -7745,6 +7770,7 @@ function afficherPortailPrincipal() {
                 ${peutCaserne ? `<button type="button" class="portail-cis-carte portail-cis-caserne" onclick="afficherEspaceCaserne()"><span class="portail-cis-titre">Espace Caserne</span><span class="portail-cis-fleche">›</span></button>` : ""}
                 ${peutPharmacie ? `<button type="button" class="portail-cis-carte portail-cis-pharmacie" onclick="afficherAccueil()"><span class="portail-cis-titre">Espace Pharmacie</span><span class="portail-cis-fleche">›</span></button>` : ""}
             </section>
+            ${htmlRaccourcisAccueil()}
             <section id="carte-garde-accueil" class="garde-accueil-zone">
                 ${cacheCarteGardeAccueilHTML || `<div class="garde-accueil-carte sans-garde" role="button" tabindex="0" onclick="afficherEspaceGarde()"><small>ÉQUIPE</small><strong>ESPACE ÉQUIPE</strong></div>`}
             </section>
@@ -9382,7 +9408,7 @@ function initialiserStyleAgendaGeneralCaserne(){
  .caserne-actu-card.caserne-actu-present{border:3px solid #178447!important;background:#e8f7ee!important;box-shadow:0 5px 18px rgba(23,132,71,.18)!important}
  .caserne-actu-card.caserne-actu-present:before{content:"PRÉSENT";display:inline-block;margin-bottom:9px;padding:5px 9px;border-radius:999px;background:#178447;color:white;font-size:11px;font-weight:950}
  .agenda-general-page{padding-bottom:115px}.agenda-general-controles{display:flex;align-items:center;gap:8px;margin:14px 0 20px}.agenda-general-controles button{border:0;border-radius:10px;padding:10px 14px;font-weight:900}.agenda-general-mois{flex:1;text-align:center;font-size:19px;font-weight:950;text-transform:capitalize}
- .agenda-general-jour{margin:16px 0 6px;padding-bottom:7px;border-bottom:2px solid #e2e6e8;font-size:17px}.agenda-general-ligne{display:grid;grid-template-columns:58px 1fr;gap:10px;padding:12px;margin:6px 0;border-radius:12px;background:#fff;box-shadow:0 2px 9px rgba(0,0,0,.06);cursor:pointer}.agenda-general-ligne.present{background:#e8f7ee;border:2px solid #178447}.agenda-general-heure{font-weight:900}.agenda-general-info strong,.agenda-general-info small{display:block}.agenda-general-info small{color:#687078;margin-top:3px}.agenda-general-present{display:inline-block!important;width:max-content!important;background:#178447;color:#fff!important;border-radius:999px;padding:3px 7px;font-weight:900}.agenda-general-vide{padding:20px;background:#fff;border-radius:13px;text-align:center}
+ .agenda-general-jour{margin:20px 0 8px;padding:9px 12px;border-radius:10px;background:#efe5e2;color:#652427;font-size:16px}.agenda-general-ligne{display:grid;grid-template-columns:64px 1fr;gap:11px;padding:13px;margin:8px 0;border:1px solid #e4d9d6;border-radius:13px;background:#fff;box-shadow:0 2px 9px rgba(0,0,0,.06);cursor:pointer}.agenda-general-ligne.present{background:#e8f7ee;border:2px solid #178447}.agenda-general-heure{font-weight:950;color:#6f292b;padding-top:1px}.agenda-general-info strong,.agenda-general-info small{display:block}.agenda-general-info strong{font-size:15px;line-height:1.25}.agenda-general-info small{color:#687078;margin-top:4px}.agenda-general-type{font-weight:800;text-transform:uppercase;font-size:10px;letter-spacing:.5px}.agenda-general-present{display:inline-block!important;width:max-content!important;background:#178447;color:#fff!important;border-radius:999px;padding:4px 8px;font-weight:900}.agenda-general-vide{padding:20px;background:#fff;border-radius:13px;text-align:center}.agenda-general-retour{margin:10px 0 14px!important}
  `;document.head.appendChild(st);
 }
 let agendaGeneralMoisCaserne=null;
@@ -9401,9 +9427,9 @@ async function afficherAgendaGeneralCaserne(decalage=0){
  const items=[];pubs.forEach(p=>{const d=new Date(p.date_evenement);if(d>=debut&&d<fin)items.push({d,p,ctx:"evenement"});if(p.date_preparation){const x=new Date(p.date_preparation);if(x>=debut&&x<fin)items.push({d:x,p,ctx:"preparation"})}});
  items.sort((a,b)=>a.d-b.d);const groupes=new Map();items.forEach(x=>{const k=dateISOlocale(x.d);if(!groupes.has(k))groupes.set(k,[]);groupes.get(k).push(x)});
  const uid=String(utilisateurConnecte?.id||"");
- const contenu=[...groupes.values()].map(g=>{const date=g[0].d,jour=date.toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long"});return `<section><h2 class="agenda-general-jour">${echapperHTML(jour.charAt(0).toUpperCase()+jour.slice(1))}</h2>${g.map(x=>{const present=(x.p.reponses||[]).some(r=>r.contexte===x.ctx&&String(r.user_id)===uid&&r.reponse==="present");const titre=(x.p.titre||obtenirConfigurationPublicationCaserne(x.p.type_publication).titre)+(x.ctx==="preparation"?" · Préparation":"");return `<div class="agenda-general-ligne ${present?"present":""}" onclick="afficherRubriqueCaserne('${x.p.type_publication}')"><div class="agenda-general-heure">${x.d.toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"})}</div><div class="agenda-general-info"><strong>${echapperHTML(titre)}</strong><small>${echapperHTML(obtenirLibelleTypeCaserne(x.p.type_publication))}</small>${present?'<small class="agenda-general-present">Présent</small>':""}</div></div>`}).join("")}</section>`}).join("");
+ const contenu=[...groupes.values()].map(g=>{const date=g[0].d,jour=date.toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long"});return `<section><h2 class="agenda-general-jour">${echapperHTML(jour.charAt(0).toUpperCase()+jour.slice(1))}</h2>${g.map(x=>{const present=(x.p.reponses||[]).some(r=>r.contexte===x.ctx&&String(r.user_id)===uid&&r.reponse==="present");const titre=(x.p.titre||obtenirConfigurationPublicationCaserne(x.p.type_publication).titre)+(x.ctx==="preparation"?" · Préparation":"");return `<div class="agenda-general-ligne ${present?"present":""}" onclick="afficherRubriqueCaserne('${x.p.type_publication}')"><div class="agenda-general-heure">${x.d.toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"})}</div><div class="agenda-general-info"><strong>${echapperHTML(titre)}</strong><small class="agenda-general-type">${echapperHTML(obtenirLibelleTypeCaserne(x.p.type_publication))}</small>${present?'<small class="agenda-general-present">Présent</small>':""}</div></div>`}).join("")}</section>`}).join("");
  const mois=agendaGeneralMoisCaserne.toLocaleDateString("fr-FR",{month:"long",year:"numeric"});
- document.getElementById("app").innerHTML=`<main class="caserne-shell agenda-general-page"><button class="caserne-retour-actualites" onclick="afficherActualitesCaserne()">← Retour aux informations</button><header class="caserne-top caserne-top-simple"><small>ESPACE CASERNE</small><h1>Agenda général</h1></header><div class="agenda-general-controles"><button onclick="afficherAgendaGeneralCaserne(-1)">‹</button><div class="agenda-general-mois">${echapperHTML(mois)}</div><button onclick="afficherAgendaGeneralCaserne(1)">›</button></div>${contenu||'<div class="agenda-general-vide">Aucune activité ce mois-ci.</div>'}</main>${navigationCaserne("caserne")}`;actualiserInterfaceBureau();window.scrollTo({top:0,behavior:"auto"});
+ document.getElementById("app").innerHTML=`<main class="caserne-shell agenda-general-page"><header class="caserne-top caserne-top-simple"><small>ESPACE CASERNE</small><h1>Agenda général</h1><p>Toutes les activités visibles avec tes permissions.</p></header><button class="caserne-retour-actualites agenda-general-retour" onclick="afficherActualitesCaserne()">← Retour aux informations</button><div class="agenda-general-controles"><button onclick="afficherAgendaGeneralCaserne(-1)">‹</button><div class="agenda-general-mois">${echapperHTML(mois)}</div><button onclick="afficherAgendaGeneralCaserne(1)">›</button></div>${contenu||'<div class="agenda-general-vide">Aucune activité ce mois-ci.</div>'}</main>${navigationCaserne("caserne")}`;actualiserInterfaceBureau();window.scrollTo({top:0,behavior:"auto"});
 }
 window.afficherAgendaGeneralCaserne=afficherAgendaGeneralCaserne;
 
@@ -9720,6 +9746,7 @@ function initialiserStylePortailCIS() {
             display: grid;
             gap: 12px;
         }
+        .raccourcis-accueil-rapides{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:14px 0 12px}.raccourcis-accueil-rapides button{min-height:64px;border:1px solid #dde2e5;border-radius:15px;background:#fff;display:flex;align-items:center;gap:10px;padding:12px 14px;text-align:left;box-shadow:0 3px 12px rgba(0,0,0,.06)}.raccourcis-accueil-rapides button span{font-size:23px}.raccourcis-accueil-rapides button strong{font-size:14px;color:#20272b}
 
         .portail-cis-carte {
             width: 100%;
@@ -21786,12 +21813,12 @@ function afficherEspaceGarde(){
         <button class="retour-button" onclick="retourAccueilDepuisEspaceEquipe()">← Retour</button>
         <header class="garde-menu-entete"><h1>Espace équipe</h1></header>
         <div class="garde-menu-cartes">
-          <button class="garde-menu-carte" onclick="afficherMenageEspaceGarde()"><span><strong>Ménage</strong></span><b class="fleche">›</b></button>
-          <button class="garde-menu-carte" onclick="afficherInventaireVehiculeEspaceGarde()"><span><strong>Inventaire véhicule</strong></span><b class="fleche">›</b></button>
-          <button class="garde-menu-carte" onclick="afficherPlanningEspaceGarde()"><span><strong>Planning</strong></span><b class="fleche">›</b></button>
-          ${utilisateurAPermission("acces_admin_menage")?`<button class="garde-menu-carte" onclick="afficherAdminMenageEquipe()"><span><strong>Administration ménage</strong></span><b class="fleche">›</b></button>`:""}
-          <button class="garde-menu-carte" onclick="afficherEnregistrerHeuresEquipe()"><span><strong>Enregistrer des heures</strong></span><b class="fleche">›</b></button>
-          ${utilisateurAPermission("acces_admin_heures")?`<button class="garde-menu-carte" onclick="afficherHistoriqueHeuresEquipe()"><span><strong>Historique des heures</strong></span><b class="fleche">›</b></button>`:""}
+          <button class="garde-menu-carte" onclick="afficherMenageEspaceGarde()"><span class="ico">🧹</span><span><strong>Ménage</strong></span><b class="fleche">›</b></button>
+          <button class="garde-menu-carte" onclick="afficherInventaireVehiculeEspaceGarde()"><span class="ico">🚒</span><span><strong>Inventaire véhicule</strong></span><b class="fleche">›</b></button>
+          <button class="garde-menu-carte" onclick="afficherPlanningEspaceGarde()"><span class="ico">📅</span><span><strong>Planning</strong></span><b class="fleche">›</b></button>
+          ${utilisateurAPermission("acces_admin_menage")?`<button class="garde-menu-carte" onclick="afficherAdminMenageEquipe()"><span class="ico">⚙️</span><span><strong>Administration ménage</strong></span><b class="fleche">›</b></button>`:""}
+          <button class="garde-menu-carte" onclick="afficherEnregistrerHeuresEquipe()"><span class="ico">⏱️</span><span><strong>Enregistrer des heures</strong></span><b class="fleche">›</b></button>
+          ${utilisateurAPermission("acces_admin_heures")?`<button class="garde-menu-carte" onclick="afficherHistoriqueHeuresEquipe()"><span class="ico">📊</span><span><strong>Historique des heures</strong></span><b class="fleche">›</b></button>`:""}
         </div>
       </main>${navigationPrincipale("","accueil")}`;
     actualiserInterfaceBureau();window.scrollTo({top:0,behavior:"auto"});
@@ -21835,7 +21862,7 @@ async function afficherMenageEspaceGarde(){
          <button type="button" class="plan-menage-zone pm-vsav" data-plan-zone="Local VSAV" aria-label="Local VSAV" onclick="basculerZoneDepuisPlanGarde(this.dataset.planZone)"></button>
        </div></div>
        <h2 class="garde-sous-titre">Zones</h2>
-       ${ZONES_MENAGE_GARDE.map(n=>`<label class="garde-zone"><input type="checkbox" data-garde-zone value="${echapperHTML(n)}" ${zs.has(n)?"checked":""} onchange="sauvegarderSelectionMenageGarde()"><span>${echapperHTML(n)}</span></label>`).join("")}
+       ${ZONES_MENAGE_GARDE.map(n=>`<label class="garde-zone ${n==="Poubelle de trie"?"garde-zone-poubelle":""}"><input type="checkbox" data-garde-zone value="${echapperHTML(n)}" ${zs.has(n)?"checked":""} onchange="sauvegarderSelectionMenageGarde()"><span>${echapperHTML(n)}</span></label>`).join("")}
        <h2 class="garde-sous-titre">Présents</h2>
        <div id="garde-personnes-liste">${utilisateursEspaceGarde.length?utilisateursEspaceGarde.map((u,i)=>{const n=[u.prenom,u.nom].filter(Boolean).join(" ")||u.identifiant||"Utilisateur";return `<label class="garde-personne-v2 ${i>=6?"garde-personne-cachee":""}"><input type="checkbox" data-garde-personne value="${echapperHTML(u.id)}" ${ps.has(String(u.id))?"checked":""} onchange="sauvegarderSelectionMenageGarde()"><span>${echapperHTML(n)}</span></label>`}).join(""):'<div class="garde-planning-attente">Liste des utilisateurs indisponible.</div>'}</div>
        ${utilisateursEspaceGarde.length>6?'<button type="button" id="garde-personnes-plus" class="garde-personnes-plus" onclick="basculerToutesPersonnesMenage()">Voir plus</button>':""}
