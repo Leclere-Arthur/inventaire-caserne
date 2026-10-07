@@ -938,7 +938,7 @@ let minuteurVerificationMiseAJour =
  * Elle permet de détecter une nouvelle version même si seul app.js change.
  */
 const VERSION_APPLICATION_JS =
-    "2026-10-07-barre-systeme-menus-v27";
+    "2026-10-07-barre-systeme-menus-v28";
 
 async function verifierNouvelleVersionAppJs() {
 
@@ -9726,6 +9726,10 @@ function initialiserStyleEspaceCaserne() {
         .caserne-raccourcis-publics{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:0 0 22px}.caserne-raccourci{min-height:70px;border:0;border-radius:17px;background:#fff;color:#542326;padding:13px 14px;display:flex;align-items:center;gap:11px;text-align:left;box-shadow:0 5px 16px rgba(70,20,20,.08)}.caserne-raccourci span{font-size:25px}.caserne-raccourci strong{font-size:15px;line-height:1.2}.caserne-raccourci-secondaire{background:#efe0dc}
         .caserne-titre-section{display:flex;align-items:center;justify-content:space-between;margin:0 2px 10px}.caserne-titre-section strong{font-size:21px}.caserne-titre-section span{font-size:12px;color:#79635e;font-weight:800}
         .caserne-menu-liste-simple{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.caserne-menu-liste-simple>button{width:100%;min-width:0;min-height:112px;border:1px solid #e0cfca;background:#fff;border-radius:18px;padding:12px 7px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;text-align:center;color:#2b1716;box-shadow:0 4px 13px rgba(80,40,30,.05)}.caserne-menu-icone{font-size:29px;line-height:1;text-align:center}.caserne-menu-texte{display:block;min-width:0;width:100%}.caserne-menu-texte strong{display:block;font-size:13px;line-height:1.18;overflow-wrap:anywhere}.caserne-menu-texte small{display:none}.caserne-menu-fleche{display:none}.menu-navigation-section-titre{margin:22px 2px 9px;font-size:13px;font-weight:900;text-transform:uppercase;letter-spacing:1.1px;color:#6d5651}.menu-navigation-pharmacie .menu-top-pharmacie{background:linear-gradient(145deg,#1f6a45,#2e8a5c)}.menu-navigation-principal .menu-top-principal{background:linear-gradient(145deg,#242424,#3a3a3a)}.menu-navigation-pharmacie .caserne-menu-fleche{color:#237448}.menu-navigation-pharmacie .caserne-menu-liste-simple>button{border-color:#cee1d6}
+        /* v28 : la barre système iPhone suit le menu affiché. Ces règles
+           passent après le fond rouge générique de l'espace Caserne. */
+        html:has(body .menu-navigation-principal),html.cis-espace-caserne:has(body .menu-navigation-principal),body:has(.menu-navigation-principal){background:#242424!important}
+        html:has(body .menu-navigation-pharmacie),html.cis-espace-caserne:has(body .menu-navigation-pharmacie),body:has(.menu-navigation-pharmacie){background:#1f6a45!important}
         /* Menu visuel : 3 rubriques par ligne sur Accueil, Caserne et Pharmacie. */
         .caserne-menu-page .caserne-menu-liste-simple{grid-template-columns:repeat(3,minmax(0,1fr))}
         .caserne-menu-page .caserne-menu-liste-simple>button{aspect-ratio:1/1;min-height:0}
