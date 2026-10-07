@@ -930,7 +930,7 @@ let minuteurVerificationMiseAJour =
  * Elle permet de détecter une nouvelle version même si seul app.js change.
  */
 const VERSION_APPLICATION_JS =
-    "2026-10-06-correctifs-raccourcis-v21";
+    "2026-10-07-mystart-raccourci-v22";
 
 async function verifierNouvelleVersionAppJs() {
 
@@ -3588,7 +3588,7 @@ async function afficherProfilUtilisateur() {
             <section class="profil-carte">
                 <h3>Raccourcis rapides</h3>
                 <small class="profil-mise-a-jour-texte">Optionnel : choisis jusqu’à 2 raccourcis à afficher sur l’accueil général.</small>
-                <div style="margin:10px 0 14px">${(()=>{const selection=new Set(lireRaccourcisAccueil());return optionsRaccourcisAccueil().map(x=>`<label style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid rgba(0,0,0,.06)"><input type="checkbox" data-raccourci-profil value="${echapperHTML(x.id)}" ${selection.has(x.id)?"checked":""} onchange="verifierRaccourcisProfil(this)" style="width:20px;height:20px"><span>${x.icone} ${echapperHTML(x.libelle)}</span></label>`).join("")})()}</div>
+                <div style="margin:10px 0 14px">${(()=>{const selection=new Set(lireRaccourcisAccueil());return optionsRaccourcisAccueil().map(x=>`<label style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid rgba(0,0,0,.06)"><input type="checkbox" data-raccourci-profil value="${echapperHTML(x.id)}" ${selection.has(x.id)?"checked":""} onchange="verifierRaccourcisProfil(this)" style="width:20px;height:20px"><span style="display:flex;align-items:center;gap:9px">${x.logo?`<img src="${echapperHTML(x.logo)}" alt="" style="width:32px;height:32px;border-radius:8px;object-fit:cover">`:`<span>${x.icone}</span>`}<span>${echapperHTML(x.libelle)}</span></span></label>`).join("")})()}</div>
                 <button class="profil-bouton-principal" type="button" onclick="enregistrerRaccourcisProfil()">Enregistrer mes raccourcis</button>
             </section>
 
@@ -7737,12 +7737,25 @@ function utilisateurPeutAccederPharmacie() {
 }
 
 const CLE_RACCOURCIS_ACCUEIL = "cis_raccourcis_accueil_v1";
+const LOGO_MYSTART_PLUS = "https://play-lh.googleusercontent.com/RATU7ev1XJti8LtsejZukgROlQo8hFvAsFhnqb4eFnLK-AJthxL1czRbhK58EI9dIbDacGlkV-fZoJNIMOqjEng=w240-h480";
+function ouvrirMyStartPlus(){
+ const android=/Android/i.test(navigator.userAgent||"");
+ const ios=/iPhone|iPad|iPod/i.test(navigator.userAgent||"");
+ if(android){
+  const fallback=encodeURIComponent("https://play.google.com/store/apps/details?id=com.systel.mystartplus");
+  window.location.href=`intent://#Intent;package=com.systel.mystartplus;S.browser_fallback_url=${fallback};end`;
+  return;
+ }
+ if(ios){window.location.href="https://apps.apple.com/fr/app/mystart/id1388374447";return;}
+ window.open("https://play.google.com/store/apps/details?id=com.systel.mystartplus","_blank","noopener");
+}
 function optionsRaccourcisAccueil(){
  const o=[];
  if(utilisateurAPermission("acces_espace_caserne")){o.push({id:"caserne",libelle:"Espace Caserne",icone:"🏠",action:"afficherEspaceCaserne()"});o.push({id:"agenda",libelle:"Agenda général",icone:"📅",action:"afficherAgendaGeneralCaserne()"});}
  if(utilisateurPeutAccederPharmacie())o.push({id:"pharmacie",libelle:"Espace Pharmacie",icone:"💊",action:"afficherAccueil()"});
  o.push({id:"equipe",libelle:"Espace équipe",icone:"🚒",action:"afficherEspaceGarde()"});
  for(const x of obtenirOngletsPharmacieAccessibles())o.push({id:"pharma_"+x.libelle.toLowerCase().replace(/[^a-z0-9]+/g,"_"),libelle:x.libelle,icone:x.icone,action:x.action});
+ o.push({id:"mystartplus",libelle:"mySTART+",icone:"",logo:LOGO_MYSTART_PLUS,action:"ouvrirMyStartPlus()"});
  return o;
 }
 function lireRaccourcisAccueil(){try{const k=CLE_RACCOURCIS_ACCUEIL+"_"+String(profilUtilisateurConnecte?.id||"");const v=JSON.parse(localStorage.getItem(k)||"[]");return Array.isArray(v)?v.slice(0,2):[]}catch(_){return []}}
@@ -7752,7 +7765,7 @@ function enregistrerRaccourcisProfil(){
  try{const k=CLE_RACCOURCIS_ACCUEIL+"_"+String(profilUtilisateurConnecte?.id||"");localStorage.setItem(k,JSON.stringify(cases.map(x=>x.value)));alert("Raccourcis enregistrés.")}catch(_){alert("Impossible d’enregistrer les raccourcis.")}
 }
 function verifierRaccourcisProfil(el){const c=[...document.querySelectorAll("[data-raccourci-profil]:checked")];if(c.length>2){el.checked=false;alert("Tu peux choisir au maximum 2 raccourcis.")}}
-function htmlRaccourcisAccueil(){const ids=lireRaccourcisAccueil(),opts=optionsRaccourcisAccueil();const a=ids.map(id=>opts.find(x=>x.id===id)).filter(Boolean);if(!a.length)return "";return `<section class="raccourcis-accueil-rapides">${a.map(x=>`<button type="button" onclick="${x.action}"><span>${x.icone}</span><strong>${echapperHTML(x.libelle)}</strong></button>`).join("")}</section>`}
+function htmlRaccourcisAccueil(){const ids=lireRaccourcisAccueil(),opts=optionsRaccourcisAccueil();const a=ids.map(id=>opts.find(x=>x.id===id)).filter(Boolean);if(!a.length)return "";return `<section class="raccourcis-accueil-rapides">${a.map(x=>`<button type="button" onclick="${x.action}">${x.logo?`<img class="raccourci-logo-appli" src="${echapperHTML(x.logo)}" alt="Logo ${echapperHTML(x.libelle)}">`:`<span>${x.icone}</span>`}<strong>${echapperHTML(x.libelle)}</strong></button>`).join("")}</section>`}
 
 function afficherPortailPrincipal() {
     initialiserStyleConnexion();
@@ -9746,7 +9759,7 @@ function initialiserStylePortailCIS() {
             display: grid;
             gap: 12px;
         }
-        .raccourcis-accueil-rapides{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:14px 0 12px}.raccourcis-accueil-rapides button{min-height:64px;border:1px solid #dde2e5;border-radius:15px;background:#fff;display:flex;align-items:center;gap:10px;padding:12px 14px;text-align:left;box-shadow:0 3px 12px rgba(0,0,0,.06)}.raccourcis-accueil-rapides button span{font-size:23px}.raccourcis-accueil-rapides button strong{font-size:14px;color:#20272b}
+        .raccourcis-accueil-rapides{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:14px 0 12px}.raccourcis-accueil-rapides button{min-height:64px;border:1px solid #dde2e5;border-radius:15px;background:#fff;display:flex;align-items:center;gap:10px;padding:12px 14px;text-align:left;box-shadow:0 3px 12px rgba(0,0,0,.06)}.raccourcis-accueil-rapides button span{font-size:23px}.raccourcis-accueil-rapides button strong{font-size:14px;color:#20272b}.raccourcis-accueil-rapides .raccourci-logo-appli{width:38px;height:38px;border-radius:10px;object-fit:cover;flex:0 0 38px}
 
         .portail-cis-carte {
             width: 100%;
