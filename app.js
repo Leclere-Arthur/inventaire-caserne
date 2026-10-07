@@ -776,6 +776,14 @@ function retourPagePrecedente() {
     actualiserInterfaceBureau();
     synchroniserApparencePWACaserne();
 
+    // Si le retour restaure le portail principal depuis l'historique HTML,
+    // la carte de garde mémorisée peut être ancienne. On la recharge aussitôt.
+    if (document.getElementById("carte-garde-accueil")) {
+        requestAnimationFrame(() =>
+            requestAnimationFrame(() => void actualiserCarteGardeAccueil())
+        );
+    }
+
     requestAnimationFrame(() => {
         window.scrollTo({
             left: precedent.scrollX || 0,
