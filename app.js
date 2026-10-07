@@ -930,7 +930,7 @@ let minuteurVerificationMiseAJour =
  * Elle permet de détecter une nouvelle version même si seul app.js change.
  */
 const VERSION_APPLICATION_JS =
-    "2026-10-07-mystart-raccourci-v22";
+    "2026-10-07-annuaire-centre-v23";
 
 async function verifierNouvelleVersionAppJs() {
 
@@ -7737,25 +7737,12 @@ function utilisateurPeutAccederPharmacie() {
 }
 
 const CLE_RACCOURCIS_ACCUEIL = "cis_raccourcis_accueil_v1";
-const LOGO_MYSTART_PLUS = "https://play-lh.googleusercontent.com/RATU7ev1XJti8LtsejZukgROlQo8hFvAsFhnqb4eFnLK-AJthxL1czRbhK58EI9dIbDacGlkV-fZoJNIMOqjEng=w240-h480";
-function ouvrirMyStartPlus(){
- const android=/Android/i.test(navigator.userAgent||"");
- const ios=/iPhone|iPad|iPod/i.test(navigator.userAgent||"");
- if(android){
-  const fallback=encodeURIComponent("https://play.google.com/store/apps/details?id=com.systel.mystartplus");
-  window.location.href=`intent://#Intent;package=com.systel.mystartplus;S.browser_fallback_url=${fallback};end`;
-  return;
- }
- if(ios){window.location.href="https://apps.apple.com/fr/app/mystart/id1388374447";return;}
- window.open("https://play.google.com/store/apps/details?id=com.systel.mystartplus","_blank","noopener");
-}
 function optionsRaccourcisAccueil(){
  const o=[];
  if(utilisateurAPermission("acces_espace_caserne")){o.push({id:"caserne",libelle:"Espace Caserne",icone:"🏠",action:"afficherEspaceCaserne()"});o.push({id:"agenda",libelle:"Agenda général",icone:"📅",action:"afficherAgendaGeneralCaserne()"});}
  if(utilisateurPeutAccederPharmacie())o.push({id:"pharmacie",libelle:"Espace Pharmacie",icone:"💊",action:"afficherAccueil()"});
  o.push({id:"equipe",libelle:"Espace équipe",icone:"🚒",action:"afficherEspaceGarde()"});
  for(const x of obtenirOngletsPharmacieAccessibles())o.push({id:"pharma_"+x.libelle.toLowerCase().replace(/[^a-z0-9]+/g,"_"),libelle:x.libelle,icone:x.icone,action:x.action});
- o.push({id:"mystartplus",libelle:"mySTART+",icone:"",logo:LOGO_MYSTART_PLUS,action:"ouvrirMyStartPlus()"});
  return o;
 }
 function lireRaccourcisAccueil(){try{const k=CLE_RACCOURCIS_ACCUEIL+"_"+String(profilUtilisateurConnecte?.id||"");const v=JSON.parse(localStorage.getItem(k)||"[]");return Array.isArray(v)?v.slice(0,2):[]}catch(_){return []}}
@@ -7960,6 +7947,12 @@ function ouvrirMenuPrincipal() {
             icone: "▤",
             action: "afficherEspaceCaserne()"
         });
+        caserne.push({
+            libelle: "Annuaire du centre",
+            aide: "Coordonnées des personnels du centre",
+            icone: "📇",
+            action: "afficherAnnuaireCentre()"
+        });
 
         for (const rubrique of obtenirRubriquesCaserne().filter(utilisateurPeutVoirRubriqueCaserne)) {
             const presentation = obtenirPresentationRubriqueCaserne(rubrique[0]);
@@ -8031,6 +8024,7 @@ function ouvrirMenuCaserne() {
             </header>
             <button type="button" class="caserne-retour-actualites" onclick="afficherActualitesCaserne()">← Retour aux informations</button>
             <section class="caserne-menu-liste-simple">
+                ${carteMenuNavigationSimple({libelle:"Annuaire du centre", aide:"Coordonnées des personnels du centre", icone:"📇", action:"afficherAnnuaireCentre()"})}
                 ${rubriques.map(r => {
                     const presentation = obtenirPresentationRubriqueCaserne(r[0]);
                     return `<button type="button" onclick="afficherRubriqueCaserne('${r[0]}')">
@@ -8044,6 +8038,93 @@ function ouvrirMenuCaserne() {
     actualiserInterfaceBureau();
     window.scrollTo({top:0, behavior:"auto"});
 }
+
+
+function initialiserStyleAnnuaireCentre() {
+    if (document.getElementById("style-annuaire-centre-v23")) return;
+    const style = document.createElement("style");
+    style.id = "style-annuaire-centre-v23";
+    style.textContent = `
+      .annuaire-centre-liste{display:grid;gap:10px;margin-top:14px}
+      .annuaire-centre-personne{width:100%;border:1px solid #eadbd7;background:#fff;border-radius:16px;padding:15px 16px;text-align:left;display:flex;align-items:center;gap:12px;box-shadow:0 3px 12px rgba(70,35,30,.06);cursor:pointer;color:#2b1716}
+      .annuaire-centre-avatar{width:44px;height:44px;border-radius:50%;background:#f1e4e1;display:grid;place-items:center;font-weight:900;font-size:17px;flex:0 0 auto}
+      .annuaire-centre-personne strong{display:block;font-size:16px}.annuaire-centre-personne small{display:block;margin-top:3px;color:#7d6965}.annuaire-centre-personne .fleche{margin-left:auto;font-size:24px;color:#a68d87}
+      .annuaire-centre-fiche{background:#fff;border:1px solid #eadbd7;border-radius:18px;padding:18px;margin-top:14px;box-shadow:0 4px 16px rgba(70,35,30,.07)}
+      .annuaire-centre-fiche h2{margin:0 0 16px;font-size:23px}.annuaire-centre-info{padding:12px 0;border-bottom:1px solid #eee4e1}.annuaire-centre-info:last-of-type{border-bottom:0}
+      .annuaire-centre-info small{display:block;color:#806e69;font-weight:800;text-transform:uppercase;font-size:10px;letter-spacing:.07em;margin-bottom:4px}.annuaire-centre-info strong,.annuaire-centre-info a{font-size:16px;color:#2b1716;text-decoration:none;overflow-wrap:anywhere}
+      .annuaire-centre-appeler{width:100%;border:0;border-radius:14px;background:#197348;color:#fff;font-weight:900;font-size:16px;padding:15px;margin-top:18px;cursor:pointer}
+      .annuaire-centre-recherche{width:100%;box-sizing:border-box;border:1px solid #d9cbc7;border-radius:14px;padding:13px 14px;font:inherit;background:#fff;color:#2b1716;margin-top:8px}
+    `;
+    document.head.appendChild(style);
+}
+
+let annuaireCentreUtilisateurs = [];
+
+async function chargerAnnuaireCentre() {
+    const supabase = obtenirClientSupabase();
+    if (!supabase || !navigator.onLine) throw new Error("Connexion internet nécessaire pour charger l’annuaire.");
+    const {data, error} = await supabase.rpc("lister_annuaire_centre");
+    if (error) throw error;
+    return (data || []).filter(u => u.actif !== false).sort((a,b) =>
+        `${a.nom || ""} ${a.prenom || ""}`.localeCompare(`${b.nom || ""} ${b.prenom || ""}`, "fr", {sensitivity:"base"})
+    );
+}
+
+function initialesAnnuaire(u) {
+    return `${String(u.prenom || "").trim().charAt(0)}${String(u.nom || "").trim().charAt(0)}`.toUpperCase() || "?";
+}
+
+function rendreListeAnnuaireCentre(filtre = "") {
+    const zone = document.getElementById("annuaire-centre-liste");
+    if (!zone) return;
+    const q = String(filtre || "").trim().toLocaleLowerCase("fr");
+    const liste = annuaireCentreUtilisateurs.filter(u => !q || `${u.prenom || ""} ${u.nom || ""}`.toLocaleLowerCase("fr").includes(q));
+    zone.innerHTML = liste.length ? liste.map(u => `
+      <button type="button" class="annuaire-centre-personne" onclick="afficherFicheAnnuaireCentre('${echapperHTML(String(u.id))}')">
+        <span class="annuaire-centre-avatar">${echapperHTML(initialesAnnuaire(u))}</span>
+        <span><strong>${echapperHTML([u.prenom,u.nom].filter(Boolean).join(" ") || "Utilisateur")}</strong><small>Voir les coordonnées</small></span><span class="fleche">›</span>
+      </button>`).join("") : '<div class="caserne-vide"><strong>Aucun utilisateur trouvé</strong></div>';
+}
+
+async function afficherAnnuaireCentre() {
+    if (!utilisateurAPermission("acces_espace_caserne")) { alert("Tu n’as pas accès à l’Espace Caserne."); return; }
+    initialiserStyleEspaceCaserne(); initialiserStyleAnnuaireCentre();
+    document.getElementById("app").innerHTML = `
+      <main class="page caserne-shell caserne-public-simple navigation-fixe-page">
+        <header class="caserne-top caserne-top-simple"><small>ESPACE CASERNE</small><h1>Annuaire du centre</h1></header>
+        <button type="button" class="caserne-retour-actualites" onclick="afficherActualitesCaserne()">← Retour aux informations</button>
+        <input class="annuaire-centre-recherche" type="search" placeholder="Rechercher un nom…" oninput="rendreListeAnnuaireCentre(this.value)">
+        <section id="annuaire-centre-liste" class="annuaire-centre-liste"><div class="caserne-vide"><strong>Chargement…</strong></div></section>
+      </main>${navigationCaserne("caserne")}`;
+    actualiserInterfaceBureau(); window.scrollTo({top:0,behavior:"auto"});
+    try { annuaireCentreUtilisateurs = await chargerAnnuaireCentre(); rendreListeAnnuaireCentre(); }
+    catch (e) { const z=document.getElementById("annuaire-centre-liste"); if(z) z.innerHTML=`<div class="caserne-vide"><strong>Annuaire indisponible</strong><p>${echapperHTML(e?.message || "Chargement impossible.")}</p></div>`; }
+}
+
+function afficherFicheAnnuaireCentre(id) {
+    const u = annuaireCentreUtilisateurs.find(x => String(x.id) === String(id)); if (!u) return;
+    const nom = [u.prenom,u.nom].filter(Boolean).join(" ") || "Utilisateur";
+    const tel = String(u.telephone || "").trim(); const email = String(u.email_contact || "").trim(); const adresse = String(u.adresse || "").trim();
+    const telLien = tel.replace(/[^+0-9]/g, "");
+    document.getElementById("app").innerHTML = `
+      <main class="page caserne-shell caserne-public-simple navigation-fixe-page">
+        <header class="caserne-top caserne-top-simple"><small>ANNUAIRE DU CENTRE</small><h1>Profil</h1></header>
+        <button type="button" class="caserne-retour-actualites" onclick="afficherAnnuaireCentre()">← Retour à l’annuaire</button>
+        <section class="annuaire-centre-fiche">
+          <h2>${echapperHTML(nom)}</h2>
+          <div class="annuaire-centre-info"><small>Prénom</small><strong>${echapperHTML(u.prenom || "Non renseigné")}</strong></div>
+          <div class="annuaire-centre-info"><small>Nom</small><strong>${echapperHTML(u.nom || "Non renseigné")}</strong></div>
+          <div class="annuaire-centre-info"><small>Adresse</small><strong>${echapperHTML(adresse || "Non renseignée")}</strong></div>
+          <div class="annuaire-centre-info"><small>Adresse mail</small>${email ? `<a href="mailto:${echapperHTML(email)}">${echapperHTML(email)}</a>` : '<strong>Non renseignée</strong>'}</div>
+          <div class="annuaire-centre-info"><small>Numéro de téléphone</small>${tel ? `<a href="tel:${echapperHTML(telLien)}">${echapperHTML(tel)}</a>` : '<strong>Non renseigné</strong>'}</div>
+          ${tel ? `<button type="button" class="annuaire-centre-appeler" onclick="window.location.href='tel:${echapperHTML(telLien)}'">Appeler</button>` : ""}
+        </section>
+      </main>${navigationCaserne("caserne")}`;
+    actualiserInterfaceBureau(); window.scrollTo({top:0,behavior:"auto"});
+}
+window.afficherAnnuaireCentre=afficherAnnuaireCentre;
+window.afficherFicheAnnuaireCentre=afficherFicheAnnuaireCentre;
+window.rendreListeAnnuaireCentre=rendreListeAnnuaireCentre;
 
 function formaterDateHeureCaserne(valeur) {
     if (!valeur) return "Date à définir";
