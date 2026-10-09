@@ -7777,6 +7777,7 @@ function afficherPortailPrincipal() {
             <section class="portail-cis-espaces">
                 ${peutCaserne ? `<button type="button" class="portail-cis-carte portail-cis-caserne" onclick="afficherEspaceCaserne()"><span class="portail-cis-titre">Espace Caserne</span><span class="portail-cis-fleche">›</span></button>` : ""}
                 ${peutPharmacie ? `<button type="button" class="portail-cis-carte portail-cis-pharmacie" onclick="afficherAccueil()"><span class="portail-cis-titre">Espace Pharmacie</span><span class="portail-cis-fleche">›</span></button>` : ""}
+                ${utilisateurAccesAdministratifCentral() ? `<button type="button" class="portail-cis-carte" style="background:#303c46;color:white" onclick="afficherAdministratifCaserne()"><span class="portail-cis-titre">⚙️ Administratif</span><span class="portail-cis-fleche">›</span></button>` : ""}
             </section>
             ${htmlRaccourcisAccueil()}
             <section id="carte-garde-accueil" class="garde-accueil-zone">
@@ -9562,26 +9563,49 @@ async function afficherActualitesCaserne(synchronisationDejaFaite = false) {
     window.scrollTo({top:0, behavior:"auto"});
 }
 
+function utilisateurAccesAdministratifCentral() {
+    return utilisateurEstSPVAdmin() || [
+        "acces_admin_menage", "acces_admin_heures", "acces_sport_admin",
+        "acces_manoeuvre_admin", "acces_casernement_admin", "acces_reunion_admin",
+        "acces_amical_admin", "acces_comite_centre_admin",
+        "acces_administratif_admin", "acces_entretien_individuel_admin",
+        "acces_notifications", "acces_gestion_utilisateurs"
+    ].some(permission => utilisateurAPermission(permission));
+}
+
 function afficherAdministratifCaserne() {
-    const peutUtilisateurs = utilisateurEstSPVAdmin() && utilisateurAPermission("acces_gestion_utilisateurs");
-    const peutNotifications = utilisateurAPermission("acces_notifications") || utilisateurEstSPVAdmin();
-    const peutPharmacie = utilisateurAPermission("acces_administration");
-    const peutArchives = utilisateurAPermission("acces_archives");
-
+    if (!utilisateurAccesAdministratifCentral()) {
+        alert("Accès non autorisé.");
+        return;
+    }
+    initialiserStyleEspaceCaserne();
+    const admin = utilisateurEstSPVAdmin();
+    const autorise = p => admin || utilisateurAPermission(p);
     const outils = [
-        peutNotifications ? `<button type="button" onclick="afficherNotificationsAdministration()"><strong>Notifications</strong><span>Créer et envoyer une notification</span></button>` : "",
-        peutPharmacie ? `<button type="button" onclick="ouvrirAdministration()"><strong>Administration pharmacie</strong><span>Matériel, catégories, réapprovisionnement et historique</span></button>` : "",
-        peutArchives ? `<button type="button" onclick="afficherArchivesHistorique()"><strong>Archives</strong><span>Consulter les historiques archivés</span></button>` : ""
-    ].filter(Boolean);
-
+        ["🧹", "Ménage", "afficherAdminMenageEquipe()", autorise("acces_admin_menage")],
+        ["🚒", "Inventaires", "afficherAdminInventairesEquipe()", autorise("acces_admin_menage")],
+        ["⏱️", "Historique des heures", "afficherHistoriqueHeuresEquipe()", autorise("acces_admin_heures")],
+        ["🏃", "Sport Admin", "afficherRubriqueCaserne('sport')", autorise("acces_sport_admin")],
+        ["🚒", "Manœuvres Admin", "afficherRubriqueCaserne('manoeuvre')", autorise("acces_manoeuvre_admin")],
+        ["🏠", "Casernement Admin", "afficherRubriqueCaserne('casernement')", autorise("acces_casernement_admin")],
+        ["📅", "Réunions Admin", "afficherRubriqueCaserne('reunion')", autorise("acces_reunion_admin")],
+        ["🤝", "Amicale Admin", "afficherRubriqueCaserne('amical')", autorise("acces_amical_admin")],
+        ["🏛️", "Comité de centre Admin", "afficherRubriqueCaserne('comite_centre')", autorise("acces_comite_centre_admin")],
+        ["📁", "Administratif caserne", "afficherRubriqueCaserne('administratif')", false],
+        ["👤", "Entretiens individuels Admin", "afficherRubriqueCaserne('entretien_individuel')", autorise("acces_entretien_individuel_admin")],
+        ["🔔", "Notifications", "afficherNotificationsAdministration()", autorise("acces_notifications")],
+        ["👥", "Gestion des utilisateurs et rôles", "afficherGestionUtilisateurs()", admin && autorise("acces_gestion_utilisateurs")],
+        ["🛡️", "Administration application", "afficherMenuAdministrateurAppli()", admin]
+    ].filter(x=>x[3]);
     document.getElementById("app").innerHTML = `
         <main class="caserne-shell caserne-administratif-page">
-            <header class="caserne-top"><small>ESPACE CASERNE</small><h1>Administratif</h1><p>Gestion de l'application et de la caserne</p></header>
+            <header class="caserne-top"><small>CIS LE CHESNE</small><h1>⚙️ Administratif</h1><p>Toutes les administrations, sauf Pharmacie Admin</p></header>
             <section class="caserne-admin-centre">
-                ${outils.length ? outils.join("") : `<div class="caserne-vide"><strong>Aucun outil administratif autorisé</strong><p>Les outils apparaissent selon les permissions de ton rôle.</p></div>`}
+                ${outils.map(([icone,libelle,action])=>`<button type="button" onclick="${action}"><strong>${icone} ${echapperHTML(libelle)}</strong><span>Ouvrir ›</span></button>`).join("")}
             </section>
-        </main>${navigationCaserne("caserne")}`;
+        </main>${navigationPrincipale("", "accueil")}`;
     actualiserInterfaceBureau();
+    window.scrollTo({top:0,behavior:"auto"});
 }
 
 async function afficherRubriqueCaserne(type) {
@@ -21377,7 +21401,7 @@ function actualiserInterfaceBureau() {
                 ${groupe("Activités", ["sport","manoeuvre","casernement"])}
                 ${groupe("Vie de la caserne", ["reunion","amical","comite_centre"])}
                 ${groupe("Personnel", ["entretien_individuel"])}
-                ${groupe("Gestion", ["administratif"])}
+                
                 <div class="bureau-nav-separateur">Autres espaces</div>
                 ${bouton("pharmacie", "Espace Pharmacie", "afficherAccueil()")}
             </nav>
@@ -21902,14 +21926,16 @@ function afficherEspaceGarde(){
           <button class="garde-menu-carte" onclick="afficherMenageEspaceGarde()"><span class="ico">🧹</span><span><strong>Ménage</strong></span><b class="fleche">›</b></button>
           <button class="garde-menu-carte" onclick="afficherInventaireVehiculeEspaceGarde()"><span class="ico">🚒</span><span><strong>Inventaire véhicule</strong></span><b class="fleche">›</b></button>
           <button class="garde-menu-carte" onclick="afficherPlanningEspaceGarde()"><span class="ico">📅</span><span><strong>Planning</strong></span><b class="fleche">›</b></button>
-          ${utilisateurAPermission("acces_admin_menage")?`<button class="garde-menu-carte" onclick="afficherAdminMenageEquipe()"><span class="ico">⚙️</span><span><strong>Administration ménage</strong></span><b class="fleche">›</b></button>`:""}
-          ${utilisateurAPermission("acces_admin_menage")?`<button class="garde-menu-carte" onclick="afficherAdminInventairesEquipe()"><span class="ico">📋</span><span><strong>Administration inventaires</strong></span><b class="fleche">›</b></button>`:""}
           <button class="garde-menu-carte" onclick="afficherEnregistrerHeuresEquipe()"><span class="ico">⏱️</span><span><strong>Enregistrer des heures</strong></span><b class="fleche">›</b></button>
-          ${utilisateurAPermission("acces_admin_heures")?`<button class="garde-menu-carte" onclick="afficherHistoriqueHeuresEquipe()"><span class="ico">📊</span><span><strong>Historique des heures</strong></span><b class="fleche">›</b></button>`:""}
+
         </div>
       </main>${navigationPrincipale("","accueil")}`;
     actualiserInterfaceBureau();window.scrollTo({top:0,behavior:"auto"});
 }
+
+function afficherAdministrationEquipe(){ afficherAdministratifCaserne(); }
+
+window.afficherAdministrationEquipe=afficherAdministrationEquipe;
 
 async function afficherMenageEspaceGarde(){
     initialiserStyleEspaceGardeUtilisateur();
@@ -22239,7 +22265,7 @@ function htmlPlanMenageHistorique(zones){
 async function afficherAdminMenageEquipe(){
     if(!utilisateurAPermission("acces_admin_menage")){alert("Accès non autorisé.");return}
     initialiserStyleEspaceGardeUtilisateur();
-    document.getElementById("app").innerHTML=`<main class="garde-section"><button class="retour-button" onclick="afficherEspaceGarde()">← Espace équipe</button><h1>Administration ménage</h1><div id="admin-menage-chargement" class="garde-planning-attente">Chargement…</div></main>${navigationPrincipale("","accueil")}`;
+    document.getElementById("app").innerHTML=`<main class="garde-section"><button class="retour-button" onclick="afficherAdministratifCaserne()">← Administratif</button><h1>Administration ménage</h1><div id="admin-menage-chargement" class="garde-planning-attente">Chargement…</div></main>${navigationPrincipale("","accueil")}`;
     actualiserInterfaceBureau();
     const supabase=obtenirClientSupabase();
     const [hist,membres]=await Promise.all([
@@ -22258,7 +22284,7 @@ async function afficherAdminMenageEquipe(){
     const totalPresences=[...presence.values()].reduce((a,b)=>a+b,0);
     const personnes=[...presence.keys()];
     document.getElementById("app").innerHTML=`<main class="garde-section">
-      <button class="retour-button" onclick="afficherEspaceGarde()">← Espace équipe</button><h1>Administration ménage</h1>
+      <button class="retour-button" onclick="afficherAdministratifCaserne()">← Administratif</button><h1>Administration ménage</h1>
       <h2 class="garde-sous-titre">Dernier nettoyage par zone</h2>
       ${zoneStats.map(s=>`<div class="garde-stat-ligne"><strong>${echapperHTML(s.z)}</strong><small class="${classeDateMenage(s.date)}">${s.date?formaterDateMenageLongue(s.date):"Jamais"}</small></div>`).join("")}
       <h2 class="garde-sous-titre">Présences</h2>
@@ -22297,7 +22323,7 @@ function inventairesAdminAuteur(r){
 async function afficherAdminInventairesEquipe(){
  if(!utilisateurAPermission('acces_admin_menage')){alert('Accès non autorisé.');return;}
  initialiserStyleEspaceGardeUtilisateur();
- document.getElementById('app').innerHTML=`<main class="garde-section"><button class="retour-button" onclick="afficherEspaceGarde()">← Espace équipe</button><h1>Administration inventaires</h1><div id="admin-inventaires-chargement" class="garde-planning-attente">Chargement…</div></main>${navigationPrincipale('','accueil')}`;
+ document.getElementById('app').innerHTML=`<main class="garde-section"><button class="retour-button" onclick="afficherAdministratifCaserne()">← Administratif</button><h1>Administration inventaires</h1><div id="admin-inventaires-chargement" class="garde-planning-attente">Chargement…</div></main>${navigationPrincipale('','accueil')}`;
  actualiserInterfaceBureau();
  const sb=obtenirClientSupabase();
  if(!sb){document.getElementById('admin-inventaires-chargement').textContent='Connexion indisponible.';return;}
@@ -22309,9 +22335,9 @@ async function afficherAdminInventairesEquipe(){
  if(!utilisateursEspaceGarde.length){try{utilisateursEspaceGarde=await chargerUtilisateursEspaceGarde();}catch(e){console.warn('Noms des contrôleurs indisponibles',e);}}
  if(!document.getElementById('admin-inventaires-chargement'))return;
  const vehicules=[...new Set(inventairesAdminCache.map(r=>r.vehicule_nom).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'fr'));
- document.getElementById('app').innerHTML=`<main class="garde-section"><button class="retour-button" onclick="afficherEspaceGarde()">← Espace équipe</button><h1>Administration inventaires</h1>
+ document.getElementById('app').innerHTML=`<main class="garde-section"><button class="retour-button" onclick="afficherAdministratifCaserne()">← Administratif</button><h1>Administration inventaires</h1>
  <h2 class="garde-sous-titre">Dernier inventaire par véhicule</h2>
- ${vehicules.map(v=>{const r=inventairesAdminCache.find(x=>x.vehicule_nom===v);return `<div class="garde-stat-ligne"><strong>${echapperHTML(v)}</strong><small>${inventairesAdminDate(r.created_at)}</small></div>`}).join('')||'<div class="garde-stat-ligne">Aucun inventaire enregistré.</div>'}
+ ${vehicules.map(v=>{const r=inventairesAdminCache.find(x=>x.vehicule_nom===v);return `<div class="garde-stat-ligne"><strong>${echapperHTML(v)}</strong><small class="${classeDateMenage(r.created_at)}">${inventairesAdminDate(r.created_at)}</small></div>`}).join('')||'<div class="garde-stat-ligne">Aucun inventaire enregistré.</div>'}
  <h2 class="garde-sous-titre">Contrôles réalisés</h2>
  ${(()=>{const counts=new Map();inventairesAdminCache.forEach(r=>{const id=String(r.controle_par||'');counts.set(id,(counts.get(id)||0)+1)});return [...counts.entries()].sort((a,b)=>b[1]-a[1]).map(([id,n])=>{const r=inventairesAdminCache.find(x=>String(x.controle_par||'')===id);return `<div class="garde-stat-ligne garde-stat-ligne-flex"><div><strong>${echapperHTML(inventairesAdminAuteur(r))}</strong><small>${n} inventaire${n>1?'s':''} réalisé${n>1?'s':''}</small></div></div>`}).join('')})()||'<div class="garde-stat-ligne">Aucun contrôle enregistré.</div>'}
  <h2 class="garde-sous-titre">Historique</h2><div class="garde-admin-card"><label for="inventaires-admin-filtre"><strong>Véhicule</strong></label><select id="inventaires-admin-filtre" class="heures-input" onchange="filtrerAdminInventairesEquipe()"><option value="">Tous les véhicules</option>${vehicules.map(v=>`<option value="${echapperHTML(v)}">${echapperHTML(v)}</option>`).join('')}</select></div>
@@ -22322,7 +22348,7 @@ function filtrerAdminInventairesEquipe(){
  const liste=document.getElementById('inventaires-admin-liste');if(!liste)return;
  const filtre=document.getElementById('inventaires-admin-filtre')?.value||'';
  const rows=inventairesAdminCache.filter(r=>!filtre||r.vehicule_nom===filtre);
- liste.innerHTML=rows.map(r=>{const materiels=inventairesAdminMateriels(r),bon=materiels.filter(m=>m.etat==='bon').length,surv=materiels.filter(m=>m.etat==='a_surveiller').length,hs=materiels.filter(m=>m.etat==='hs').length;return `<div class="garde-admin-card"><button type="button" onclick="afficherDetailInventaireAdminEquipe('${echapperHTML(String(r.id))}')"><strong>${echapperHTML(inventairesAdminNom(r))} · ${echapperHTML(r.vehicule_nom||'Véhicule')}</strong><br><small>${inventairesAdminDate(r.created_at)} · ${echapperHTML(inventairesAdminAuteur(r))}</small><br><small>${inventairesAdminZones(r).length} zone(s) · ${bon} Bon · ${surv} À surveiller · ${hs} HS</small></button></div>`}).join('')||'<div class="garde-stat-ligne">Aucun inventaire pour ce véhicule.</div>';
+ liste.innerHTML=rows.map(r=>{const materiels=inventairesAdminMateriels(r),bon=materiels.filter(m=>m.etat==='bon').length,surv=materiels.filter(m=>m.etat==='a_surveiller').length,hs=materiels.filter(m=>m.etat==='hs').length;return `<div class="garde-admin-card"><button type="button" onclick="afficherDetailInventaireAdminEquipe('${echapperHTML(String(r.id))}')"><strong>${echapperHTML(inventairesAdminNom(r))} · ${echapperHTML(r.vehicule_nom||'Véhicule')}</strong><br><small class="${classeDateMenage(r.created_at)}">${inventairesAdminDate(r.created_at)}</small> · <small>${echapperHTML(inventairesAdminAuteur(r))}</small><br><small>${inventairesAdminZones(r).length} zone(s) · ${bon} Bon · ${surv} À surveiller · ${hs} HS</small></button></div>`}).join('')||'<div class="garde-stat-ligne">Aucun inventaire pour ce véhicule.</div>';
 }
 function afficherDetailInventaireAdminEquipe(id){
  if(!utilisateurAPermission('acces_admin_menage')){alert('Accès non autorisé.');return;}
@@ -22331,7 +22357,7 @@ function afficherDetailInventaireAdminEquipe(id){
  const zones=inventairesAdminZones(r),materiels=inventairesAdminMateriels(r);
  const etat=m=>m.etat==='bon'?'Bon':m.etat==='a_surveiller'?'À surveiller':m.etat==='hs'?'HS':'Non renseigné';
  document.getElementById('app').innerHTML=`<main class="garde-section"><button class="retour-button" onclick="afficherAdminInventairesEquipe()">← Retour</button><h1>Détail de l’inventaire</h1>
- <div class="garde-admin-card"><strong>${echapperHTML(inventairesAdminNom(r))}</strong><p><strong>Véhicule :</strong> ${echapperHTML(r.vehicule_nom||'Non renseigné')}</p><p><strong>Date :</strong> ${inventairesAdminDate(r.created_at)}</p><p><strong>Enregistré par :</strong> ${echapperHTML(inventairesAdminAuteur(r))}</p><p><strong>Zones contrôlées :</strong> ${zones.length}</p><p><strong>Matériel :</strong> ${materiels.filter(m=>m.etat==='bon').length} Bon · ${materiels.filter(m=>m.etat==='a_surveiller').length} À surveiller · ${materiels.filter(m=>m.etat==='hs').length} HS</p></div>
+ <div class="garde-admin-card"><strong>${echapperHTML(inventairesAdminNom(r))}</strong><p><strong>Véhicule :</strong> ${echapperHTML(r.vehicule_nom||'Non renseigné')}</p><p><strong>Date :</strong> <span class="${classeDateMenage(r.created_at)}">${inventairesAdminDate(r.created_at)}</span></p><p><strong>Enregistré par :</strong> ${echapperHTML(inventairesAdminAuteur(r))}</p><p><strong>Zones contrôlées :</strong> ${zones.length}</p><p><strong>Matériel :</strong> ${materiels.filter(m=>m.etat==='bon').length} Bon · ${materiels.filter(m=>m.etat==='a_surveiller').length} À surveiller · ${materiels.filter(m=>m.etat==='hs').length} HS</p></div>
  ${zones.map(z=>`<h2 class="garde-sous-titre">${echapperHTML(z.zone_nom||'Zone')}</h2>${(Array.isArray(z.materiels)?z.materiels:[]).map(m=>`<div class="garde-stat-ligne"><strong>${echapperHTML(m.nom||'Matériel')} × ${Number(m.quantite)||1}</strong><small>${echapperHTML(etat(m))}</small>${m.observation?`<p>Observation : ${echapperHTML(m.observation)}</p>`:''}</div>`).join('')||'<div class="garde-stat-ligne">Aucun matériel.</div>'}`).join('')||'<div class="garde-stat-ligne">Aucune zone enregistrée.</div>'}
  </main>${navigationPrincipale('','accueil')}`;
  actualiserInterfaceBureau();window.scrollTo({top:0,behavior:'auto'});
@@ -22376,7 +22402,7 @@ async function enregistrerHeuresEquipe(){
  try{btn.disabled=true;btn.textContent="Enregistrement…";const sb=obtenirClientSupabase();const ids=[...personnesHeuresSelectionnees];if(!ids.includes(String(profilUtilisateurConnecte?.id)))ids.unshift(String(profilUtilisateurConnecte.id));const {error}=await sb.from("heures_equipe").insert({enregistre_par:profilUtilisateurConnecte.id,motif_id:motif.value,duree_minutes:duree,details:details||null,personnes_concernees:ids});if(error)throw error;st.textContent="✓ Heures enregistrées.";st.className="garde-menage-statut ok";setTimeout(()=>afficherEspaceGarde(),700)}catch(e){st.textContent="Échec : "+(e?.message||"erreur inconnue");st.className="garde-menage-statut err"}finally{if(btn){btn.disabled=false;btn.textContent="Enregistrer les heures"}}
 }
 async function afficherHistoriqueHeuresEquipe(){
- if(!utilisateurAPermission("acces_admin_heures")){alert("Accès non autorisé.");return}initialiserStyleEspaceGardeUtilisateur();document.getElementById("app").innerHTML=`<main class="garde-section"><button class="retour-button" onclick="afficherEspaceGarde()">← Espace équipe</button><h1>Historique des heures</h1><div id="heures-hist" class="garde-planning-attente">Chargement…</div></main>${navigationPrincipale("","accueil")}`;actualiserInterfaceBureau();
+ if(!utilisateurAPermission("acces_admin_heures")){alert("Accès non autorisé.");return}initialiserStyleEspaceGardeUtilisateur();document.getElementById("app").innerHTML=`<main class="garde-section"><button class="retour-button" onclick="afficherAdministratifCaserne()">← Administratif</button><h1>Historique des heures</h1><div id="heures-hist" class="garde-planning-attente">Chargement…</div></main>${navigationPrincipale("","accueil")}`;actualiserInterfaceBureau();
  const sb=obtenirClientSupabase();const {data,error}=await sb.from("heures_equipe").select("id,created_at,duree_minutes,details,enregistre_par,personnes_concernees,motifs_heures(nom)").order("created_at",{ascending:false});if(error){document.getElementById("heures-hist").textContent="Historique indisponible : "+error.message;return}if(!utilisateursEspaceGarde.length)utilisateursEspaceGarde=await chargerUtilisateursEspaceGarde();const nom=id=>nomPersonnelHeures(utilisateursEspaceGarde.find(x=>String(x.id)===String(id)));
  document.getElementById("heures-hist").outerHTML=`<div>${(data||[]).map(r=>`<div class="garde-admin-card"><strong>${new Date(r.created_at).toLocaleString("fr-FR")}</strong><p><b>${echapperHTML(r.motifs_heures?.nom||"Motif")}</b> · ${libelleDureeHeures(r.duree_minutes)}</p><p>${(r.personnes_concernees||[]).map(id=>echapperHTML(nom(id))).join(" · ")}</p>${r.details?`<p>${echapperHTML(r.details)}</p>`:""}<small>Enregistré par ${echapperHTML(nom(r.enregistre_par))}</small></div>`).join("")||"Aucune heure enregistrée."}</div>`;
 }
