@@ -938,7 +938,7 @@ let minuteurVerificationMiseAJour =
  * Elle permet de détecter une nouvelle version même si seul app.js change.
  */
 const VERSION_APPLICATION_JS =
-    "2026-10-09-inventaire-vehicules-v36";
+    "2026-10-09-inventaire-vehicules-v37";
 
 async function verifierNouvelleVersionAppJs() {
 
@@ -21980,7 +21980,7 @@ const vehInventaireHTML = valeur => echapperHTML(String(valeur ?? ""));
 function vehInventaireStyle(){
  if(document.getElementById("veh-inventaire-style"))return;
  const st=document.createElement("style");st.id="veh-inventaire-style";
- st.textContent=`.veh-card{background:#fff;border:1px solid #e0e5e9;border-radius:15px;padding:18px;margin:13px 0;box-shadow:0 2px 9px #15202b0c}.veh-card button{cursor:pointer}.veh-action{display:block;width:100%;min-height:54px;border:0;border-radius:13px;padding:16px 18px;background:#246b4b;color:#fff;font:inherit;font-weight:800;font-size:17px;box-shadow:0 3px 10px #15202b1a}.veh-action:disabled{opacity:.45}.veh-muted{color:#68737e;font-size:14px}.veh-zone{display:flex;justify-content:space-between;align-items:center;gap:12px;width:100%;min-height:67px;text-align:left;border:2px solid #367bd7;background:#eef5ff;color:#163c71;border-radius:14px;padding:18px;margin:12px 0;font:inherit;font-size:17px;font-weight:800;cursor:pointer}.veh-zone small{font-size:13px}.veh-zone.terminee{border-color:#21965c;background:#e8f8ef;color:#12613b}.veh-etat{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:14px 0}.veh-etat label{display:flex;align-items:center;justify-content:center;gap:6px;min-height:54px;padding:9px 5px;border:1px solid #b9c8d5;border-radius:12px;background:#f8fafc;font-size:14px;font-weight:750;cursor:pointer}.veh-etat label:has(input:checked){background:#e2f0ff;border:2px solid #367bd7}.veh-etat input{width:18px;height:18px;accent-color:#246b4b}.veh-note{box-sizing:border-box;width:100%;border:1px solid #ccd5df;border-radius:10px;padding:13px;font:inherit;font-size:16px}.veh-progress{height:10px;border-radius:99px;background:#e2e8f0;overflow:hidden}.veh-progress>div{height:100%;background:#21965c}.veh-retour{margin-bottom:14px;min-height:44px}.veh-inventaire-contenu{padding-bottom:18px}`;
+ st.textContent=`.veh-card{background:#fff;border:1px solid #e0e5e9;border-radius:15px;padding:18px;margin:13px 0;box-shadow:0 2px 9px #15202b0c}.veh-card button{cursor:pointer}.veh-action{display:block;width:100%;min-height:54px;border:0;border-radius:13px;padding:16px 18px;background:#246b4b;color:#fff;font:inherit;font-weight:800;font-size:17px;box-shadow:0 3px 10px #15202b1a}.veh-action:disabled{opacity:.45}.veh-muted{color:#68737e;font-size:14px}.veh-zone{display:flex;justify-content:space-between;align-items:center;gap:12px;width:100%;min-height:67px;text-align:left;border:2px solid #367bd7;background:#eef5ff;color:#163c71;border-radius:14px;padding:18px;margin:12px 0;font:inherit;font-size:17px;font-weight:800;cursor:pointer}.veh-zone small{font-size:13px}.veh-zone.terminee{border-color:#21965c;background:#e8f8ef;color:#12613b}.veh-etat{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:14px 0}.veh-etat label{display:flex;align-items:center;justify-content:center;gap:6px;min-height:54px;padding:9px 5px;border:1px solid #b9c8d5;border-radius:12px;background:#f8fafc;font-size:14px;font-weight:750;cursor:pointer}.veh-etat label:has(input:checked){border-width:3px}.veh-etat label:has(input[value="bon"]:checked){background:#c7f3d7;border-color:#16834a;color:#07532b}.veh-etat label:has(input[value="a_surveiller"]:checked){background:#fff0a6;border-color:#d19a00;color:#6c4a00}.veh-etat label:has(input[value="hs"]:checked){background:#ffd1d1;border-color:#c52c2c;color:#821515}.veh-etat input{width:18px;height:18px;accent-color:#246b4b}.veh-note{box-sizing:border-box;width:100%;border:1px solid #ccd5df;border-radius:10px;padding:13px;font:inherit;font-size:16px}.veh-progress{height:10px;border-radius:99px;background:#e2e8f0;overflow:hidden}.veh-progress>div{height:100%;background:#21965c}.veh-retour{margin-bottom:14px;min-height:44px}.veh-inventaire-contenu{padding-bottom:18px}`;
  document.head.appendChild(st);
 }
 function vehInventaireAfficher(corps){
@@ -21997,6 +21997,8 @@ async function vehInventaireQuitter(){
 // Les navigations externes passent par la fenêtre de confirmation habituelle de l'application.
 document.addEventListener("click",async function(event){
  if(!vehInventaireSession||vehInventaireNavigationConfirmee)return;
+ // Les boutons de la fenêtre de confirmation ne sont pas une navigation.
+ if(event.target?.closest?.(".fenetre-cis-overlay, .fenetre-cis"))return;
  const btn=event.target?.closest?.("button,a");if(!btn||btn.closest(".veh-inventaire-contenu"))return;
  if(!document.querySelector(".veh-inventaire-contenu"))return;
  event.preventDefault();event.stopImmediatePropagation();
@@ -22052,7 +22054,13 @@ function vehInventaireEnregistrerZone(id){
  }
  session.controles[id]=controles;vehInventaireAfficherZones();
 }
+let vehInventaireEnregistrementEnCours=false;
 async function vehInventaireTerminer(){
+ if(vehInventaireEnregistrementEnCours)return;
+ vehInventaireEnregistrementEnCours=true;
+ try{await vehInventaireTerminerInterne();}finally{vehInventaireEnregistrementEnCours=false;}
+}
+async function vehInventaireTerminerInterne(){
  const session=vehInventaireSession;if(!session)return;
  if(vehInventaireZones.some(z=>!session.controles[z.id])){alert("Tous les coffres doivent être contrôlés.");return;}
  if(!(await afficherConfirmationCIS("Confirmer l’enregistrement définitif de l’inventaire ?")))return;
