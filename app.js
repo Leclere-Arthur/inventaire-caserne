@@ -938,7 +938,7 @@ let minuteurVerificationMiseAJour =
  * Elle permet de détecter une nouvelle version même si seul app.js change.
  */
 const VERSION_APPLICATION_JS =
-    "2026-10-09-entetes-harmonises-v33";
+    "2026-10-09-menu-unifie-neutre-v34";
 
 async function verifierNouvelleVersionAppJs() {
 
@@ -7915,96 +7915,66 @@ function carteMenuNavigationSimple(onglet) {
     </button>`;
 }
 
-function ouvrirMenuPharmacie() {
-    if (document.querySelector(".menu-navigation-pharmacie")) {
-        afficherAccueil();
-        return;
-    }
-    initialiserStyleEspaceCaserne();
-    const onglets = obtenirOngletsPharmacieAccessibles();
-
-    document.getElementById("app").innerHTML = `
-        <main class="page caserne-shell caserne-menu-page caserne-public-simple navigation-fixe-page menu-navigation-pharmacie">
-            <header class="caserne-top caserne-top-simple menu-top-pharmacie">
-                <small>ESPACE PHARMACIE</small>
-                <h1>Menu</h1>
-            </header>
-            <button type="button" class="caserne-retour-actualites" onclick="afficherAccueil()">← Retour à la pharmacie</button>
-            <section class="caserne-menu-liste-simple">
-                ${onglets.map(carteMenuNavigationSimple).join("") || '<div class="caserne-vide"><strong>Aucun onglet disponible</strong><p>Ton rôle ne donne accès à aucun outil pharmacie.</p></div>'}
-            </section>
-        </main>
-        ${navigationPrincipale("pharmacie", "pharmacie")}`;
-
-    actualiserInterfaceBureau();
-    synchroniserApparencePWACaserne();
-    window.scrollTo({top: 0, behavior: "auto"});
-}
-
-function ouvrirMenuPrincipal() {
-    if (document.querySelector(".menu-navigation-principal")) {
-        afficherPortailPrincipal();
-        return;
-    }
-    initialiserStyleEspaceCaserne();
-
+function obtenirSectionsMenuGlobal() {
     const caserne = [];
     if (utilisateurAPermission("acces_espace_caserne")) {
-        caserne.push({
-            libelle: "Fil d'actualité Caserne",
-            aide: "Voir toutes les informations récentes",
-            icone: "▤",
-            action: "afficherEspaceCaserne()"
-        });
-        caserne.push({
-            libelle: "Annuaire du centre",
-            aide: "Coordonnées des personnels du centre",
-            icone: "📇",
-            action: "afficherAnnuaireCentre()"
-        });
-
+        caserne.push({libelle:"Fil d'actualité Caserne", aide:"Informations récentes", icone:"▤", action:"afficherEspaceCaserne()"});
+        caserne.push({libelle:"Annuaire du centre", aide:"Coordonnées des personnels", icone:"📇", action:"afficherAnnuaireCentre()"});
         for (const rubrique of obtenirRubriquesCaserne().filter(utilisateurPeutVoirRubriqueCaserne)) {
             const presentation = obtenirPresentationRubriqueCaserne(rubrique[0]);
-            caserne.push({
-                libelle: rubrique[1],
-                aide: presentation.aide,
-                icone: presentation.icone,
-                action: `afficherRubriqueCaserne('${rubrique[0]}')`
-            });
+            caserne.push({libelle:rubrique[1], aide:presentation.aide, icone:presentation.icone, action:`afficherRubriqueCaserne('${rubrique[0]}')`});
         }
     }
+    const pharmacie = utilisateurPeutAccederPharmacie() ? obtenirOngletsPharmacieAccessibles() : [];
+    const sections = [
+        {titre:"Caserne", onglets:caserne},
+        {titre:"Pharmacie", onglets:pharmacie},
+        {titre:"Compte", onglets:[{libelle:"Mon profil", aide:"Compte et préférences", icone:"○", action:"ouvrirProfilDepuisPageCourante()"}]}
+    ];
+    return sections.filter(section => section.onglets.length).map(section => `
+        <div class="menu-navigation-section-titre">${section.titre}</div>
+        <section class="caserne-menu-liste-simple">${section.onglets.map(carteMenuNavigationSimple).join("")}</section>
+    `).join("");
+}
 
-    const pharmacie = obtenirOngletsPharmacieAccessibles();
+function carteMenuNavigationSimple(onglet) {
+    return `<button type="button" onclick="${onglet.action}">
+        <span class="caserne-menu-icone" aria-hidden="true">${onglet.icone}</span>
+        <span class="caserne-menu-texte"><strong>${echapperHTML(onglet.libelle)}</strong><small>${echapperHTML(onglet.aide || "")}</small></span>
+        <span class="caserne-menu-fleche" aria-hidden="true">›</span>
+    </button>`;
+}
 
+function afficherMenuGlobal(theme) {
+    const options = {
+        accueil:{classe:"menu-navigation-principal", entete:"menu-top-principal", petit:"CIS LE CHESNE", retour:"Retour à l'accueil", action:"afficherPortailPrincipal()", actif:"accueil"},
+        pharmacie:{classe:"menu-navigation-pharmacie", entete:"menu-top-pharmacie", petit:"ESPACE PHARMACIE", retour:"Retour à la pharmacie", action:"afficherAccueil()", actif:"pharmacie"},
+        caserne:{classe:"menu-navigation-caserne", entete:"menu-top-caserne", petit:"ESPACE CASERNE", retour:"Retour aux informations", action:"afficherActualitesCaserne()", actif:"caserne"}
+    };
+    const option = options[theme] || options.accueil;
+    if (document.querySelector(`.caserne-menu-page.${option.classe}`)) {
+        if (theme === "caserne") afficherActualitesCaserne();
+        else if (theme === "pharmacie") afficherAccueil();
+        else afficherPortailPrincipal();
+        return;
+    }
+    initialiserStyleEspaceCaserne();
     document.getElementById("app").innerHTML = `
-        <main class="page caserne-shell caserne-menu-page caserne-public-simple navigation-fixe-page menu-navigation-principal">
-            <header class="caserne-top caserne-top-simple menu-top-principal">
-                <small>CIS LE CHESNE</small>
-                <h1>Menu</h1>
+        <main class="page caserne-shell caserne-menu-page caserne-public-simple navigation-fixe-page ${option.classe}">
+            <header class="caserne-top caserne-top-simple ${option.entete}">
+                <small>${option.petit}</small><h1>Menu</h1>
             </header>
-            <button type="button" class="caserne-retour-actualites" onclick="afficherPortailPrincipal()">← Retour à l'accueil</button>
-
-            ${caserne.length ? `
-                <div class="menu-navigation-section-titre">Caserne</div>
-                <section class="caserne-menu-liste-simple">${caserne.map(carteMenuNavigationSimple).join("")}</section>
-            ` : ""}
-
-            ${pharmacie.length ? `
-                <div class="menu-navigation-section-titre">Pharmacie</div>
-                <section class="caserne-menu-liste-simple">${pharmacie.map(carteMenuNavigationSimple).join("")}</section>
-            ` : ""}
-
-            <div class="menu-navigation-section-titre">Compte</div>
-            <section class="caserne-menu-liste-simple">
-                ${carteMenuNavigationSimple({libelle:"Mon profil", aide:"Compte et préférences de notifications", icone:"○", action:"ouvrirProfilDepuisPageCourante()"})}
-            </section>
+            <button type="button" class="caserne-retour-actualites" onclick="${option.action}">← ${option.retour}</button>
+            ${obtenirSectionsMenuGlobal()}
         </main>
-        ${navigationPrincipale("accueil", "accueil")}`;
-
+        ${navigationPrincipale(option.actif, theme)}`;
     actualiserInterfaceBureau();
     synchroniserApparencePWACaserne();
-    window.scrollTo({top: 0, behavior: "auto"});
+    window.scrollTo({top:0,behavior:"auto"});
 }
+
+function ouvrirMenuPharmacie() { afficherMenuGlobal("pharmacie"); }
+function ouvrirMenuPrincipal() { afficherMenuGlobal("accueil"); }
 
 function obtenirPresentationRubriqueCaserne(type) {
     return ({
@@ -8019,36 +7989,7 @@ function obtenirPresentationRubriqueCaserne(type) {
     })[type] || {icone:"•", aide:"Ouvrir cette rubrique"};
 }
 
-function ouvrirMenuCaserne() {
-    if (document.querySelector(".caserne-menu-page:not(.menu-navigation-pharmacie):not(.menu-navigation-principal)")) {
-        afficherActualitesCaserne();
-        return;
-    }
-    initialiserStyleEspaceCaserne();
-    const rubriques = obtenirRubriquesCaserne().filter(utilisateurPeutVoirRubriqueCaserne);
-    document.getElementById("app").innerHTML = `
-        <main class="caserne-shell caserne-menu-page caserne-public-simple">
-            <header class="caserne-top caserne-top-simple">
-                <small>ESPACE CASERNE</small>
-                <h1>Menu</h1>
-            </header>
-            <button type="button" class="caserne-retour-actualites" onclick="afficherActualitesCaserne()">← Retour aux informations</button>
-            <section class="caserne-menu-liste-simple">
-                ${carteMenuNavigationSimple({libelle:"Annuaire du centre", aide:"Coordonnées des personnels du centre", icone:"📇", action:"afficherAnnuaireCentre()"})}
-                ${rubriques.map(r => {
-                    const presentation = obtenirPresentationRubriqueCaserne(r[0]);
-                    return `<button type="button" onclick="afficherRubriqueCaserne('${r[0]}')">
-                        <span class="caserne-menu-icone" aria-hidden="true">${presentation.icone}</span>
-                        <span class="caserne-menu-texte"><strong>${echapperHTML(r[1])}</strong><small>${echapperHTML(presentation.aide)}</small></span>
-                        <span class="caserne-menu-fleche" aria-hidden="true">›</span>
-                    </button>`;
-                }).join("") || '<div class="caserne-vide"><strong>Aucune rubrique disponible</strong><p>Ton rôle ne donne accès à aucune rubrique pour le moment.</p></div>'}
-            </section>
-        </main>${navigationCaserne("caserne")}`;
-    actualiserInterfaceBureau();
-    synchroniserApparencePWACaserne();
-    window.scrollTo({top:0, behavior:"auto"});
-}
+function ouvrirMenuCaserne() { afficherMenuGlobal("caserne"); }
 
 
 function initialiserStyleAnnuaireCentre() {
@@ -9739,6 +9680,14 @@ function initialiserStyleEspaceCaserne() {
         html.cis-menu-pharmacie body.cis-espace-caserne{background:#1f6a45!important;background-color:#1f6a45!important}
         html.cis-menu-caserne,html.cis-menu-caserne body,
         html.cis-menu-caserne body.cis-espace-caserne{background:#7d2425!important;background-color:#7d2425!important}
+        /* v34 : fond neutre uniquement dans les menus, sans modifier les pages Caserne. */
+        body:has(.caserne-menu-page) #app,
+        html.cis-espace-caserne body:has(.caserne-menu-page) #app{background:#f3f4f6!important}
+        .caserne-shell.caserne-menu-page{background:#f3f4f6!important;color:#28313b}
+        .caserne-menu-page .caserne-menu-liste-simple>button{background:#fff;border-color:#dce2e8;color:#28313b;box-shadow:0 3px 12px rgba(30,41,59,.045)}
+        .caserne-menu-page .menu-navigation-section-titre{color:#566273}
+        .caserne-menu-page .caserne-retour-actualites{color:#334155;border-color:#dce2e8;box-shadow:0 2px 9px rgba(30,41,59,.04)}
+        .menu-navigation-pharmacie .caserne-menu-liste-simple>button{border-color:#dce2e8}
         /* Menu visuel : 3 rubriques par ligne sur Accueil, Caserne et Pharmacie. */
         .caserne-menu-page .caserne-menu-liste-simple{grid-template-columns:repeat(3,minmax(0,1fr))}
         .caserne-menu-page .caserne-menu-liste-simple>button{aspect-ratio:1/1;min-height:0}
