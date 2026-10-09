@@ -126,7 +126,7 @@ function chargerThree(){
   const roof=/toit|sup[eé]rieur|pavillon/.test(s);
   const ladder=/[eé]chelle|acc[eè]s/.test(s);
   const low=/bas|inf[eé]rieur|soute|marche/.test(s);
-  const rear=/arri[eè]re|hayon/.test(s);
+  const rear=/pompe|panneau de pompe|arriere pompe|arrière pompe|devidoir|dévidoir/.test(s);
   const right=/droit|conducteur/.test(s);
   const left=/gauch|passager/.test(s);
   const cabin=/cabine|vitre|pare.brise|habitacle/.test(s);
