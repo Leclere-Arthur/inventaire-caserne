@@ -938,7 +938,7 @@ let minuteurVerificationMiseAJour =
  * Elle permet de détecter une nouvelle version même si seul app.js change.
  */
 const VERSION_APPLICATION_JS =
-    "2026-10-07-barre-systeme-menus-v28";
+    "2026-10-09-navigation-menu-v31";
 
 async function verifierNouvelleVersionAppJs() {
 
@@ -7838,17 +7838,37 @@ function utilisateurPeutVoirRubriqueCaserne(rubrique) {
     return utilisateurAPermission(rubrique[2]) || utilisateurAPermission(rubrique[3]);
 }
 
+// Navigation unique : un clic sur Menu referme le menu ouvert,
+// et les autres onglets restent accessibles même depuis le menu.
+function naviguerBarreInferieure(destination, theme) {
+    const menuOuvert = Boolean(document.querySelector(".caserne-menu-page"));
+    if (destination === "menu") {
+        if (menuOuvert) {
+            if (document.querySelector(".menu-navigation-pharmacie")) afficherAccueil();
+            else if (document.querySelector(".menu-navigation-principal")) afficherPortailPrincipal();
+            else afficherActualitesCaserne();
+        } else if (theme === "pharmacie") ouvrirMenuPharmacie();
+        else if (theme === "accueil") ouvrirMenuPrincipal();
+        else ouvrirMenuCaserne();
+        return;
+    }
+    if (destination === "accueil") afficherPortailPrincipal();
+    else if (destination === "caserne") afficherEspaceCaserne();
+    else if (destination === "pharmacie") afficherAccueil();
+    else if (destination === "profil") ouvrirProfilDepuisPageCourante();
+}
+
 function navigationPrincipale(active, theme = "caserne") {
     const classeTheme = theme === "pharmacie" ? "nav-theme-pharmacie" : theme === "accueil" ? "nav-theme-accueil" : "nav-theme-caserne";
     const actionMenu = theme === "caserne" ? "ouvrirMenuCaserne()" : theme === "pharmacie" ? "ouvrirMenuPharmacie()" : "ouvrirMenuPrincipal()";
     const peutCaserne = utilisateurAPermission("acces_espace_caserne");
     const peutPharmacie = utilisateurPeutAccederPharmacie();
     return `<nav class="caserne-nav-bas ${classeTheme}">
-        <button onclick="afficherPortailPrincipal()" class="${active === "accueil" ? "actif" : ""}"><span>⌂</span>Accueil</button>
-        ${peutCaserne ? `<button onclick="afficherEspaceCaserne()" class="${active === "caserne" ? "actif" : ""}"><span>▣</span>Caserne</button>` : ""}
-        ${peutPharmacie ? `<button onclick="afficherAccueil()" class="${active === "pharmacie" ? "actif" : ""}"><span>✚</span>Pharmacie</button>` : ""}
-        <button onclick="ouvrirProfilDepuisPageCourante()" class="${active === "profil" ? "actif" : ""}"><span>○</span>Profil</button>
-        <button onclick="${actionMenu}" class="caserne-menu-bulle" aria-label="Menu"><span>☰</span></button></nav>`;
+        <button onclick="naviguerBarreInferieure('accueil', '${theme}')" class="${active === "accueil" ? "actif" : ""}"><span>⌂</span>Accueil</button>
+        ${peutCaserne ? `<button onclick="naviguerBarreInferieure('caserne', '${theme}')" class="${active === "caserne" ? "actif" : ""}"><span>▣</span>Caserne</button>` : ""}
+        ${peutPharmacie ? `<button onclick="naviguerBarreInferieure('pharmacie', '${theme}')" class="${active === "pharmacie" ? "actif" : ""}"><span>✚</span>Pharmacie</button>` : ""}
+        <button onclick="naviguerBarreInferieure('profil', '${theme}')" class="${active === "profil" ? "actif" : ""}"><span>○</span>Profil</button>
+        <button onclick="naviguerBarreInferieure('menu', '${theme}')" class="caserne-menu-bulle" aria-label="Menu"><span>☰</span></button></nav>`;
 }
 
 
@@ -9715,7 +9735,7 @@ function initialiserStyleEspaceCaserne() {
         .caserne-separateur-passe{display:flex;align-items:center;gap:12px;margin:24px 2px 4px;color:#786f6c;font-size:12px;font-weight:900;text-transform:uppercase;letter-spacing:1px}.caserne-separateur-passe::before,.caserne-separateur-passe::after{content:"";height:1px;background:#c9c0bd;flex:1}.caserne-separateur-passe span{white-space:nowrap}.caserne-passes-au-dessus{display:grid;gap:14px;padding:0;background:transparent}.caserne-passes-au-dessus .caserne-separateur-passe{margin:8px 2px 0}.caserne-shell-actualites{min-height:100vh}.caserne-shell-actualites .caserne-top{position:sticky;top:0;z-index:40}.caserne-fil-actuel{min-height:55vh}
         .caserne-actu-passee{background:#dedbd9!important;border-color:#cbc6c3!important;color:#5d5957!important;box-shadow:none!important}.caserne-actu-passee .caserne-actu-meta span,.caserne-actu-passee .caserne-actu-meta time,.caserne-actu-passee h2,.caserne-actu-passee p,.caserne-actu-passee .caserne-reponse-contexte,.caserne-actu-passee .caserne-liste-presents>strong,.caserne-actu-passee .caserne-entretien-jour>strong{color:#5d5957!important}.caserne-actu-passee .caserne-liste-presents span,.caserne-actu-passee .caserne-badge-soustype,.caserne-actu-passee .caserne-badge-visibilite,.caserne-actu-passee .caserne-entretien-card-entete>span{background:#c9c5c2!important;color:#55514f!important}.caserne-actu-passee .caserne-preparation-bloc,.caserne-actu-passee .caserne-zone-reponse{background:rgba(255,255,255,.22)!important;border-color:#c7c2bf!important}.caserne-creneau-passe{border:1px solid #c2bdb9;background:#d2cfcc;border-radius:10px;padding:9px 5px;text-align:center;color:#5d5957}.caserne-creneau-passe span{font-weight:900}.caserne-zone-reponse-passee .caserne-liste-presents{margin-top:0}
         .caserne-admin-centre{display:grid;grid-template-columns:1fr 1fr;gap:12px}.caserne-admin-centre>button{border:1px solid #dcc7c2;background:#fff;border-radius:18px;padding:19px;text-align:left;min-height:108px;display:flex;flex-direction:column;justify-content:space-between;gap:12px;color:#2b1716;box-shadow:0 6px 18px rgba(80,40,30,.06)}.caserne-admin-centre>button strong{font-size:17px}.caserne-admin-centre>button span{font-size:12px;line-height:1.4;color:#765f5b}.caserne-administratif-page .caserne-vide{grid-column:1/-1}@media(max-width:560px){.caserne-admin-centre{grid-template-columns:1fr}}
-        .caserne-nav-bas{position:fixed;z-index:5000;left:50%;bottom:12px;transform:translateX(-50%);width:min(calc(100% - 24px),620px);height:68px;background:#fff;border:1px solid #eadbd7;border-radius:22px;box-shadow:0 12px 34px rgba(50,20,20,.18);display:grid;grid-template-columns:repeat(4,1fr);padding:5px 54px 5px 6px}
+        .caserne-nav-bas{position:fixed;z-index:10000;pointer-events:auto;left:50%;bottom:12px;transform:translateX(-50%);width:min(calc(100% - 24px),620px);height:68px;background:#fff;border:1px solid #eadbd7;border-radius:22px;box-shadow:0 12px 34px rgba(50,20,20,.18);display:grid;grid-template-columns:repeat(4,1fr);padding:5px 54px 5px 6px}
         .caserne-nav-bas>button:not(.caserne-menu-bulle){border:0;background:transparent;color:#7d6b67;font-size:10px;font-weight:700;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px}.caserne-nav-bas>button span{font-size:21px;line-height:1}.caserne-nav-bas>button.actif{color:#8a2527}.caserne-menu-bulle{position:absolute;right:8px;top:8px;width:50px;height:50px;border-radius:50%;border:0;background:#7d2425;color:#fff;box-shadow:0 5px 15px rgba(80,20,20,.25)}.caserne-menu-bulle span{font-size:20px!important}
         .navigation-fixe-page{padding-bottom:110px!important}
         .caserne-nav-bas.nav-theme-pharmacie>button.actif{color:#237448}.caserne-nav-bas.nav-theme-pharmacie .caserne-menu-bulle{background:#237448;box-shadow:0 5px 15px rgba(20,85,52,.24)}
