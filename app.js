@@ -521,6 +521,18 @@ function afficherSaisieCIS(
 }
 
 
+/* Retour haptique discret après une confirmation de réussite.
+   navigator.vibrate est facultatif : iOS et certains navigateurs l'ignorent. */
+let dernierRetourHaptiqueCIS = 0;
+function vibrerConfirmationEnregistrementCIS(message) {
+    if (determinerTypeFenetreCIS(message) !== "succes") return;
+    if (typeof navigator.vibrate !== "function") return;
+    const maintenant = Date.now();
+    if (maintenant - dernierRetourHaptiqueCIS < 700) return;
+    dernierRetourHaptiqueCIS = maintenant;
+    try { navigator.vibrate(80); } catch (_) { /* Vibration non prise en charge. */ }
+}
+
 function afficherFenetreCIS(message) {
 
     initialiserFenetreCIS();
@@ -538,6 +550,8 @@ function afficherFenetreCIS(message) {
 
         const type =
             determinerTypeFenetreCIS(message);
+
+        vibrerConfirmationEnregistrementCIS(message);
 
         const overlay =
             document.createElement("div");
