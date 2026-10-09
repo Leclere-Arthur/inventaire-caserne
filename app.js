@@ -938,7 +938,7 @@ let minuteurVerificationMiseAJour =
  * Elle permet de détecter une nouvelle version même si seul app.js change.
  */
 const VERSION_APPLICATION_JS =
-    "2026-10-09-inventaire-vehicules-v35";
+    "2026-10-09-inventaire-vehicules-v36";
 
 async function verifierNouvelleVersionAppJs() {
 
@@ -21980,7 +21980,7 @@ const vehInventaireHTML = valeur => echapperHTML(String(valeur ?? ""));
 function vehInventaireStyle(){
  if(document.getElementById("veh-inventaire-style"))return;
  const st=document.createElement("style");st.id="veh-inventaire-style";
- st.textContent=`.veh-card{background:#fff;border:1px solid #e0e5e9;border-radius:15px;padding:16px;margin:11px 0;box-shadow:0 2px 9px #15202b0c}.veh-card button{cursor:pointer}.veh-action{border:0;border-radius:11px;padding:13px 15px;background:#246b4b;color:#fff;font-weight:800;font-size:15px}.veh-action:disabled{opacity:.45}.veh-muted{color:#68737e;font-size:13px}.veh-zone{display:flex;justify-content:space-between;align-items:center;gap:10px;width:100%;text-align:left;border:2px solid #367bd7;background:#eef5ff;color:#163c71;border-radius:13px;padding:15px;margin:9px 0;font-weight:800}.veh-zone.terminee{border-color:#21965c;background:#e8f8ef;color:#12613b}.veh-etat{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}.veh-etat label{padding:9px;border:1px solid #ccd5df;border-radius:9px;background:#f8fafc;font-size:13px}.veh-note{box-sizing:border-box;width:100%;border:1px solid #ccd5df;border-radius:10px;padding:10px;font:inherit}.veh-progress{height:8px;border-radius:99px;background:#e2e8f0;overflow:hidden}.veh-progress>div{height:100%;background:#21965c}.veh-retour{border:0;background:#e8edf1;border-radius:9px;padding:10px 12px;font-weight:800;margin-bottom:12px}`;
+ st.textContent=`.veh-card{background:#fff;border:1px solid #e0e5e9;border-radius:15px;padding:18px;margin:13px 0;box-shadow:0 2px 9px #15202b0c}.veh-card button{cursor:pointer}.veh-action{display:block;width:100%;min-height:54px;border:0;border-radius:13px;padding:16px 18px;background:#246b4b;color:#fff;font:inherit;font-weight:800;font-size:17px;box-shadow:0 3px 10px #15202b1a}.veh-action:disabled{opacity:.45}.veh-muted{color:#68737e;font-size:14px}.veh-zone{display:flex;justify-content:space-between;align-items:center;gap:12px;width:100%;min-height:67px;text-align:left;border:2px solid #367bd7;background:#eef5ff;color:#163c71;border-radius:14px;padding:18px;margin:12px 0;font:inherit;font-size:17px;font-weight:800;cursor:pointer}.veh-zone small{font-size:13px}.veh-zone.terminee{border-color:#21965c;background:#e8f8ef;color:#12613b}.veh-etat{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:14px 0}.veh-etat label{display:flex;align-items:center;justify-content:center;gap:6px;min-height:54px;padding:9px 5px;border:1px solid #b9c8d5;border-radius:12px;background:#f8fafc;font-size:14px;font-weight:750;cursor:pointer}.veh-etat label:has(input:checked){background:#e2f0ff;border:2px solid #367bd7}.veh-etat input{width:18px;height:18px;accent-color:#246b4b}.veh-note{box-sizing:border-box;width:100%;border:1px solid #ccd5df;border-radius:10px;padding:13px;font:inherit;font-size:16px}.veh-progress{height:10px;border-radius:99px;background:#e2e8f0;overflow:hidden}.veh-progress>div{height:100%;background:#21965c}.veh-retour{margin-bottom:14px;min-height:44px}.veh-inventaire-contenu{padding-bottom:18px}`;
  document.head.appendChild(st);
 }
 function vehInventaireAfficher(corps){
@@ -21988,33 +21988,36 @@ function vehInventaireAfficher(corps){
  document.getElementById("app").innerHTML=`<main class="garde-section">${corps}</main>${navigationPrincipale("","accueil")}`;
  actualiserInterfaceBureau();window.scrollTo({top:0,behavior:"auto"});
 }
-function vehInventaireQuitter(){
- if(vehInventaireSession&&!window.confirm("Quitter l'inventaire ?\n\nSi vous quittez sans terminer l'enregistrement, tous les contrôles effectués seront supprimés."))return;
+const VEH_INVENTAIRE_AVERTISSEMENT="Quitter l'inventaire ?\n\nSi vous quittez sans terminer l'enregistrement, tous les contrôles effectués seront supprimés.";
+let vehInventaireNavigationConfirmee=false;
+async function vehInventaireQuitter(){
+ if(vehInventaireSession && !(await afficherConfirmationCIS(VEH_INVENTAIRE_AVERTISSEMENT)))return;
  vehInventaireSession=null;afficherInventaireVehiculeEspaceGarde();
 }
-// Capture les boutons de navigation hors de l'inventaire (y compris la barre inférieure).
-document.addEventListener("click",function(event){
- if(!vehInventaireSession)return;
+// Les navigations externes passent par la fenêtre de confirmation habituelle de l'application.
+document.addEventListener("click",async function(event){
+ if(!vehInventaireSession||vehInventaireNavigationConfirmee)return;
  const btn=event.target?.closest?.("button,a");if(!btn||btn.closest(".veh-inventaire-contenu"))return;
  if(!document.querySelector(".veh-inventaire-contenu"))return;
- if(!window.confirm("Quitter l'inventaire ?\n\nLes informations non enregistrées définitivement seront supprimées.")){
-   event.preventDefault();event.stopImmediatePropagation();return;
- }
+ event.preventDefault();event.stopImmediatePropagation();
+ if(!(await afficherConfirmationCIS(VEH_INVENTAIRE_AVERTISSEMENT)))return;
  vehInventaireSession=null;
+ vehInventaireNavigationConfirmee=true;
+ try{btn.click();}finally{vehInventaireNavigationConfirmee=false;}
 },true);
 async function afficherInventaireVehiculeEspaceGarde(){
- vehInventaireAfficher(`<div class="veh-inventaire-liste"><button class="veh-retour" onclick="afficherEspaceGarde()">← Espace équipe</button><h1>Inventaire véhicule</h1><div id="veh-liste" class="veh-muted">Chargement des véhicules…</div></div>`);
+ vehInventaireAfficher(`<div class="veh-inventaire-liste"><button class="retour-button veh-retour" onclick="afficherEspaceGarde()">← Espace équipe</button><h1>Inventaire véhicule</h1><div id="veh-liste" class="veh-muted">Chargement des véhicules…</div></div>`);
  try{
   const sb=obtenirClientSupabase();if(!sb)throw Error("Connexion Supabase indisponible");
   const {data,error}=await sb.from("cis_vehicules").select("id,nom,code,actif").eq("actif",true).order("nom");if(error)throw error;
   vehInventaireCatalogue=data||[];
   const zone=document.getElementById("veh-liste");if(!zone)return;
-  zone.innerHTML=vehInventaireCatalogue.length?vehInventaireCatalogue.map(v=>`<button class="veh-zone" onclick="vehInventaireOuvrirVehicule('${v.id}')"><span>🚒 ${vehInventaireHTML(v.nom)}</span><span>›</span></button>`).join(""):'Aucun véhicule configuré dans Admin.';
+  zone.innerHTML=vehInventaireCatalogue.length?vehInventaireCatalogue.map(v=>`<button class="veh-zone" onclick="vehInventaireOuvrirVehicule('${v.id}')"><span>${vehInventaireHTML(v.nom)}</span><span>›</span></button>`).join(""):'Aucun véhicule configuré dans Admin.';
  }catch(e){const zone=document.getElementById("veh-liste");if(zone)zone.textContent="Impossible de charger les véhicules : "+e.message;}
 }
 async function vehInventaireOuvrirVehicule(id){
  const v=vehInventaireCatalogue.find(x=>x.id===id);if(!v)return;
- vehInventaireAfficher(`<button class="veh-retour" onclick="afficherInventaireVehiculeEspaceGarde()">← Véhicules</button><h1>${vehInventaireHTML(v.nom)}</h1><div class="veh-card"><p>Contrôler chaque coffre et son matériel, puis terminer l'enregistrement.</p><button class="veh-action" onclick="vehInventaireCommencer('${v.id}')">Réaliser l'inventaire</button></div>`);
+ vehInventaireAfficher(`<button class="retour-button veh-retour" onclick="afficherInventaireVehiculeEspaceGarde()">← Véhicules</button><h1>${vehInventaireHTML(v.nom)}</h1><div class="veh-card"><p>Contrôler chaque coffre et son matériel, puis terminer l'enregistrement.</p><button class="veh-action" onclick="vehInventaireCommencer('${v.id}')">Réaliser l'inventaire</button></div>`);
 }
 async function vehInventaireCommencer(id){
  const v=vehInventaireCatalogue.find(x=>x.id===id);if(!v)return;
@@ -22022,23 +22025,23 @@ async function vehInventaireCommencer(id){
  try{
   const sb=obtenirClientSupabase();
   const z=await sb.from("cis_vehicule_zones").select("id,vehicule_id,nom,cote,ordre,actif").eq("vehicule_id",id).eq("actif",true).order("ordre");if(z.error)throw z.error;
-  const zones=z.data||[];if(!zones.length){vehInventaireAfficher(`<button class="veh-retour" onclick="vehInventaireOuvrirVehicule('${id}')">← Retour</button><h1>${vehInventaireHTML(v.nom)}</h1><p>Configure d'abord les coffres dans l'application Admin.</p>`);return;}
+  const zones=z.data||[];if(!zones.length){vehInventaireAfficher(`<button class="retour-button veh-retour" onclick="vehInventaireOuvrirVehicule('${id}')">← Retour</button><h1>${vehInventaireHTML(v.nom)}</h1><p>Configure d'abord les coffres dans l'application Admin.</p>`);return;}
   const m=await sb.from("cis_vehicule_materiels").select("id,zone_id,nom,quantite,etat_reference,notes,ordre").in("zone_id",zones.map(x=>x.id)).order("ordre");if(m.error)throw m.error;
   vehInventaireZones=zones;vehInventaireMateriels=m.data||[];
   vehInventaireSession={vehicule:{id:v.id,nom:v.nom,code:v.code},controles:{}};
   vehInventaireAfficherZones();
- }catch(e){vehInventaireAfficher(`<button class="veh-retour" onclick="vehInventaireOuvrirVehicule('${id}')">← Retour</button><h1>Erreur de chargement</h1><p>${vehInventaireHTML(e.message)}</p>`);}
+ }catch(e){vehInventaireAfficher(`<button class="retour-button veh-retour" onclick="vehInventaireOuvrirVehicule('${id}')">← Retour</button><h1>Erreur de chargement</h1><p>${vehInventaireHTML(e.message)}</p>`);}
 }
 function vehInventaireAfficherZones(){
  const session=vehInventaireSession;if(!session)return;
  const nb=vehInventaireZones.filter(z=>session.controles[z.id]).length;
- vehInventaireAfficher(`<div class="veh-inventaire-contenu"><button class="veh-retour" onclick="vehInventaireQuitter()">← Retour</button><h1>${vehInventaireHTML(session.vehicule.nom)}</h1><p class="veh-muted">Inventaire en cours · ${nb}/${vehInventaireZones.length} zones contrôlées</p><div class="veh-progress"><div style="width:${100*nb/vehInventaireZones.length}%"></div></div><div class="veh-card"><strong>Zones de contrôle</strong><p class="veh-muted">La visualisation 3D sera ajoutée dans une prochaine étape. Toutes les zones sont accessibles ici.</p>${vehInventaireZones.map(z=>`<button class="veh-zone ${session.controles[z.id]?"terminee":""}" onclick="vehInventaireOuvrirZone('${z.id}')"><span>${session.controles[z.id]?"✓":"●"} ${vehInventaireHTML(z.nom)}</span><small>${session.controles[z.id]?"Enregistré":"À contrôler"}</small></button>`).join("")}</div><button class="veh-action" ${nb!==vehInventaireZones.length?"disabled":""} onclick="vehInventaireTerminer()">Terminer l'enregistrement</button></div>`);
+ vehInventaireAfficher(`<div class="veh-inventaire-contenu"><button class="retour-button veh-retour" onclick="vehInventaireQuitter()">← Retour</button><h1>${vehInventaireHTML(session.vehicule.nom)}</h1><p class="veh-muted">Inventaire en cours · ${nb}/${vehInventaireZones.length} zones contrôlées</p><div class="veh-progress"><div style="width:${100*nb/vehInventaireZones.length}%"></div></div><div class="veh-card"><strong>Zones de contrôle</strong><p class="veh-muted">La visualisation 3D sera ajoutée dans une prochaine étape. Toutes les zones sont accessibles ici.</p>${vehInventaireZones.map(z=>`<button class="veh-zone ${session.controles[z.id]?"terminee":""}" onclick="vehInventaireOuvrirZone('${z.id}')"><span>${session.controles[z.id]?"✓":"●"} ${vehInventaireHTML(z.nom)}</span><small>${session.controles[z.id]?"Enregistré":"À contrôler"}</small></button>`).join("")}</div><button class="veh-action" ${nb!==vehInventaireZones.length?"disabled":""} onclick="vehInventaireTerminer()">Terminer l'enregistrement</button></div>`);
 }
 function vehInventaireOuvrirZone(id){
  const session=vehInventaireSession,z=vehInventaireZones.find(x=>x.id===id);if(!session||!z)return;
  const materiels=vehInventaireMateriels.filter(m=>m.zone_id===id);
  const precedent=session.controles[id]||{};
- vehInventaireAfficher(`<div class="veh-inventaire-contenu"><button class="veh-retour" onclick="vehInventaireAfficherZones()">← Coffres</button><h1>${vehInventaireHTML(z.nom)}</h1><p class="veh-muted">Sélectionne un état pour chaque matériel.</p><div id="veh-materiels">${materiels.length?materiels.map(m=>{const valeur=precedent[m.id]||{};return `<div class="veh-card" data-materiel="${m.id}"><strong>${vehInventaireHTML(m.nom)}</strong><p class="veh-muted">Quantité prévue : ${m.quantite}</p><div class="veh-etat">${[["bon","Bon"],["a_surveiller","À surveiller"],["hs","HS"]].map(([val,lib])=>`<label><input type="radio" name="etat-${m.id}" value="${val}" ${valeur.etat===val?"checked":""}> ${lib}</label>`).join("")}</div><textarea class="veh-note" rows="2" placeholder="Observation (facultatif)">${vehInventaireHTML(valeur.observation||"")}</textarea></div>`}).join(""):'<p>Aucun matériel configuré pour cette zone.</p>'}</div><button class="veh-action" onclick="vehInventaireEnregistrerZone('${id}')">Enregistrer ce coffre</button></div>`);
+ vehInventaireAfficher(`<div class="veh-inventaire-contenu"><button class="retour-button veh-retour" onclick="vehInventaireAfficherZones()">← Coffres</button><h1>${vehInventaireHTML(z.nom)}</h1><p class="veh-muted">Sélectionne un état pour chaque matériel.</p><div id="veh-materiels">${materiels.length?materiels.map(m=>{const valeur=precedent[m.id]||{};return `<div class="veh-card" data-materiel="${m.id}"><strong>${vehInventaireHTML(m.nom)}</strong><p class="veh-muted">Quantité prévue : ${m.quantite}</p><div class="veh-etat">${[["bon","Bon"],["a_surveiller","À surveiller"],["hs","HS"]].map(([val,lib])=>`<label><input type="radio" name="etat-${m.id}" value="${val}" ${valeur.etat===val?"checked":""}> ${lib}</label>`).join("")}</div><textarea class="veh-note" rows="2" placeholder="Observation (facultatif)">${vehInventaireHTML(valeur.observation||"")}</textarea></div>`}).join(""):'<p>Aucun matériel configuré pour cette zone.</p>'}</div><button class="veh-action" onclick="vehInventaireEnregistrerZone('${id}')">Enregistrer ce coffre</button></div>`);
 }
 function vehInventaireEnregistrerZone(id){
  const session=vehInventaireSession;if(!session)return;
@@ -22052,7 +22055,7 @@ function vehInventaireEnregistrerZone(id){
 async function vehInventaireTerminer(){
  const session=vehInventaireSession;if(!session)return;
  if(vehInventaireZones.some(z=>!session.controles[z.id])){alert("Tous les coffres doivent être contrôlés.");return;}
- if(!window.confirm("Confirmer l'enregistrement définitif de l'inventaire ?"))return;
+ if(!(await afficherConfirmationCIS("Confirmer l’enregistrement définitif de l’inventaire ?")))return;
  const btn=document.querySelector(".veh-inventaire-contenu .veh-action");if(btn){btn.disabled=true;btn.textContent="Enregistrement…";}
  try{
   const sb=obtenirClientSupabase();const payload={vehicule_id:session.vehicule.id,vehicule_nom:session.vehicule.nom,controle_par:profilUtilisateurConnecte?.id,details:vehInventaireZones.map(z=>({zone_id:z.id,zone_nom:z.nom,cote:z.cote,materiels:vehInventaireMateriels.filter(m=>m.zone_id===z.id).map(m=>({materiel_id:m.id,nom:m.nom,quantite:m.quantite,etat_reference:m.etat_reference,etat:session.controles[z.id][m.id]?.etat||null,observation:session.controles[z.id][m.id]?.observation||""}))}))};
