@@ -938,7 +938,7 @@ let minuteurVerificationMiseAJour =
  * Elle permet de détecter une nouvelle version même si seul app.js change.
  */
 const VERSION_APPLICATION_JS =
-    "2026-10-09-inventaire-sans-3d-v43";
+    "2026-10-09-admin-inventaires-v44";
 
 async function verifierNouvelleVersionAppJs() {
 
@@ -21903,6 +21903,7 @@ function afficherEspaceGarde(){
           <button class="garde-menu-carte" onclick="afficherInventaireVehiculeEspaceGarde()"><span class="ico">🚒</span><span><strong>Inventaire véhicule</strong></span><b class="fleche">›</b></button>
           <button class="garde-menu-carte" onclick="afficherPlanningEspaceGarde()"><span class="ico">📅</span><span><strong>Planning</strong></span><b class="fleche">›</b></button>
           ${utilisateurAPermission("acces_admin_menage")?`<button class="garde-menu-carte" onclick="afficherAdminMenageEquipe()"><span class="ico">⚙️</span><span><strong>Administration ménage</strong></span><b class="fleche">›</b></button>`:""}
+          ${utilisateurAPermission("acces_admin_menage")?`<button class="garde-menu-carte" onclick="afficherAdminInventairesEquipe()"><span class="ico">📋</span><span><strong>Administration inventaires</strong></span><b class="fleche">›</b></button>`:""}
           <button class="garde-menu-carte" onclick="afficherEnregistrerHeuresEquipe()"><span class="ico">⏱️</span><span><strong>Enregistrer des heures</strong></span><b class="fleche">›</b></button>
           ${utilisateurAPermission("acces_admin_heures")?`<button class="garde-menu-carte" onclick="afficherHistoriqueHeuresEquipe()"><span class="ico">📊</span><span><strong>Historique des heures</strong></span><b class="fleche">›</b></button>`:""}
         </div>
@@ -22282,6 +22283,62 @@ async function afficherDetailMenageEquipe(id){
     actualiserInterfaceBureau();
 }
 
+
+/* Inventaires admin : même présentation et même autorisation que Ménage admin. */
+let inventairesAdminCache=[];
+const inventairesAdminDate=v=>{const d=new Date(v);return Number.isNaN(d.getTime())?'Date inconnue':d.toLocaleString('fr-FR')};
+const inventairesAdminZones=r=>Array.isArray(r.details)?r.details:[];
+const inventairesAdminMateriels=r=>inventairesAdminZones(r).flatMap(z=>Array.isArray(z.materiels)?z.materiels:[]);
+const inventairesAdminNom=r=>r.numero_inventaire!=null?'INV-'+String(r.numero_inventaire).padStart(6,'0'):'Inventaire '+String(r.id||'').slice(0,8);
+function inventairesAdminAuteur(r){
+ const u=utilisateursEspaceGarde.find(x=>String(x.id)===String(r.controle_par));
+ return u?([u.prenom,u.nom].filter(Boolean).join(' ')||u.identifiant):'Utilisateur non identifié';
+}
+async function afficherAdminInventairesEquipe(){
+ if(!utilisateurAPermission('acces_admin_menage')){alert('Accès non autorisé.');return;}
+ initialiserStyleEspaceGardeUtilisateur();
+ document.getElementById('app').innerHTML=`<main class="garde-section"><button class="retour-button" onclick="afficherEspaceGarde()">← Espace équipe</button><h1>Administration inventaires</h1><div id="admin-inventaires-chargement" class="garde-planning-attente">Chargement…</div></main>${navigationPrincipale('','accueil')}`;
+ actualiserInterfaceBureau();
+ const sb=obtenirClientSupabase();
+ if(!sb){document.getElementById('admin-inventaires-chargement').textContent='Connexion indisponible.';return;}
+ let resultat=await sb.from('cis_inventaires_vehicules').select('id,numero_inventaire,vehicule_nom,controle_par,created_at,details').order('created_at',{ascending:false}).limit(200);
+ if(resultat.error&&/numero_inventaire/i.test(resultat.error.message||''))resultat=await sb.from('cis_inventaires_vehicules').select('id,vehicule_nom,controle_par,created_at,details').order('created_at',{ascending:false}).limit(200);
+ if(!document.getElementById('admin-inventaires-chargement'))return;
+ if(resultat.error){document.getElementById('admin-inventaires-chargement').textContent='Historique indisponible : '+resultat.error.message;return;}
+ inventairesAdminCache=resultat.data||[];
+ if(!utilisateursEspaceGarde.length){try{utilisateursEspaceGarde=await chargerUtilisateursEspaceGarde();}catch(e){console.warn('Noms des contrôleurs indisponibles',e);}}
+ if(!document.getElementById('admin-inventaires-chargement'))return;
+ const vehicules=[...new Set(inventairesAdminCache.map(r=>r.vehicule_nom).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'fr'));
+ document.getElementById('app').innerHTML=`<main class="garde-section"><button class="retour-button" onclick="afficherEspaceGarde()">← Espace équipe</button><h1>Administration inventaires</h1>
+ <h2 class="garde-sous-titre">Dernier inventaire par véhicule</h2>
+ ${vehicules.map(v=>{const r=inventairesAdminCache.find(x=>x.vehicule_nom===v);return `<div class="garde-stat-ligne"><strong>${echapperHTML(v)}</strong><small>${inventairesAdminDate(r.created_at)}</small></div>`}).join('')||'<div class="garde-stat-ligne">Aucun inventaire enregistré.</div>'}
+ <h2 class="garde-sous-titre">Contrôles réalisés</h2>
+ ${(()=>{const counts=new Map();inventairesAdminCache.forEach(r=>{const id=String(r.controle_par||'');counts.set(id,(counts.get(id)||0)+1)});return [...counts.entries()].sort((a,b)=>b[1]-a[1]).map(([id,n])=>{const r=inventairesAdminCache.find(x=>String(x.controle_par||'')===id);return `<div class="garde-stat-ligne garde-stat-ligne-flex"><div><strong>${echapperHTML(inventairesAdminAuteur(r))}</strong><small>${n} inventaire${n>1?'s':''} réalisé${n>1?'s':''}</small></div></div>`}).join('')})()||'<div class="garde-stat-ligne">Aucun contrôle enregistré.</div>'}
+ <h2 class="garde-sous-titre">Historique</h2><div class="garde-admin-card"><label for="inventaires-admin-filtre"><strong>Véhicule</strong></label><select id="inventaires-admin-filtre" class="heures-input" onchange="filtrerAdminInventairesEquipe()"><option value="">Tous les véhicules</option>${vehicules.map(v=>`<option value="${echapperHTML(v)}">${echapperHTML(v)}</option>`).join('')}</select></div>
+ <div id="inventaires-admin-liste"></div><small>Affichage des 200 inventaires les plus récents.</small></main>${navigationPrincipale('','accueil')}`;
+ actualiserInterfaceBureau();filtrerAdminInventairesEquipe();window.scrollTo({top:0,behavior:'auto'});
+}
+function filtrerAdminInventairesEquipe(){
+ const liste=document.getElementById('inventaires-admin-liste');if(!liste)return;
+ const filtre=document.getElementById('inventaires-admin-filtre')?.value||'';
+ const rows=inventairesAdminCache.filter(r=>!filtre||r.vehicule_nom===filtre);
+ liste.innerHTML=rows.map(r=>{const materiels=inventairesAdminMateriels(r),bon=materiels.filter(m=>m.etat==='bon').length,surv=materiels.filter(m=>m.etat==='a_surveiller').length,hs=materiels.filter(m=>m.etat==='hs').length;return `<div class="garde-admin-card"><button type="button" onclick="afficherDetailInventaireAdminEquipe('${echapperHTML(String(r.id))}')"><strong>${echapperHTML(inventairesAdminNom(r))} · ${echapperHTML(r.vehicule_nom||'Véhicule')}</strong><br><small>${inventairesAdminDate(r.created_at)} · ${echapperHTML(inventairesAdminAuteur(r))}</small><br><small>${inventairesAdminZones(r).length} zone(s) · ${bon} Bon · ${surv} À surveiller · ${hs} HS</small></button></div>`}).join('')||'<div class="garde-stat-ligne">Aucun inventaire pour ce véhicule.</div>';
+}
+function afficherDetailInventaireAdminEquipe(id){
+ if(!utilisateurAPermission('acces_admin_menage')){alert('Accès non autorisé.');return;}
+ const r=inventairesAdminCache.find(x=>String(x.id)===String(id));if(!r){alert('Inventaire introuvable.');return;}
+ initialiserStyleEspaceGardeUtilisateur();
+ const zones=inventairesAdminZones(r),materiels=inventairesAdminMateriels(r);
+ const etat=m=>m.etat==='bon'?'Bon':m.etat==='a_surveiller'?'À surveiller':m.etat==='hs'?'HS':'Non renseigné';
+ document.getElementById('app').innerHTML=`<main class="garde-section"><button class="retour-button" onclick="afficherAdminInventairesEquipe()">← Retour</button><h1>Détail de l’inventaire</h1>
+ <div class="garde-admin-card"><strong>${echapperHTML(inventairesAdminNom(r))}</strong><p><strong>Véhicule :</strong> ${echapperHTML(r.vehicule_nom||'Non renseigné')}</p><p><strong>Date :</strong> ${inventairesAdminDate(r.created_at)}</p><p><strong>Enregistré par :</strong> ${echapperHTML(inventairesAdminAuteur(r))}</p><p><strong>Zones contrôlées :</strong> ${zones.length}</p><p><strong>Matériel :</strong> ${materiels.filter(m=>m.etat==='bon').length} Bon · ${materiels.filter(m=>m.etat==='a_surveiller').length} À surveiller · ${materiels.filter(m=>m.etat==='hs').length} HS</p></div>
+ ${zones.map(z=>`<h2 class="garde-sous-titre">${echapperHTML(z.zone_nom||'Zone')}</h2>${(Array.isArray(z.materiels)?z.materiels:[]).map(m=>`<div class="garde-stat-ligne"><strong>${echapperHTML(m.nom||'Matériel')} × ${Number(m.quantite)||1}</strong><small>${echapperHTML(etat(m))}</small>${m.observation?`<p>Observation : ${echapperHTML(m.observation)}</p>`:''}</div>`).join('')||'<div class="garde-stat-ligne">Aucun matériel.</div>'}`).join('')||'<div class="garde-stat-ligne">Aucune zone enregistrée.</div>'}
+ </main>${navigationPrincipale('','accueil')}`;
+ actualiserInterfaceBureau();window.scrollTo({top:0,behavior:'auto'});
+}
+window.afficherAdminInventairesEquipe=afficherAdminInventairesEquipe;
+window.filtrerAdminInventairesEquipe=filtrerAdminInventairesEquipe;
+window.afficherDetailInventaireAdminEquipe=afficherDetailInventaireAdminEquipe;
 
 let personnesHeuresSelectionnees=new Set();
 let personnesHeuresCache=[];
