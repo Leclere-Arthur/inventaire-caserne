@@ -118,6 +118,7 @@ function chargerThree(){
   box(.2,.12,.15,-4.09,1.89,z,silver);
  }
  box(.16,.15,2.4,-3.75,.91,0,silver);
+ const anciensElements=root.children.slice(); // géométrie de secours conservée si le GLB ne charge pas
  const clickable=[];
  const sides={gauche:[],droite:[],bas:[],arriere:[],toit:[],echelle:[],cabine:[],autre:[]};
  for(const zone of zones){
@@ -128,6 +129,7 @@ function chargerThree(){
   const rear=/arri[eè]re|hayon/.test(s);
   const right=/droit|conducteur/.test(s);
   const left=/gauch|passager/.test(s);
+  const cabin=/cabine|vitre|pare.brise|habitacle/.test(s);
   const key=cabin?'cabine':roof?'toit':ladder?'echelle':rear?'arriere':low?'bas':right?'droite':left?'gauche':(sides.gauche.length<=sides.droite.length?'gauche':'droite');
   sides[key].push(zone);
  }
@@ -178,6 +180,30 @@ function chargerThree(){
  const el=renderer.domElement;el.style.touchAction='pan-y';el.addEventListener('pointerdown',down);el.addEventListener('pointermove',move);el.addEventListener('pointerup',up);el.addEventListener('pointercancel',()=>dragging=false);el.addEventListener('wheel',wheel,{passive:false});el.addEventListener('touchmove',touch,{passive:false});el.addEventListener('touchend',()=>pinch=0);
  const resize=new ResizeObserver(()=>{if(!host.isConnected)return;const w=host.clientWidth||320,h=host.clientHeight||310;camera.aspect=w/h;camera.updateProjectionMatrix();renderer.setSize(w,h);render();});resize.observe(host);
  function render(){renderer.render(scene,camera);}render();
- host.__ccrmStop=()=>{resize.disconnect();renderer.dispose();scene.traverse(o=>{if(o.geometry)o.geometry.dispose();if(o.material){if(Array.isArray(o.material))o.material.forEach(m=>m.dispose());else o.material.dispose();}});};
+ // Modèle GLB externe : remplace seulement la carrosserie, jamais les zones tactiles.
+ // Si le fichier ou le chargeur manque, le modèle de secours reste visible.
+ let modeleCharge=null,actif=true;
+ (async()=>{
+  try{
+   if(!T.GLTFLoader){
+    await new Promise((resolve,reject)=>{
+     const s=document.createElement('script');
+     s.src='https://cdn.jsdelivr.net/npm/three@0.149.0/examples/js/loaders/GLTFLoader.js';
+     s.onload=()=>T.GLTFLoader?resolve():reject(Error('Chargeur GLB indisponible'));
+     s.onerror=()=>reject(Error('Chargeur GLB inaccessible'));
+     document.head.appendChild(s);
+    });
+   }
+   const gltf=await new Promise((resolve,reject)=>{
+    new T.GLTFLoader().load('./ccrm-le-chesne.glb',resolve,undefined,reject);
+   });
+   if(!actif||!host.isConnected)return;
+   modeleCharge=gltf.scene;
+   scene.add(modeleCharge);
+   anciensElements.forEach(element=>{element.visible=false;});
+   render();
+  }catch(erreur){console.warn('CCRM : modèle GLB non chargé, affichage de secours conservé',erreur);}
+ })();
+ host.__ccrmStop=()=>{actif=false;resize.disconnect();renderer.dispose();scene.traverse(o=>{if(o.geometry)o.geometry.dispose();if(o.material){if(Array.isArray(o.material))o.material.forEach(m=>m.dispose());else o.material.dispose();}});};
 };
 })();
