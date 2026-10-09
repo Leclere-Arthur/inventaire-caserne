@@ -5,19 +5,24 @@ let libPromise;
 function chargerThree(){
  if(window.THREE)return Promise.resolve(window.THREE);
  if(!libPromise)libPromise=new Promise((ok,ko)=>{
-  const s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/three.js/r160/three.min.js';
-  s.onload=()=>window.THREE?ok(window.THREE):ko(Error('Three.js indisponible'));
-  s.onerror=()=>ko(Error('Chargement Three.js impossible'));document.head.appendChild(s);
+  const urls=['https://cdnjs.cloudflare.com/ajax/libs/three.js/r149/three.min.js','https://cdn.jsdelivr.net/npm/three@0.149.0/build/three.min.js'];
+  function essayer(i){
+   if(i>=urls.length){ko(Error('Moteur 3D indisponible'));return;}
+   const s=document.createElement('script');s.src=urls[i];
+   s.onload=()=>window.THREE?ok(window.THREE):essayer(i+1);
+   s.onerror=()=>essayer(i+1);document.head.appendChild(s);
+  }
+  essayer(0);
  });return libPromise;
 }
-window.creerModeleCCRM3D=async function(host,zones,controles,ouvrir){
+ window.creerModeleCCRM3D=async function(host,zones,controles,ouvrir){
  const T=await chargerThree();if(!host.isConnected)return;
  if(host.__ccrmStop)host.__ccrmStop();host.innerHTML='';
  const scene=new T.Scene();scene.background=new T.Color('#e8eff5');
  const camera=new T.PerspectiveCamera(35,1,.1,100);camera.position.set(10,7,12);camera.lookAt(0,1.6,0);
  const renderer=new T.WebGLRenderer({antialias:true,alpha:false,powerPreference:'low-power'});
  renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));renderer.setSize(host.clientWidth||320,host.clientHeight||310);
- renderer.outputColorSpace=T.SRGBColorSpace;host.appendChild(renderer.domElement);
+ if(T.sRGBEncoding)renderer.outputEncoding=T.sRGBEncoding;host.appendChild(renderer.domElement);
  scene.add(new T.HemisphereLight(0xffffff,0x647587,2.4));
  const light=new T.DirectionalLight(0xffffff,2.3);light.position.set(5,10,7);scene.add(light);
  const root=new T.Group();scene.add(root);
