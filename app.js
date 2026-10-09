@@ -9565,90 +9565,39 @@ function utilisateurAccesAdministratifCentral() {
     ].some(permission => utilisateurAPermission(permission));
 }
 
-let ongletAdministratifActif = "";
-let ongletsAdministratifVisibles = false;
-let observateurOngletsAdministratif = null;
-
 function afficherAdministratifCaserne() {
     if (!utilisateurAccesAdministratifCentral()) {
         alert("Accès non autorisé."); return;
     }
+    initialiserStyleEspaceGardeUtilisateur();
     const admin = utilisateurEstSPVAdmin();
-    const autorise = p => admin || utilisateurAPermission(p);
-    const outils = [
-        ["Ménage", "afficherAdminMenageEquipe()", autorise("acces_admin_menage")],
-        ["Inventaires", "afficherAdminInventairesEquipe()", autorise("acces_admin_menage")],
-        ["Historique des heures", "afficherHistoriqueHeuresEquipe()", autorise("acces_admin_heures")],
-        ["Sport", "afficherRubriqueCaserne('sport')", autorise("acces_sport_admin")],
-        ["Manœuvres", "afficherRubriqueCaserne('manoeuvre')", autorise("acces_manoeuvre_admin")],
-        ["Casernement", "afficherRubriqueCaserne('casernement')", autorise("acces_casernement_admin")],
-        ["Réunions", "afficherRubriqueCaserne('reunion')", autorise("acces_reunion_admin")],
-        ["Amicale", "afficherRubriqueCaserne('amical')", autorise("acces_amical_admin")],
-        ["Comité de centre", "afficherRubriqueCaserne('comite_centre')", autorise("acces_comite_centre_admin")],
-        ["Entretiens", "afficherRubriqueCaserne('entretien_individuel')", autorise("acces_entretien_individuel_admin")],
-        ["Notifications", "afficherNotificationsAdministration()", autorise("acces_notifications")],
-        ["Utilisateurs et rôles", "afficherGestionUtilisateurs()", admin && autorise("acces_gestion_utilisateurs")],
-        ["Administration application", "afficherMenuAdministrateurAppli()", admin]
-    ].filter(x => x[2]);
-    ongletsAdministratifVisibles = true;
-    window.cisOngletsAdministratifs = outils;
-    if (!document.getElementById("cis-admin-onglets-style-v2")) {
-        const style = document.createElement("style");
-        style.id = "cis-admin-onglets-style-v2";
-        style.textContent = `
-          .cis-admin-tabs-shell{background:#f4f6f8;color:#233142;padding:16px 16px 10px;border-bottom:1px solid #dce3e9;font-family:inherit}
-          .cis-admin-tabs-shell .cis-admin-tabs-retour{border:0;background:none;color:#536779;font-weight:750;padding:7px 0 12px;cursor:pointer}
-          .cis-admin-tabs-shell h1{color:#223142!important;font-size:24px;margin:0 0 14px}
-          .cis-admin-tabs{display:flex;gap:4px;overflow-x:auto;white-space:nowrap;border-bottom:2px solid #dce3e9;scrollbar-width:thin;padding:0 2px}
-          .cis-admin-tabs button{flex:0 0 auto;border:0;border-bottom:3px solid transparent;margin-bottom:-2px;padding:12px 15px;background:transparent;color:#536779;font-weight:750;font-size:14px;cursor:pointer;border-radius:7px 7px 0 0}
-          .cis-admin-tabs button[aria-selected=true]{color:#1764a2;border-bottom-color:#1764a2;background:#e7f1f9}
-          .cis-admin-tabs-content{background:#fff;min-height:180px}
-          .cis-admin-tabs-content > main{margin:0 auto}
-          .cis-admin-tabs-content .retour-button{display:none!important}
-          @media(max-width:600px){.cis-admin-tabs-shell{padding:12px 10px 8px}.cis-admin-tabs button{padding:11px 12px}}
-        `;
-        document.head.appendChild(style);
-    }
-    if (!observateurOngletsAdministratif) {
-        const app = document.getElementById("app");
-        observateurOngletsAdministratif = new MutationObserver(() => {
-            if (!ongletsAdministratifVisibles || !ongletAdministratifActif) return;
-            if (app.querySelector(".cis-admin-tabs-shell")) return;
-            const main = app.querySelector("main");
-            if (!main) return;
-            installerBarreOngletsAdministratif();
-        });
-        observateurOngletsAdministratif.observe(app, {childList:true});
-    }
-    document.getElementById("app").innerHTML = `<main class="cis-admin-tabs-content"><div style="padding:24px;color:#64748b">Sélectionne un onglet.</div></main>${navigationPrincipale("","accueil")}`;
-    ongletAdministratifActif = "";
-    ouvrirOngletAdministratif(0);
-}
-
-function installerBarreOngletsAdministratif() {
+    const autorise = permission => admin || utilisateurAPermission(permission);
+    const cartes = [
+        ["🧹", "Ménage Admin", "afficherAdminMenageEquipe()", autorise("acces_admin_menage")],
+        ["🚒", "Inventaires Admin", "afficherAdminInventairesEquipe()", autorise("acces_admin_menage")],
+        ["⏱️", "Historique des heures", "afficherHistoriqueHeuresEquipe()", autorise("acces_admin_heures")],
+        ["🏃", "Sport Admin", "afficherRubriqueCaserne('sport')", autorise("acces_sport_admin")],
+        ["📋", "Manœuvres Admin", "afficherRubriqueCaserne('manoeuvre')", autorise("acces_manoeuvre_admin")],
+        ["🏢", "Casernement Admin", "afficherRubriqueCaserne('casernement')", autorise("acces_casernement_admin")],
+        ["📅", "Réunions Admin", "afficherRubriqueCaserne('reunion')", autorise("acces_reunion_admin")],
+        ["🤝", "Amicale Admin", "afficherRubriqueCaserne('amical')", autorise("acces_amical_admin")],
+        ["👥", "Comité de centre Admin", "afficherRubriqueCaserne('comite_centre')", autorise("acces_comite_centre_admin")],
+        ["📝", "Entretiens individuels Admin", "afficherRubriqueCaserne('entretien_individuel')", autorise("acces_entretien_individuel_admin")],
+        ["🔔", "Notifications", "afficherNotificationsAdministration()", autorise("acces_notifications")],
+        ["👤", "Utilisateurs et rôles", "afficherGestionUtilisateurs()", admin && autorise("acces_gestion_utilisateurs")],
+        ["⚙️", "Administration application", "afficherMenuAdministrateurAppli()", admin]
+    ].filter(carte => carte[3]);
     const app = document.getElementById("app");
-    if (!app || !ongletsAdministratifVisibles) return;
-    const nav = document.createElement("section");
-    nav.className = "cis-admin-tabs-shell";
-    nav.innerHTML = `<button class="cis-admin-tabs-retour" type="button" onclick="quitterOngletsAdministratif()">← Espace équipe</button><h1>Administratif</h1><div class="cis-admin-tabs" role="tablist" aria-label="Administration">${(window.cisOngletsAdministratifs||[]).map(([nom],i)=>`<button type="button" role="tab" aria-selected="${ongletAdministratifActif===String(i)}" onclick="ouvrirOngletAdministratif(${i})">${echapperHTML(nom)}</button>`).join("")}</div>`;
-    app.prepend(nav);
-}
-
-function ouvrirOngletAdministratif(index) {
-    const outils = window.cisOngletsAdministratifs || [];
-    if (!ongletsAdministratifVisibles || !outils[index]) return;
-    ongletAdministratifActif = String(index);
-    const action = outils[index][1];
-    // Les fonctions existantes continuent de charger les vraies données et contrôlent les droits.
-    try { const executer = {"afficherAdminMenageEquipe()":()=>afficherAdminMenageEquipe(),"afficherAdminInventairesEquipe()":()=>afficherAdminInventairesEquipe(),"afficherHistoriqueHeuresEquipe()":()=>afficherHistoriqueHeuresEquipe(),"afficherNotificationsAdministration()":()=>afficherNotificationsAdministration(),"afficherGestionUtilisateurs()":()=>afficherGestionUtilisateurs(),"afficherMenuAdministrateurAppli()":()=>afficherMenuAdministrateurAppli()}; if(executer[action]) executer[action](); else {const type = action.match(/^afficherRubriqueCaserne\('([^']+)'\)$/)?.[1]; if(type) void afficherRubriqueCaserne(type); } }
-    catch (erreur) { console.error("Onglet administratif",erreur); alert("Impossible d'ouvrir cet onglet."); }
-    installerBarreOngletsAdministratif();
-}
-
-function quitterOngletsAdministratif() {
-    ongletsAdministratifVisibles = false;
-    ongletAdministratifActif = "";
-    afficherEspaceGarde();
+    app.innerHTML = `<main class="garde-menu-page">
+        <button class="retour-button" onclick="afficherEspaceGarde()">← Retour</button>
+        <header class="garde-menu-entete"><h1>Administratif</h1></header>
+        <div class="garde-menu-cartes">${cartes.map(([icone, titre, action]) => `
+            <button type="button" class="garde-menu-carte" onclick="${action}">
+                <span class="ico">${icone}</span><span><strong>${echapperHTML(titre)}</strong></span><b class="fleche">›</b>
+            </button>`).join("")}</div>
+    </main>${navigationPrincipale("","accueil")}`;
+    actualiserInterfaceBureau();
+    window.scrollTo({top:0,behavior:"auto"});
 }
 
 async function afficherRubriqueCaserne(type) {
