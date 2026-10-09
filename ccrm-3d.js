@@ -48,10 +48,7 @@ function chargerThree(){
   box(.10,.25,.48,3.68,1.12,z,silver);
   box(.11,.12,.29,3.75,1.02,z,white);
  }
- // Chevron réfléchissant sur le nez.
- for(let i=0;i<5;i++)for(const z of [-1,1]){
-  const q=stripe(.17,.78,.022,3.485,2.19, z*(.19+i*.215),z*.44,yellow);
- }
+ // Pare-brise dégagé : pas de chevrons jaunes devant la vitre.
  // Portes avant/arrière, vitres, poignées, rétroviseurs et marchepieds.
  for(const side of [-1,1]){
   const z=side*1.256;
@@ -62,8 +59,6 @@ function chargerThree(){
   for(const x of [1.45,2.72])box(.19,.045,.055,x,1.94,side*1.29,black);
   box(.44,.66,.19,3.12,2.55,side*1.48,black);
   box(.08,.11,.4,3.02,2.49,side*1.34,black);
-  box(2.1,.09,.37,1.87,.92,side*1.35,silver);
-  box(2.05,.045,.24,1.87,.98,side*1.35,black);
   // Marquage jaune de la cabine et ligne de caisse.
   box(2.60,.065,.018,1.98,1.43,side*1.286,yellow);
   box(4.1,.075,.028,-1.45,1.32,side*1.322,yellow);
@@ -100,8 +95,8 @@ function chargerThree(){
   }
  }
  // Toit, gyrophare, coffret supérieur et échelle métallique sur le toit.
- for(const x of [1.22,2.88]){
-  const beacon=new T.Mesh(new T.CylinderGeometry(.15,.17,.20,12),mat('#1554a3',true));beacon.position.set(x,3.36,0.78);root.add(beacon);
+ for(const z of [-.77,.77]){
+  const beacon=new T.Mesh(new T.CylinderGeometry(.15,.17,.20,12),mat('#1554a3',true));beacon.position.set(2.58,3.36,z);root.add(beacon);
  }
  box(.96,.42,.8,-2.40,3.58,.43,silver);
  for(const z of [-.48,.48])box(4.15,.09,.09,-.86,3.62,z,silver);
@@ -124,7 +119,7 @@ function chargerThree(){
  }
  box(.16,.15,2.4,-3.75,.91,0,silver);
  const clickable=[];
- const sides={gauche:[],droite:[],bas:[],arriere:[],toit:[],echelle:[],autre:[]};
+ const sides={gauche:[],droite:[],bas:[],arriere:[],toit:[],echelle:[],cabine:[],autre:[]};
  for(const zone of zones){
   const s=(zone.nom+' '+(zone.cote||'')).toLocaleLowerCase('fr');
   const roof=/toit|sup[eé]rieur|pavillon/.test(s);
@@ -133,28 +128,43 @@ function chargerThree(){
   const rear=/arri[eè]re|hayon/.test(s);
   const right=/droit|conducteur/.test(s);
   const left=/gauch|passager/.test(s);
-  const key=roof?'toit':ladder?'echelle':rear?'arriere':low?'bas':right?'droite':left?'gauche':(sides.gauche.length<=sides.droite.length?'gauche':'droite');
+  const key=cabin?'cabine':roof?'toit':ladder?'echelle':rear?'arriere':low?'bas':right?'droite':left?'gauche':(sides.gauche.length<=sides.droite.length?'gauche':'droite');
   sides[key].push(zone);
  }
+ // Surfaces de contrôle placées DEVANT les rideaux jaunes, et non à l'intérieur.
+ // Un matériau légèrement transparent laisse les détails du véhicule visibles.
  function clickableBox(zone,w,h,d,x,y,z){
   const done=Object.prototype.hasOwnProperty.call(controles,zone.id);
-  const mesh=box(w,h,d,x,y,z,mat(done?'#126b3b':'#1553a5',true));
+  const m=mat(done?'#126039':'#124a96',true);m.transparent=true;m.opacity=.79;m.depthWrite=false;
+  const mesh=box(w,h,d,x,y,z,m);
   mesh.userData.zone=zone;clickable.push(mesh);
-  const edge=new T.LineSegments(new T.EdgesGeometry(mesh.geometry),new T.LineBasicMaterial({color:done?0x064b2b:0x092d67}));edge.position.copy(mesh.position);root.add(edge);
+  const edge=new T.LineSegments(new T.EdgesGeometry(mesh.geometry),new T.LineBasicMaterial({color:done?0x063f25:0x082e69,depthTest:false}));
+  edge.position.copy(mesh.position);edge.renderOrder=3;root.add(edge);
+  mesh.renderOrder=2;
  }
- function sideZones(arr,side,lower){
+ // Chaque rideau correspond à une zone lorsqu'elle existe dans Supabase.
+ function sideZones(arr,side){
   arr.forEach((zone,i)=>{
-   const width=Math.min(1.7,3.5/Math.max(arr.length,2)-.08);
-   const x=-2.85+(i+.5)*(3.5/arr.length);
-   clickableBox(zone,width,lower?.39:1.34,.085,x,lower?1.0:2.24,side*1.32);
+   const x=arr.length===2?[-2.28,-.40][i]:-3.13+(i+.5)*3.38/arr.length;
+   const width=arr.length===2?[1.82,1.56][i]:Math.min(1.8,3.38/arr.length-.06);
+   clickableBox(zone,width,1.36,.035,x,2.29,side*1.495);
   });
  }
- sideZones(sides.gauche,-1,false);sideZones(sides.droite,1,false);
- sides.bas.forEach((z,i)=>clickableBox(z,Math.min(1.4,3.6/sides.bas.length-.07),.35,.1,-2.9+(i+.5)*3.6/sides.bas.length,.99,(i%2?1:-1)*1.33));
- sides.echelle.forEach((z,i)=>clickableBox(z,.55,1.48,.1,-2.75+i*.62,2.23,1.34));
- sides.arriere.forEach((z,i)=>clickableBox(z,.085,.72,Math.min(.8,2/sides.arriere.length-.05),-3.39,2.32,-.95+(i+.5)*1.9/sides.arriere.length));
- sides.toit.forEach((z,i)=>clickableBox(z,Math.min(1.2,2.5/sides.toit.length-.07),.15,1.05,-2.6+(i+.5)*2.5/sides.toit.length,3.38,.4));
- const rest=sides.autre;rest.forEach((z,i)=>clickableBox(z,.7,.6,.1,-2.6+i*.75,1.65,-1.34));
+ sideZones(sides.gauche,-1);sideZones(sides.droite,1);
+ sides.bas.forEach((z,i)=>clickableBox(z,Math.min(1.5,3.6/sides.bas.length-.05),.47,.035,-3.25+(i+.5)*3.6/sides.bas.length,1.12,(i%2?1:-1)*1.49));
+ sides.echelle.forEach((z,i)=>clickableBox(z,.65,1.5,.045,-3.03+i*.65,2.31,1.80));
+ // La pompe est accessible depuis l'arrière, même avec les dévidoirs.
+ sides.arriere.forEach((z,i)=>clickableBox(z,.045,.94,Math.min(1.05,2.2/sides.arriere.length-.05),-4.23,1.50,-1.1+(i+.5)*2.2/sides.arriere.length));
+ sides.toit.forEach((z,i)=>clickableBox(z,Math.min(1.2,2.5/sides.toit.length-.07),.08,1.05,-2.6+(i+.5)*2.5/sides.toit.length,3.89,.4));
+ // Vitres latérales et pare-brise = zone cabine si elle existe.
+ sides.cabine.forEach((z,i)=>{
+  if(i===0){
+   clickableBox(z,.035,.98,2.17,3.58,2.46,0);
+   // surfaces secondaires cliquables reliées à la même zone
+   for(const side of [-1,1])for(const x of [1.40,2.67])clickableBox(z,.89,.70,.032,x,2.55,side*1.318);
+  }else clickableBox(z,.035,.85,1.8,3.60,2.46,0);
+ });
+ sides.autre.forEach((z,i)=>clickableBox(z,.75,.63,.04,-2.65+i*.78,1.85,-1.53));
  const ground=box(9,.06,5,0,.07,0,mat('#d6dee4'));
  let dragging=false,moved=false,lastX=0,lastY=0,az=.35,elev=.42,dist=13;
  function position(){camera.position.set(Math.cos(az)*Math.cos(elev)*dist,1.7+Math.sin(elev)*dist,Math.sin(az)*Math.cos(elev)*dist);camera.lookAt(0,1.65,0);}
