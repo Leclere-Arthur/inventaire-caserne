@@ -938,7 +938,7 @@ let minuteurVerificationMiseAJour =
  * Elle permet de détecter une nouvelle version même si seul app.js change.
  */
 const VERSION_APPLICATION_JS =
-    "2026-10-07-barre-systeme-menus-v28";
+    "2026-10-09-couleurs-menus-v32";
 
 async function verifierNouvelleVersionAppJs() {
 
@@ -9730,6 +9730,15 @@ function initialiserStyleEspaceCaserne() {
            passent après le fond rouge générique de l'espace Caserne. */
         html:has(body .menu-navigation-principal),html.cis-espace-caserne:has(body .menu-navigation-principal),body:has(.menu-navigation-principal){background:#242424!important}
         html:has(body .menu-navigation-pharmacie),html.cis-espace-caserne:has(body .menu-navigation-pharmacie),body:has(.menu-navigation-pharmacie){background:#1f6a45!important}
+        /* v32 : priorité explicite aux couleurs des menus sur iPhone.
+           La couleur est appliquée à html ET body, y compris les règles
+           génériques rouges de l'espace Caserne. */
+        html.cis-menu-accueil,html.cis-menu-accueil body,
+        html.cis-menu-accueil body.cis-espace-caserne{background:#242424!important;background-color:#242424!important}
+        html.cis-menu-pharmacie,html.cis-menu-pharmacie body,
+        html.cis-menu-pharmacie body.cis-espace-caserne{background:#1f6a45!important;background-color:#1f6a45!important}
+        html.cis-menu-caserne,html.cis-menu-caserne body,
+        html.cis-menu-caserne body.cis-espace-caserne{background:#7d2425!important;background-color:#7d2425!important}
         /* Menu visuel : 3 rubriques par ligne sur Accueil, Caserne et Pharmacie. */
         .caserne-menu-page .caserne-menu-liste-simple{grid-template-columns:repeat(3,minmax(0,1fr))}
         .caserne-menu-page .caserne-menu-liste-simple>button{aspect-ratio:1/1;min-height:0}
@@ -9765,6 +9774,13 @@ function synchroniserApparencePWACaserne() {
     const menuPharmacie = Boolean(document.querySelector(".menu-navigation-pharmacie"));
     const menuPrincipal = Boolean(document.querySelector(".menu-navigation-principal"));
     const dansCaserne = Boolean(pageCaserne);
+    // Les classes sont indépendantes de la navigation et reflètent
+    // exclusivement le menu visible (Accueil, Pharmacie, Caserne).
+    document.documentElement.classList.remove("cis-menu-accueil", "cis-menu-pharmacie", "cis-menu-caserne");
+    if (document.querySelector(".caserne-menu-page")) {
+        document.documentElement.classList.add(menuPharmacie ? "cis-menu-pharmacie" : menuPrincipal ? "cis-menu-accueil" : "cis-menu-caserne");
+    }
+
 
     let theme = document.querySelector('meta[name="theme-color"]');
     if (!theme) {
@@ -9798,7 +9814,8 @@ function synchroniserApparencePWACaserne() {
                 : "#7d2425";
 
         theme.setAttribute("content", couleurSysteme);
-        status.setAttribute("content", "black-translucent");
+        // Conserver le mode iOS défini dans index.html pour éviter les décalages.
+        status.setAttribute("content", window.__cisStatusInitial || "default");
         document.documentElement.classList.add("cis-espace-caserne");
         document.body.classList.add("cis-espace-caserne");
         if (viewport) {
