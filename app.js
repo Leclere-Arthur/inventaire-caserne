@@ -7777,7 +7777,6 @@ function afficherPortailPrincipal() {
             <section class="portail-cis-espaces">
                 ${peutCaserne ? `<button type="button" class="portail-cis-carte portail-cis-caserne" onclick="afficherEspaceCaserne()"><span class="portail-cis-titre">Espace Caserne</span><span class="portail-cis-fleche">›</span></button>` : ""}
                 ${peutPharmacie ? `<button type="button" class="portail-cis-carte portail-cis-pharmacie" onclick="afficherAccueil()"><span class="portail-cis-titre">Espace Pharmacie</span><span class="portail-cis-fleche">›</span></button>` : ""}
-                ${utilisateurAccesAdministratifCentral() ? `<button type="button" class="portail-cis-carte" style="background:#303c46;color:white" onclick="afficherAdministratifCaserne()"><span class="portail-cis-titre">⚙️ Administratif</span><span class="portail-cis-fleche">›</span></button>` : ""}
             </section>
             ${htmlRaccourcisAccueil()}
             <section id="carte-garde-accueil" class="garde-accueil-zone">
@@ -7896,14 +7895,6 @@ function obtenirOngletsPharmacieAccessibles() {
         });
     }
 
-    if (utilisateurEstSPVAdmin()) {
-        onglets.push({
-            libelle: "Administrateur appli",
-            aide: "Utilisateurs, rôles et notifications",
-            icone: "🛠️",
-            action: "afficherMenuAdministrateurAppli()"
-        });
-    }
 
     return onglets;
 }
@@ -7919,6 +7910,7 @@ function carteMenuNavigationSimple(onglet) {
 function obtenirSectionsMenuGlobal() {
     const caserne = [];
     if (utilisateurAPermission("acces_espace_caserne")) {
+        if (utilisateurAccesAdministratifCentral()) caserne.push({libelle:"Administratif", aide:"Toutes les administrations hors Pharmacie", icone:"⚙️", action:"afficherAdministratifCaserne()"});
         caserne.push({libelle:"Fil d'actualité Caserne", aide:"Informations récentes", icone:"▤", action:"afficherEspaceCaserne()"});
         caserne.push({libelle:"Annuaire du centre", aide:"Coordonnées des personnels", icone:"📇", action:"afficherAnnuaireCentre()"});
         for (const rubrique of obtenirRubriquesCaserne().filter(utilisateurPeutVoirRubriqueCaserne)) {
@@ -9574,36 +9566,53 @@ function utilisateurAccesAdministratifCentral() {
 }
 
 function afficherAdministratifCaserne() {
-    if (!utilisateurAccesAdministratifCentral()) {
-        alert("Accès non autorisé.");
-        return;
+    if (!utilisateurAccesAdministratifCentral() || !utilisateurAPermission("acces_espace_caserne")) {
+        alert("Accès non autorisé."); return;
     }
-    initialiserStyleEspaceCaserne();
     const admin = utilisateurEstSPVAdmin();
     const autorise = p => admin || utilisateurAPermission(p);
     const outils = [
-        ["🧹", "Ménage", "afficherAdminMenageEquipe()", autorise("acces_admin_menage")],
-        ["🚒", "Inventaires", "afficherAdminInventairesEquipe()", autorise("acces_admin_menage")],
-        ["⏱️", "Historique des heures", "afficherHistoriqueHeuresEquipe()", autorise("acces_admin_heures")],
-        ["🏃", "Sport Admin", "afficherRubriqueCaserne('sport')", autorise("acces_sport_admin")],
-        ["🚒", "Manœuvres Admin", "afficherRubriqueCaserne('manoeuvre')", autorise("acces_manoeuvre_admin")],
-        ["🏠", "Casernement Admin", "afficherRubriqueCaserne('casernement')", autorise("acces_casernement_admin")],
-        ["📅", "Réunions Admin", "afficherRubriqueCaserne('reunion')", autorise("acces_reunion_admin")],
-        ["🤝", "Amicale Admin", "afficherRubriqueCaserne('amical')", autorise("acces_amical_admin")],
-        ["🏛️", "Comité de centre Admin", "afficherRubriqueCaserne('comite_centre')", autorise("acces_comite_centre_admin")],
-        ["📁", "Administratif caserne", "afficherRubriqueCaserne('administratif')", false],
-        ["👤", "Entretiens individuels Admin", "afficherRubriqueCaserne('entretien_individuel')", autorise("acces_entretien_individuel_admin")],
-        ["🔔", "Notifications", "afficherNotificationsAdministration()", autorise("acces_notifications")],
-        ["👥", "Gestion des utilisateurs et rôles", "afficherGestionUtilisateurs()", admin && autorise("acces_gestion_utilisateurs")],
-        ["🛡️", "Administration application", "afficherMenuAdministrateurAppli()", admin]
-    ].filter(x=>x[3]);
+        ["Ménage", "afficherAdminMenageEquipe()", autorise("acces_admin_menage")],
+        ["Inventaires", "afficherAdminInventairesEquipe()", autorise("acces_admin_menage")],
+        ["Historique des heures", "afficherHistoriqueHeuresEquipe()", autorise("acces_admin_heures")],
+        ["Sport", "afficherRubriqueCaserne('sport')", autorise("acces_sport_admin")],
+        ["Manœuvres", "afficherRubriqueCaserne('manoeuvre')", autorise("acces_manoeuvre_admin")],
+        ["Casernement", "afficherRubriqueCaserne('casernement')", autorise("acces_casernement_admin")],
+        ["Réunions", "afficherRubriqueCaserne('reunion')", autorise("acces_reunion_admin")],
+        ["Amicale", "afficherRubriqueCaserne('amical')", autorise("acces_amical_admin")],
+        ["Comité de centre", "afficherRubriqueCaserne('comite_centre')", autorise("acces_comite_centre_admin")],
+        ["Entretiens", "afficherRubriqueCaserne('entretien_individuel')", autorise("acces_entretien_individuel_admin")],
+        ["Notifications", "afficherNotificationsAdministration()", autorise("acces_notifications")],
+        ["Utilisateurs et rôles", "afficherGestionUtilisateurs()", admin && autorise("acces_gestion_utilisateurs")],
+        ["Administration application", "afficherMenuAdministrateurAppli()", admin]
+    ].filter(x => x[2]);
+    if (!document.getElementById("cis-admin-neutre-style")) {
+        const style = document.createElement("style");
+        style.id = "cis-admin-neutre-style";
+        style.textContent = `
+            body:has(.cis-admin-neutre) #app { background:#f4f6f8!important; }
+            .cis-admin-neutre { min-height:100vh;box-sizing:border-box;padding:28px max(18px,calc((100vw - 1100px)/2)) 125px;background:#f4f6f8!important;color:#24313e!important;font-family:inherit; }
+            .cis-admin-neutre .cis-admin-retour {border:0;background:transparent;color:#455667;font-size:14px;font-weight:700;padding:10px 0;cursor:pointer}
+            .cis-admin-neutre h1 {font-size:clamp(26px,4vw,36px);margin:18px 0 6px;color:#1c2937!important}
+            .cis-admin-neutre p {color:#627183;margin:0 0 26px;line-height:1.5}
+            .cis-admin-onglets {display:flex;flex-wrap:wrap;gap:9px;padding:14px;background:#fff;border:1px solid #e0e5ea;border-radius:16px;box-shadow:0 3px 15px #2030400b}
+            .cis-admin-onglets button {appearance:none;border:1px solid #dce2e8;background:#f8fafb;color:#263747;border-radius:10px;padding:13px 16px;font-size:14px;font-weight:750;min-height:46px;cursor:pointer}
+            .cis-admin-onglets button:hover,.cis-admin-onglets button:focus-visible {background:#263747;color:#fff;outline:none}
+            .cis-admin-info {margin-top:20px;padding:20px;border:1px solid #e0e5ea;background:#fff;border-radius:14px;color:#4d6072}
+            @media(max-width:600px){.cis-admin-neutre{padding:20px 14px 110px}.cis-admin-onglets{padding:10px}.cis-admin-onglets button{flex:1 1 auto;padding:12px}}
+        `;
+        document.head.appendChild(style);
+    }
     document.getElementById("app").innerHTML = `
-        <main class="caserne-shell caserne-administratif-page">
-            <header class="caserne-top"><small>CIS LE CHESNE</small><h1>⚙️ Administratif</h1><p>Toutes les administrations, sauf Pharmacie Admin</p></header>
-            <section class="caserne-admin-centre">
-                ${outils.map(([icone,libelle,action])=>`<button type="button" onclick="${action}"><strong>${icone} ${echapperHTML(libelle)}</strong><span>Ouvrir ›</span></button>`).join("")}
-            </section>
-        </main>${navigationPrincipale("", "accueil")}`;
+        <main class="cis-admin-neutre">
+            <button type="button" class="cis-admin-retour" onclick="afficherEspaceCaserne()">← Espace Caserne</button>
+            <h1>Administratif</h1>
+            <p>Choisis une rubrique pour accéder à sa gestion.</p>
+            <nav class="cis-admin-onglets" aria-label="Rubriques administratives">
+                ${outils.map(([libelle, action]) => `<button type="button" onclick="${action}">${echapperHTML(libelle)}</button>`).join("")}
+            </nav>
+            <div class="cis-admin-info">Les rubriques disponibles dépendent de tes autorisations. L'administration Pharmacie reste dans l'Espace Pharmacie.</div>
+        </main>${navigationCaserne("caserne")}`;
     actualiserInterfaceBureau();
     window.scrollTo({top:0,behavior:"auto"});
 }
@@ -21401,6 +21410,7 @@ function actualiserInterfaceBureau() {
                 ${groupe("Activités", ["sport","manoeuvre","casernement"])}
                 ${groupe("Vie de la caserne", ["reunion","amical","comite_centre"])}
                 ${groupe("Personnel", ["entretien_individuel"])}
+                ${utilisateurAccesAdministratifCentral() ? bouton("admin-central", "⚙️ Administratif", "afficherAdministratifCaserne()", true, "bureau-nav-sous-bouton") : ""}
                 
                 <div class="bureau-nav-separateur">Autres espaces</div>
                 ${bouton("pharmacie", "Espace Pharmacie", "afficherAccueil()")}
