@@ -938,7 +938,7 @@ let minuteurVerificationMiseAJour =
  * Elle permet de détecter une nouvelle version même si seul app.js change.
  */
 const VERSION_APPLICATION_JS =
-    "2026-10-09-inventaire-vehicules-v37";
+    "2026-10-09-ccrm-3d-v42";
 
 async function verifierNouvelleVersionAppJs() {
 
@@ -22037,8 +22037,29 @@ async function vehInventaireCommencer(id){
 function vehInventaireAfficherZones(){
  const session=vehInventaireSession;if(!session)return;
  const nb=vehInventaireZones.filter(z=>session.controles[z.id]).length;
- vehInventaireAfficher(`<div class="veh-inventaire-contenu"><button class="retour-button veh-retour" onclick="vehInventaireQuitter()">← Retour</button><h1>${vehInventaireHTML(session.vehicule.nom)}</h1><p class="veh-muted">Inventaire en cours · ${nb}/${vehInventaireZones.length} zones contrôlées</p><div class="veh-progress"><div style="width:${100*nb/vehInventaireZones.length}%"></div></div><div class="veh-card"><strong>Zones de contrôle</strong><p class="veh-muted">La visualisation 3D sera ajoutée dans une prochaine étape. Toutes les zones sont accessibles ici.</p>${vehInventaireZones.map(z=>`<button class="veh-zone ${session.controles[z.id]?"terminee":""}" onclick="vehInventaireOuvrirZone('${z.id}')"><span>${session.controles[z.id]?"✓":"●"} ${vehInventaireHTML(z.nom)}</span><small>${session.controles[z.id]?"Enregistré":"À contrôler"}</small></button>`).join("")}</div><button class="veh-action" ${nb!==vehInventaireZones.length?"disabled":""} onclick="vehInventaireTerminer()">Terminer l'enregistrement</button></div>`);
+ vehInventaireAfficher(`<div class="veh-inventaire-contenu"><button class="retour-button veh-retour" onclick="vehInventaireQuitter()">← Retour</button><h1>${vehInventaireHTML(session.vehicule.nom)}</h1><p class="veh-muted">Inventaire en cours · ${nb}/${vehInventaireZones.length} zones contrôlées</p><div class="veh-progress"><div style="width:${100*nb/vehInventaireZones.length}%"></div></div>${/CCRM/i.test(session.vehicule.nom+" "+session.vehicule.code)?`<div class="veh-card"><strong>CCRM — vue 3D interactive</strong><p class="veh-muted">Fais glisser pour tourner le camion, pince pour zoomer, puis touche un coffre coloré. Le coffre de toit est également accessible.</p><div id="ccrm-3d" style="height:310px;position:relative;border-radius:12px;overflow:hidden;background:linear-gradient(#dfeaf3,#f7f9fb)"><div class="veh-muted" style="padding:20px">Chargement du modèle 3D…</div></div><p id="ccrm-3d-info" class="veh-muted">Les coffres bleus sont à contrôler, les verts sont enregistrés.</p></div>`:""}<div class="veh-card"><strong>Zones de contrôle</strong><p class="veh-muted">Tu peux aussi ouvrir chaque coffre directement dans la liste.</p>${vehInventaireZones.map(z=>`<button class="veh-zone ${session.controles[z.id]?"terminee":""}" onclick="vehInventaireOuvrirZone('${z.id}')"><span>${session.controles[z.id]?"✓":"●"} ${vehInventaireHTML(z.nom)}</span><small>${session.controles[z.id]?"Enregistré":"À contrôler"}</small></button>`).join("")}</div><button class="veh-action" ${nb!==vehInventaireZones.length?"disabled":""} onclick="vehInventaireTerminer()">Terminer l'enregistrement</button></div>`);
+ if(document.getElementById("ccrm-3d"))void vehInventaireCharger3D();
 }
+
+let vehInventaire3DPromise=null;
+async function vehInventaireCharger3D(){
+ const element=document.getElementById("ccrm-3d");
+ if(!element||!vehInventaireSession)return;
+ try{
+  if(!vehInventaire3DPromise)vehInventaire3DPromise=new Promise((resolve,reject)=>{
+   const script=document.createElement("script");script.src="./ccrm-3d.js?v=42";
+   script.onload=()=>resolve();script.onerror=()=>reject(Error("Module 3D indisponible"));
+   document.head.appendChild(script);
+  });
+  await vehInventaire3DPromise;
+  if(!element.isConnected||!vehInventaireSession)return;
+  await window.creerModeleCCRM3D(element,vehInventaireZones,vehInventaireSession.controles,id=>vehInventaireOuvrirZone(id));
+ }catch(e){
+  console.warn("Visualisation CCRM :",e);
+  if(element.isConnected)element.innerHTML='<div class="veh-muted" style="padding:20px">Vue 3D indisponible sur cet appareil. La liste des coffres ci-dessous reste entièrement utilisable.</div>';
+ }
+}
+
 function vehInventaireOuvrirZone(id){
  const session=vehInventaireSession,z=vehInventaireZones.find(x=>x.id===id);if(!session||!z)return;
  const materiels=vehInventaireMateriels.filter(m=>m.zone_id===id);
