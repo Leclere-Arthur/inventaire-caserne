@@ -663,12 +663,55 @@ function afficherFenetreCIS(message) {
  * réelle : retour enregistré, stock ajouté, utilisateur modifié, etc.
  */
 window.alert = function (message) {
-
+    const texte = String(message || "");
+    if (determinerTypeFenetreCIS(texte) === "succes" &&
+        /enregistr|ajouté|modifié|supprimé|effectué|sauvegardé|validé/i.test(texte)) {
+        void animationValidationEnregistrementCIS(texte.replace(/^[\s✅✓]+/, ""));
+        return;
+    }
     afficherFenetreCIS(message);
-
 };
 
 
+
+/* Confirmation plein écran : cercle vert qui s'ouvre après une sauvegarde réussie. */
+let confirmationEnregistrementActiveCIS = false;
+async function animationValidationEnregistrementCIS(texte, destination) {
+    if (confirmationEnregistrementActiveCIS) return;
+    confirmationEnregistrementActiveCIS = true;
+    const ancien = document.getElementById("cis-validation-plein-ecran");
+    if (ancien) ancien.remove();
+    if (!document.getElementById("cis-validation-animation-style")) {
+        const style = document.createElement("style");
+        style.id = "cis-validation-animation-style";
+        style.textContent = `
+          #cis-validation-plein-ecran{position:fixed;inset:0;z-index:300000;display:grid;place-items:center;overflow:hidden;pointer-events:all;color:white}
+          #cis-validation-plein-ecran .cis-validation-bulle{position:absolute;left:50%;top:50%;width:120vmax;height:120vmax;border-radius:50%;background:#16844b;transform:translate(-50%,-50%) scale(0);animation:cis-bulle-ouvrir .7s cubic-bezier(.2,.7,.2,1) forwards}
+          #cis-validation-plein-ecran .cis-validation-contenu{position:relative;z-index:1;text-align:center;padding:24px;opacity:0;animation:cis-texte-apparaitre .4s ease .42s forwards;font:inherit}
+          #cis-validation-plein-ecran .cis-validation-coche{font-size:70px;font-weight:900;line-height:1.2}
+          #cis-validation-plein-ecran .cis-validation-message{font-size:clamp(19px,5vw,27px);font-weight:800;max-width:85vw}
+          @keyframes cis-bulle-ouvrir{to{transform:translate(-50%,-50%) scale(1)}}
+          @keyframes cis-texte-apparaitre{to{opacity:1}}
+          @media(prefers-reduced-motion:reduce){#cis-validation-plein-ecran .cis-validation-bulle{animation-duration:.01s}#cis-validation-plein-ecran .cis-validation-contenu{animation-delay:0s;animation-duration:.01s}}
+        `;
+        document.head.appendChild(style);
+    }
+    const overlay = document.createElement("div");
+    overlay.id = "cis-validation-plein-ecran";
+    const bulle = document.createElement("div"); bulle.className = "cis-validation-bulle";
+    const contenu = document.createElement("div"); contenu.className = "cis-validation-contenu";
+    const coche = document.createElement("div"); coche.className = "cis-validation-coche"; coche.textContent = "✓";
+    const message = document.createElement("div"); message.className = "cis-validation-message";
+    message.textContent = texte || "Enregistrement effectué";
+    contenu.append(coche, message); overlay.append(bulle, contenu); document.body.appendChild(overlay);
+    try {
+        vibrerConfirmationEnregistrementCIS("Enregistré");
+        await new Promise(resolve => setTimeout(resolve, 1350));
+        if (typeof destination === "function") await destination();
+    } finally {
+        overlay.remove(); confirmationEnregistrementActiveCIS = false;
+    }
+}
 
 /* =========================================================
    INVENTAIRE CASERNE
@@ -12444,15 +12487,11 @@ async function validerRetourIntervention() {
 
         if (!navigator.onLine) {
 
-            alert(
-                "✅ Retour enregistré hors connexion. Il sera synchronisé plus tard."
-            );
+            console.info("Retour enregistré hors connexion ; synchronisation ultérieure.");
 
         } else if (synchronise) {
 
-            alert(
-                "✅ Retour d'intervention enregistré et synchronisé !"
-            );
+            console.info("Retour d'intervention enregistré et synchronisé.");
 
         } else {
 
@@ -12462,7 +12501,7 @@ async function validerRetourIntervention() {
 
         }
 
-        await afficherHistorique();
+        await animationValidationEnregistrementCIS("Retour d’intervention enregistré", () => afficherHistorique());
 
     } finally {
 
@@ -22104,7 +22143,8 @@ async function vehInventaireTerminerInterne(){
  try{
   const sb=obtenirClientSupabase();const payload={vehicule_id:session.vehicule.id,vehicule_nom:session.vehicule.nom,controle_par:profilUtilisateurConnecte?.id,details:vehInventaireZones.map(z=>({zone_id:z.id,zone_nom:z.nom,cote:z.cote,materiels:vehInventaireMateriels.filter(m=>m.zone_id===z.id).map(m=>({materiel_id:m.id,nom:m.nom,quantite:m.quantite,etat_reference:m.etat_reference,etat:session.controles[z.id][m.id]?.etat||null,observation:session.controles[z.id][m.id]?.observation||""}))}))};
   const {error}=await sb.from("cis_inventaires_vehicules").insert(payload);if(error)throw error;
-  vehInventaireSession=null;vehInventaireAfficher(`<h1>Inventaire enregistré ✓</h1><div class="veh-card"><p>L'inventaire de ${vehInventaireHTML(payload.vehicule_nom)} a bien été enregistré définitivement.</p><button class="veh-action" onclick="afficherInventaireVehiculeEspaceGarde()">Retour aux véhicules</button></div>`);
+  vehInventaireSession=null;
+  await animationValidationEnregistrementCIS("Inventaire enregistré", () => afficherEspaceGarde());
  }catch(e){alert("Enregistrement impossible : "+e.message+". Les contrôles sont conservés sur cette page.");if(btn){btn.disabled=false;btn.textContent="Terminer l'enregistrement";}}
 }
 window.vehInventaireOuvrirVehicule=vehInventaireOuvrirVehicule;
@@ -22246,7 +22286,7 @@ async function enregistrerMenageEquipe(){
         document.querySelectorAll("[data-garde-zone],[data-garde-personne]").forEach(x=>x.checked=false);
         const dureeEl=document.getElementById("garde-menage-duree");if(dureeEl)dureeEl.value="";
         actualiserPlanMenageGarde();
-        afficherStatut("✓ Ménage réellement enregistré dans l’historique.",true);
+        await animationValidationEnregistrementCIS("Ménage enregistré", () => afficherEspaceGarde());
     }catch(e){
         console.error("Enregistrement ménage :",e);
         afficherStatut("Échec de l’enregistrement : "+(e?.message||"erreur inconnue"),false);
@@ -22407,7 +22447,7 @@ async function afficherEnregistrerHeuresEquipe(){
 async function enregistrerHeuresEquipe(){
  const st=document.getElementById("heures-statut"),btn=document.querySelector(".garde-menage-enregistrer"),motif=document.getElementById("heures-motif"),details=(document.getElementById("heures-details")?.value||"").trim(),duree=Number(document.getElementById("heures-duree")?.value||0);const autre=motif?.options[motif.selectedIndex]?.dataset?.autre==="1";
  if(autre&&!details){if(st){st.textContent="Le détail est obligatoire avec le motif Autre.";st.className="garde-menage-statut err"}return}
- try{btn.disabled=true;btn.textContent="Enregistrement…";const sb=obtenirClientSupabase();const ids=[...personnesHeuresSelectionnees];if(!ids.includes(String(profilUtilisateurConnecte?.id)))ids.unshift(String(profilUtilisateurConnecte.id));const {error}=await sb.from("heures_equipe").insert({enregistre_par:profilUtilisateurConnecte.id,motif_id:motif.value,duree_minutes:duree,details:details||null,personnes_concernees:ids});if(error)throw error;st.textContent="✓ Heures enregistrées.";st.className="garde-menage-statut ok";setTimeout(()=>afficherEspaceGarde(),700)}catch(e){st.textContent="Échec : "+(e?.message||"erreur inconnue");st.className="garde-menage-statut err"}finally{if(btn){btn.disabled=false;btn.textContent="Enregistrer les heures"}}
+ try{btn.disabled=true;btn.textContent="Enregistrement…";const sb=obtenirClientSupabase();const ids=[...personnesHeuresSelectionnees];if(!ids.includes(String(profilUtilisateurConnecte?.id)))ids.unshift(String(profilUtilisateurConnecte.id));const {error}=await sb.from("heures_equipe").insert({enregistre_par:profilUtilisateurConnecte.id,motif_id:motif.value,duree_minutes:duree,details:details||null,personnes_concernees:ids});if(error)throw error;await animationValidationEnregistrementCIS("Heures enregistrées", () => afficherEspaceGarde())}catch(e){st.textContent="Échec : "+(e?.message||"erreur inconnue");st.className="garde-menage-statut err"}finally{if(btn){btn.disabled=false;btn.textContent="Enregistrer les heures"}}
 }
 async function afficherHistoriqueHeuresEquipe(){
  if(!utilisateurAPermission("acces_admin_heures")){alert("Accès non autorisé.");return}initialiserStyleEspaceGardeUtilisateur();document.getElementById("app").innerHTML=`<main class="garde-section"><button class="retour-button" onclick="afficherAdministratifCaserne()">← Administratif</button><h1>Historique des heures</h1><div id="heures-hist" class="garde-planning-attente">Chargement…</div></main>${navigationPrincipale("","accueil")}`;actualiserInterfaceBureau();
