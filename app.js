@@ -806,6 +806,9 @@ function installerHistoriqueNavigationApplication() {
     document.addEventListener("click", (event) => {
         const bouton = event.target?.closest?.(".retour-button, .reappro-retour, [data-retour-page]");
         if (!bouton) return;
+        // Les retours de l'inventaire véhicules ont leur propre navigation :
+        // restaurer un ancien HTML laisserait les photos et listes non initialisées.
+        if (bouton.classList.contains("veh-retour")) return;
         event.preventDefault();
         event.stopImmediatePropagation();
         retourPagePrecedente();
@@ -830,6 +833,19 @@ function retourPagePrecedente() {
 
     app.innerHTML = precedent.html;
     etatNavigationCourante = precedent;
+    // Une page inventaire restaurée doit retrouver ses données et ses photos.
+    // La restauration HTML seule ne relance pas les chargements asynchrones.
+    if (app.querySelector(".veh-inventaire-liste")) {
+        restaurationNavigationEnCours = false;
+        void afficherInventaireVehiculeEspaceGarde();
+        return;
+    }
+    if (app.querySelector(".veh-inventaire-contenu") && vehInventaireSession) {
+        restaurationNavigationEnCours = false;
+        vehInventaireAfficherZones();
+        return;
+    }
+    if (app.querySelector(".veh-photo-miniature")) void vehInventaireChargerPhotos();
     actualiserInterfaceBureau();
     synchroniserApparencePWACaserne();
 
