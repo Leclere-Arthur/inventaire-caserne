@@ -995,7 +995,7 @@ let minuteurVerificationMiseAJour =
  * Elle permet de détecter une nouvelle version même si seul app.js change.
  */
 const VERSION_APPLICATION_JS =
-    "2026-10-09-admin-inventaires-v44";
+    "2026-10-10-tracabilite-pharmacie-v45";
 
 async function verifierNouvelleVersionAppJs() {
 
@@ -3556,6 +3556,12 @@ async function afficherProfilUtilisateur() {
 
             </section>
 
+
+            <section class="profil-carte">
+                <h3>Ma signature</h3>
+                <p>Enregistre ta signature au doigt pour les fiches d’entretien VSAV.</p>
+                <button type="button" class="profil-bouton-principal" onclick="ouvrirSignaturePharmacie()">✍️ Enregistrer ma signature</button>
+            </section>
 
             <section class="profil-carte">
 
@@ -11385,6 +11391,13 @@ async function afficherRetourIntervention() {
             </div>
 
 
+            <section class="formulaire" style="margin:15px 0;padding:15px;background:#f3faf5;border-radius:15px">
+                <strong>Contrôles au retour d’intervention</strong>
+                <label style="display:flex;align-items:center;gap:12px;margin:12px 0"><input type="checkbox" id="controle-meducore-retour" style="width:22px;height:22px"> Contrôle du Meducore</label>
+                <label style="display:flex;align-items:center;gap:12px;margin:12px 0"><input type="checkbox" id="entretien-vsav-retour" style="width:22px;height:22px"> Entretien du VSAV</label>
+                <small>Les contrôles cochés alimentent leurs fiches de traçabilité distinctes.</small>
+            </section>
+
             <div class="recherche">
 
                 <input
@@ -12284,6 +12297,21 @@ async function validerRetourIntervention() {
     }
 
 
+    const meducoreCoche = Boolean(document.getElementById("controle-meducore-retour")?.checked);
+    const vsavCoche = Boolean(document.getElementById("entretien-vsav-retour")?.checked);
+    let signatureRetour = null;
+    if (meducoreCoche || vsavCoche) {
+        if (!navigator.onLine) {
+            alert("Les fiches de contrôle nécessitent une connexion Internet. Réessaie connecté ou décoche les contrôles.");
+            return;
+        }
+        if (vsavCoche) {
+            try { signatureRetour = await chargerSignaturePharmacie(); }
+            catch (e) { alert("Impossible de charger ta signature : " + e.message); return; }
+            if (!signatureRetour) { alert("Enregistre d’abord ta signature dans Mon profil pour valider l’entretien VSAV."); return; }
+        }
+    }
+
     const ids =
         Object.keys(
             consommationsEnCours
@@ -12442,10 +12470,11 @@ async function validerRetourIntervention() {
     );
 
 
+    const idRetourPourControles = genererUUID();
     historique.push({
 
         id:
-            genererUUID(),
+            idRetourPourControles,
 
         date:
             date,
@@ -12501,6 +12530,19 @@ async function validerRetourIntervention() {
 
         }
 
+        if (meducoreCoche || vsavCoche) {
+            try {
+                await enregistrerControlesPharmacie({
+                    interventionId: idRetourPourControles, date, numero,
+                    meducore: meducoreCoche, vsav: vsavCoche,
+                    signature: signatureRetour
+                });
+            } catch (e) {
+                console.error("Traçabilité pharmacie", e);
+                alert("⚠️ Le retour est enregistré, mais les fiches Meducore/VSAV ne sont pas sauvegardées : " + e.message + ". Contacte l’administrateur avant de recommencer.");
+                return;
+            }
+        }
         await animationValidationEnregistrementCIS("Retour d’intervention enregistré", () => afficherHistorique());
 
     } finally {
@@ -16282,6 +16324,10 @@ function afficherMenuAdministration() {
             <h2>Administration</h2>
 
             <div class="menu-administration">
+                <button class="menu-button" onclick="afficherArchivesControlesPharmacie()">
+                    <span class="menu-icon">📄</span>
+                    <span><strong>Traçabilité Meducore / VSAV</strong><small>Consulter et exporter les feuilles de contrôle</small></span>
+                </button>
 
                 ${
                     utilisateurAPermission("acces_ajout_materiel")
@@ -22468,3 +22514,83 @@ window.afficherInventaireVehiculeEspaceGarde=afficherInventaireVehiculeEspaceGar
 window.afficherPlanningEspaceGarde=afficherPlanningEspaceGarde;
 window.sauvegarderSelectionMenageGarde=sauvegarderSelectionMenageGarde;
 window.basculerZoneDepuisPlanGarde=basculerZoneDepuisPlanGarde;
+
+
+/* ===== TRAÇABILITÉ PHARMACIE : Meducore / VSAV ===== */
+async function chargerSignaturePharmacie() {
+    const sb = obtenirClientSupabase();
+    if (!sb || !utilisateurConnecte?.id) throw new Error("Session indisponible");
+    const {data,error}=await sb.from("cis_signatures_spv").select("signature_png").eq("user_id",utilisateurConnecte.id).maybeSingle();
+    if(error) throw error;
+    return data?.signature_png || null;
+}
+async function ouvrirSignaturePharmacie() {
+    const ancien=document.getElementById("cis-signature-modal");if(ancien)ancien.remove();
+    const overlay=document.createElement("div");overlay.id="cis-signature-modal";
+    overlay.style.cssText="position:fixed;inset:0;z-index:300000;background:#0009;display:grid;place-items:center;padding:15px";
+    overlay.innerHTML=`<div style="background:white;color:#202428;border-radius:18px;padding:18px;width:min(95vw,540px);box-sizing:border-box"><h3>✍️ Ma signature</h3><p>Signe avec ton doigt dans le cadre.</p><canvas id="cis-signature-canvas" style="width:100%;height:190px;background:#fff;border:2px solid #aab;border-radius:10px;touch-action:none"></canvas><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px"><button id="cis-signature-effacer">Effacer</button><button id="cis-signature-enregistrer">Enregistrer</button><button id="cis-signature-fermer">Annuler</button></div><p id="cis-signature-info" role="status"></p></div>`;
+    document.body.appendChild(overlay);
+    const canvas=overlay.querySelector("canvas"),ctx=canvas.getContext("2d");
+    canvas.width=900;canvas.height=320;ctx.lineWidth=4;ctx.lineCap="round";ctx.lineJoin="round";ctx.strokeStyle="#18232e";
+    let dessin=false,trace=false;
+    const position=e=>{const r=canvas.getBoundingClientRect();return {x:(e.clientX-r.left)*canvas.width/r.width,y:(e.clientY-r.top)*canvas.height/r.height}};
+    canvas.addEventListener("pointerdown",e=>{e.preventDefault();canvas.setPointerCapture(e.pointerId);const p=position(e);ctx.beginPath();ctx.moveTo(p.x,p.y);dessin=true;});
+    canvas.addEventListener("pointermove",e=>{if(!dessin)return;e.preventDefault();const p=position(e);ctx.lineTo(p.x,p.y);ctx.stroke();trace=true;});
+    canvas.addEventListener("pointerup",()=>{dessin=false;});canvas.addEventListener("pointercancel",()=>{dessin=false;});
+    overlay.querySelector("#cis-signature-effacer").onclick=()=>{ctx.clearRect(0,0,canvas.width,canvas.height);trace=false;};
+    overlay.querySelector("#cis-signature-fermer").onclick=()=>overlay.remove();
+    try {const existante=await chargerSignaturePharmacie();if(existante){const img=new Image();img.onload=()=>{ctx.drawImage(img,0,0,canvas.width,canvas.height);trace=true;};img.src=existante;}}catch(e){overlay.querySelector("#cis-signature-info").textContent=e.message;}
+    overlay.querySelector("#cis-signature-enregistrer").onclick=async()=>{
+        if(!trace){overlay.querySelector("#cis-signature-info").textContent="Signe avant d’enregistrer.";return;}
+        const btn=overlay.querySelector("#cis-signature-enregistrer");btn.disabled=true;
+        try{const sb=obtenirClientSupabase();const {error}=await sb.from("cis_signatures_spv").upsert({user_id:utilisateurConnecte.id,signature_png:canvas.toDataURL("image/png"),updated_at:new Date().toISOString()},{onConflict:"user_id"});if(error)throw error;overlay.remove();alert("Signature enregistrée.");}
+        catch(e){overlay.querySelector("#cis-signature-info").textContent="Échec : "+e.message;btn.disabled=false;}
+    };
+}
+async function enregistrerControlesPharmacie(c) {
+    const sb=obtenirClientSupabase();if(!sb || !utilisateurConnecte?.id)throw new Error("Non connecté");
+    const nom=[profilUtilisateurConnecte?.prenom,profilUtilisateurConnecte?.nom].filter(Boolean).join(" ").trim();
+    const lignes=[];
+    for(const type of ["meducore","vsav"]){
+        if(!c[type])continue;
+        lignes.push({type_controle:type,intervention_ref:c.interventionId,date_intervention:c.date,numero_intervention:c.numero,user_id:utilisateurConnecte.id,agent_nom:nom,signature_png:type==="vsav"?c.signature:null});
+    }
+    if(!lignes.length)return;
+    const {error}=await sb.from("cis_controles_pharmacie").insert(lignes);
+    if(error)throw error;
+}
+
+
+const CAPACITE_CONTROLES_PHARMACIE={meducore:14,vsav:16};
+let archivesControlesPharmacie={meducore:[],vsav:[]};
+async function afficherArchivesControlesPharmacie(){
+ if(!utilisateurPeutExporterPharmaciePDF()){alert("Accès réservé aux administrateurs pharmacie.");return;}
+ document.getElementById("app").innerHTML=`<main class="page navigation-fixe-page"><button class="retour-button" onclick="ouvrirAdministration()">← Retour</button><h2>Traçabilité pharmacie</h2><p>Contrôles du Meducore et entretiens du VSAV — feuilles distinctes et conservées.</p><div id="archives-controles-pharmacie">Chargement…</div></main>${navigationPrincipale("pharmacie","pharmacie")}`;
+ const sb=obtenirClientSupabase();const {data,error}=await sb.from("cis_controles_pharmacie").select("id,type_controle,date_intervention,numero_intervention,agent_nom,signature_png,created_at").order("created_at",{ascending:true}).limit(10000);
+ const zone=document.getElementById("archives-controles-pharmacie");if(!zone)return;
+ if(error){zone.textContent="Impossible de charger les archives : "+error.message;return;}
+ archivesControlesPharmacie={meducore:[],vsav:[]};
+ for(const type of ["meducore","vsav"]){const lignes=(data||[]).filter(v=>v.type_controle===type);for(let i=0;i<lignes.length;i+=CAPACITE_CONTROLES_PHARMACIE[type])archivesControlesPharmacie[type].push(lignes.slice(i,i+CAPACITE_CONTROLES_PHARMACIE[type]));}
+ zone.innerHTML=["meducore","vsav"].map(type=>`<section class="profil-carte" style="margin:16px 0;padding:15px"><h3>${type==="meducore"?"Contrôles du Meducore":"Entretiens du VSAV"}</h3>${archivesControlesPharmacie[type].length?archivesControlesPharmacie[type].map((p,i)=>`<div style="padding:12px 0;border-bottom:1px solid #ddd"><strong>Feuille ${i+1}</strong><div>Du ${echapperHTML(p[0].date_intervention)} au ${echapperHTML(p[p.length-1].date_intervention)} — ${p.length} ligne(s)</div><button type="button" class="profil-bouton-principal" onclick="exporterControlePharmaciePDF('${type}',${i})">Télécharger le PDF</button></div>`).join(""):"Aucune feuille enregistrée."}</section>`).join("");
+}
+async function bibliothequePDFControlesPharmacie(){
+ if(window.PDFLib)return window.PDFLib;
+ await new Promise((resolve,reject)=>{const s=document.createElement("script");s.src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js";s.onload=resolve;s.onerror=()=>reject(new Error("Bibliothèque PDF inaccessible"));document.head.appendChild(s)});
+ return window.PDFLib;
+}
+async function exporterControlePharmaciePDF(type,index){
+ try{
+ const lignes=archivesControlesPharmacie[type]?.[index];if(!lignes?.length)throw new Error("Feuille introuvable");
+ const lib=await bibliothequePDFControlesPharmacie();
+ const fichier=type==="meducore"?"controle_meducore.pdf":"tracabilite_entretien_vsav.pdf";
+ const r=await fetch("./"+fichier);if(!r.ok)throw new Error("Modèle PDF manquant : "+fichier);
+ const pdf=await lib.PDFDocument.load(await r.arrayBuffer());const page=pdf.getPages()[0],font=await pdf.embedFont(lib.StandardFonts.Helvetica);
+ const draw=(s,x,top,size=9)=>{let t=String(s||"");while(t.length&&font.widthOfTextAtSize(t,size)>145)t=t.slice(0,-1);page.drawText(t,{x,y:page.getHeight()-top,size,font,color:lib.rgb(.05,.13,.19)})};
+ for(let i=0;i<lignes.length;i++){
+ const v=lignes[i],date=String(v.date_intervention||"").split("-").reverse().join("/");
+ if(type==="meducore"){const y=241+i*40.42;draw(date,58,y,9);draw(v.agent_nom,171,y,9);draw(v.numero_intervention,455,y+9,8);}
+ else {const y=293+i*29.06;draw(date,44,y,8);draw(v.agent_nom,113,y,8);draw("X",357,y,11);if(v.signature_png){try{const png=await pdf.embedPng(v.signature_png);const dim=png.scaleToFit(90,23);page.drawImage(png,{x:231,y:page.getHeight()-(y-17)-dim.height,width:dim.width,height:dim.height});}catch(e){console.warn(e);}}}
+ }
+ const bytes=await pdf.save();const blob=new Blob([bytes],{type:"application/pdf"}),url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download=`${type}-${lignes[0].date_intervention}-au-${lignes[lignes.length-1].date_intervention}-feuille-${index+1}.pdf`;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),30000);
+ }catch(e){alert("Export impossible : "+e.message);}
+}
