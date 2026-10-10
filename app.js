@@ -995,7 +995,7 @@ let minuteurVerificationMiseAJour =
  * Elle permet de détecter une nouvelle version même si seul app.js change.
  */
 const VERSION_APPLICATION_JS =
-    "2026-10-10-agenda-moderne-v46";
+    "2026-10-10-photos-vehicules-v47";
 
 async function verifierNouvelleVersionAppJs() {
 
@@ -22138,15 +22138,63 @@ let vehInventaireCatalogue = [];
 let vehInventaireZones = [];
 let vehInventaireMateriels = [];
 const vehInventaireHTML = valeur => echapperHTML(String(valeur ?? ""));
+// Photos configurées dans l'application Admin (bucket Supabase privé).
+const VEH_PHOTO_BUCKET = "cis-photos-inventaire";
+let vehPhotoGeneration = 0;
+function vehPhotoMiniature(chemin, taille = "materiel") {
+ if (!chemin) return "";
+ return `<button type="button" class="veh-photo-miniature veh-photo-${taille}" data-veh-photo-path="${vehInventaireHTML(chemin)}" aria-label="Agrandir la photo" onclick="vehInventaireAgrandirPhoto(this)"><img alt="" loading="lazy"></button>`;
+}
+async function vehInventaireChargerPhotos() {
+ const generation = ++vehPhotoGeneration;
+ const elements = [...document.querySelectorAll('.veh-photo-miniature[data-veh-photo-path]')];
+ if (!elements.length) return;
+ const sb = obtenirClientSupabase();
+ if (!sb) return;
+ const chemins = [...new Set(elements.map(e => e.dataset.vehPhotoPath).filter(Boolean))];
+ await Promise.all(chemins.map(async chemin => {
+  try {
+   const {data,error} = await sb.storage.from(VEH_PHOTO_BUCKET).createSignedUrl(chemin,3600);
+   if (error) throw error;
+   if (generation !== vehPhotoGeneration) return;
+   for (const bouton of elements.filter(e => e.dataset.vehPhotoPath === chemin)) {
+    if (!bouton.isConnected) continue;
+    const image = bouton.querySelector('img');
+    if (image) image.src = data.signedUrl;
+    bouton.dataset.vehPhotoUrl = data.signedUrl;
+    bouton.classList.add('veh-photo-chargee');
+   }
+  } catch (erreur) { console.warn('Photo inventaire indisponible :', erreur); }
+ }));
+}
+function vehInventaireAgrandirPhoto(bouton) {
+ const url = bouton?.dataset?.vehPhotoUrl;
+ if (!url) return;
+ document.getElementById('veh-photo-plein-ecran')?.remove();
+ const fond = document.createElement('div');
+ fond.id = 'veh-photo-plein-ecran';
+ fond.setAttribute('role','dialog');
+ fond.setAttribute('aria-label','Photo agrandie');
+ const image = document.createElement('img');
+ image.src = url; image.alt = '';
+ fond.appendChild(image);
+ const fermer = () => { fond.remove(); document.removeEventListener('keydown', touche); };
+ const touche = e => { if (e.key === 'Escape') fermer(); };
+ fond.addEventListener('click', fermer);
+ document.addEventListener('keydown', touche);
+ document.body.appendChild(fond);
+}
+
 function vehInventaireStyle(){
  if(document.getElementById("veh-inventaire-style"))return;
  const st=document.createElement("style");st.id="veh-inventaire-style";
- st.textContent=`.veh-card{background:#fff;border:1px solid #e0e5e9;border-radius:15px;padding:18px;margin:13px 0;box-shadow:0 2px 9px #15202b0c}.veh-card button{cursor:pointer}.veh-action{display:block;width:100%;min-height:54px;border:0;border-radius:13px;padding:16px 18px;background:#246b4b;color:#fff;font:inherit;font-weight:800;font-size:17px;box-shadow:0 3px 10px #15202b1a}.veh-action:disabled{opacity:.45}.veh-muted{color:#68737e;font-size:14px}.veh-zone{display:flex;justify-content:space-between;align-items:center;gap:12px;width:100%;min-height:67px;text-align:left;border:2px solid #367bd7;background:#eef5ff;color:#163c71;border-radius:14px;padding:18px;margin:12px 0;font:inherit;font-size:17px;font-weight:800;cursor:pointer}.veh-zone small{font-size:13px}.veh-zone.terminee{border-color:#21965c;background:#e8f8ef;color:#12613b}.veh-etat{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:14px 0}.veh-etat label{display:flex;align-items:center;justify-content:center;gap:6px;min-height:54px;padding:9px 5px;border:1px solid #b9c8d5;border-radius:12px;background:#f8fafc;font-size:14px;font-weight:750;cursor:pointer}.veh-etat label:has(input:checked){border-width:3px}.veh-etat label:has(input[value="bon"]:checked){background:#c7f3d7;border-color:#16834a;color:#07532b}.veh-etat label:has(input[value="a_surveiller"]:checked){background:#fff0a6;border-color:#d19a00;color:#6c4a00}.veh-etat label:has(input[value="hs"]:checked){background:#ffd1d1;border-color:#c52c2c;color:#821515}.veh-etat input{width:18px;height:18px;accent-color:#246b4b}.veh-note{box-sizing:border-box;width:100%;border:1px solid #ccd5df;border-radius:10px;padding:13px;font:inherit;font-size:16px}.veh-progress{height:10px;border-radius:99px;background:#e2e8f0;overflow:hidden}.veh-progress>div{height:100%;background:#21965c}.veh-retour{margin-bottom:14px;min-height:44px}.veh-inventaire-contenu{padding-bottom:18px}`;
+ st.textContent=`.veh-card{background:#fff;border:1px solid #e0e5e9;border-radius:15px;padding:18px;margin:13px 0;box-shadow:0 2px 9px #15202b0c}.veh-card button{cursor:pointer}.veh-action{display:block;width:100%;min-height:54px;border:0;border-radius:13px;padding:16px 18px;background:#246b4b;color:#fff;font:inherit;font-weight:800;font-size:17px;box-shadow:0 3px 10px #15202b1a}.veh-action:disabled{opacity:.45}.veh-muted{color:#68737e;font-size:14px}.veh-zone{display:flex;justify-content:space-between;align-items:center;gap:12px;width:100%;min-height:67px;text-align:left;border:2px solid #367bd7;background:#eef5ff;color:#163c71;border-radius:14px;padding:18px;margin:12px 0;font:inherit;font-size:17px;font-weight:800;cursor:pointer}.veh-zone small{font-size:13px}.veh-zone.terminee{border-color:#21965c;background:#e8f8ef;color:#12613b}.veh-etat{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:14px 0}.veh-etat label{display:flex;align-items:center;justify-content:center;gap:6px;min-height:54px;padding:9px 5px;border:1px solid #b9c8d5;border-radius:12px;background:#f8fafc;font-size:14px;font-weight:750;cursor:pointer}.veh-etat label:has(input:checked){border-width:3px}.veh-etat label:has(input[value="bon"]:checked){background:#c7f3d7;border-color:#16834a;color:#07532b}.veh-etat label:has(input[value="a_surveiller"]:checked){background:#fff0a6;border-color:#d19a00;color:#6c4a00}.veh-etat label:has(input[value="hs"]:checked){background:#ffd1d1;border-color:#c52c2c;color:#821515}.veh-etat input{width:18px;height:18px;accent-color:#246b4b}.veh-note{box-sizing:border-box;width:100%;border:1px solid #ccd5df;border-radius:10px;padding:13px;font:inherit;font-size:16px}.veh-progress{height:10px;border-radius:99px;background:#e2e8f0;overflow:hidden}.veh-progress>div{height:100%;background:#21965c}.veh-retour{margin-bottom:14px;min-height:44px}.veh-inventaire-contenu{padding-bottom:18px}.veh-zone-identite{display:flex;align-items:center;gap:12px;min-width:0}.veh-photo-miniature{display:none;flex:0 0 auto;overflow:hidden;border:1px solid #cbd5e1;border-radius:11px;padding:0;background:#f1f5f9;cursor:zoom-in;align-items:center;justify-content:center}.veh-photo-miniature.veh-photo-chargee{display:flex}.veh-photo-miniature img{width:100%;height:100%;object-fit:cover;display:block}.veh-photo-zone{width:74px;height:74px}.veh-photo-materiel{width:105px;height:90px;margin:10px 0}.veh-photo-detail{width:min(100%,280px);height:175px;margin:12px 0}#veh-photo-plein-ecran{position:fixed;inset:0;z-index:400000;background:rgba(0,0,0,.97);display:flex;align-items:center;justify-content:center;padding:12px;box-sizing:border-box;cursor:zoom-out}#veh-photo-plein-ecran img{display:block;max-width:100%;max-height:100%;object-fit:contain}`;
  document.head.appendChild(st);
 }
 function vehInventaireAfficher(corps){
  initialiserStyleEspaceGardeUtilisateur();vehInventaireStyle();
  document.getElementById("app").innerHTML=`<main class="garde-section">${corps}</main>${navigationPrincipale("","accueil")}`;
+ void vehInventaireChargerPhotos();
  actualiserInterfaceBureau();window.scrollTo({top:0,behavior:"auto"});
 }
 const VEH_INVENTAIRE_AVERTISSEMENT="Quitter l'inventaire ?\n\nSi vous quittez sans terminer l'enregistrement, tous les contrôles effectués seront supprimés.";
@@ -22187,9 +22235,9 @@ async function vehInventaireCommencer(id){
  vehInventaireAfficher(`<h1>${vehInventaireHTML(v.nom)}</h1><p>Chargement des coffres…</p>`);
  try{
   const sb=obtenirClientSupabase();
-  const z=await sb.from("cis_vehicule_zones").select("id,vehicule_id,nom,cote,ordre,actif").eq("vehicule_id",id).eq("actif",true).order("ordre");if(z.error)throw z.error;
+  const z=await sb.from("cis_vehicule_zones").select("id,vehicule_id,nom,cote,ordre,actif,photo_path").eq("vehicule_id",id).eq("actif",true).order("ordre");if(z.error)throw z.error;
   const zones=z.data||[];if(!zones.length){vehInventaireAfficher(`<button class="retour-button veh-retour" onclick="vehInventaireOuvrirVehicule('${id}')">← Retour</button><h1>${vehInventaireHTML(v.nom)}</h1><p>Configure d'abord les coffres dans l'application Admin.</p>`);return;}
-  const m=await sb.from("cis_vehicule_materiels").select("id,zone_id,nom,quantite,etat_reference,notes,ordre").in("zone_id",zones.map(x=>x.id)).order("ordre");if(m.error)throw m.error;
+  const m=await sb.from("cis_vehicule_materiels").select("id,zone_id,nom,quantite,etat_reference,notes,ordre,photo_path").in("zone_id",zones.map(x=>x.id)).order("ordre");if(m.error)throw m.error;
   vehInventaireZones=zones;vehInventaireMateriels=m.data||[];
   vehInventaireSession={vehicule:{id:v.id,nom:v.nom,code:v.code},controles:{}};
   vehInventaireAfficherZones();
@@ -22198,14 +22246,14 @@ async function vehInventaireCommencer(id){
 function vehInventaireAfficherZones(){
  const session=vehInventaireSession;if(!session)return;
  const nb=vehInventaireZones.filter(z=>session.controles[z.id]).length;
- vehInventaireAfficher(`<div class="veh-inventaire-contenu"><button class="retour-button veh-retour" onclick="vehInventaireQuitter()">← Retour</button><h1>${vehInventaireHTML(session.vehicule.nom)}</h1><p class="veh-muted">Inventaire en cours · ${nb}/${vehInventaireZones.length} zones contrôlées</p><div class="veh-progress"><div style="width:${100*nb/vehInventaireZones.length}%"></div></div><div class="veh-card"><strong>Zones de contrôle</strong><p class="veh-muted">Sélectionne chaque zone pour contrôler son matériel. Les zones validées apparaissent en vert.</p>${vehInventaireZones.map(z=>`<button class="veh-zone ${session.controles[z.id]?"terminee":""}" onclick="vehInventaireOuvrirZone('${z.id}')"><span>${session.controles[z.id]?"✓":"●"} ${vehInventaireHTML(z.nom)}</span><small>${session.controles[z.id]?"Enregistré":"À contrôler"}</small></button>`).join("")}</div><button class="veh-action" ${nb!==vehInventaireZones.length?"disabled":""} onclick="vehInventaireTerminer()">Terminer l'enregistrement</button></div>`);
+ vehInventaireAfficher(`<div class="veh-inventaire-contenu"><button class="retour-button veh-retour" onclick="vehInventaireQuitter()">← Retour</button><h1>${vehInventaireHTML(session.vehicule.nom)}</h1><p class="veh-muted">Inventaire en cours · ${nb}/${vehInventaireZones.length} zones contrôlées</p><div class="veh-progress"><div style="width:${100*nb/vehInventaireZones.length}%"></div></div><div class="veh-card"><strong>Zones de contrôle</strong><p class="veh-muted">Sélectionne chaque zone pour contrôler son matériel. Les zones validées apparaissent en vert.</p>${vehInventaireZones.map(z=>`<div class="veh-zone ${session.controles[z.id]?"terminee":""}" style="cursor:default"><div class="veh-zone-identite">${vehPhotoMiniature(z.photo_path,"zone")}<button type="button" style="border:0;background:transparent;color:inherit;font:inherit;font-weight:inherit;text-align:left;cursor:pointer;flex:1;padding:4px" onclick="vehInventaireOuvrirZone('${z.id}')">${session.controles[z.id]?"✓":"●"} ${vehInventaireHTML(z.nom)}</button></div><small>${session.controles[z.id]?"Enregistré":"À contrôler"}</small></div>`).join("")}</div><button class="veh-action" ${nb!==vehInventaireZones.length?"disabled":""} onclick="vehInventaireTerminer()">Terminer l'enregistrement</button></div>`);
 }
 
 function vehInventaireOuvrirZone(id){
  const session=vehInventaireSession,z=vehInventaireZones.find(x=>x.id===id);if(!session||!z)return;
  const materiels=vehInventaireMateriels.filter(m=>m.zone_id===id);
  const precedent=session.controles[id]||{};
- vehInventaireAfficher(`<div class="veh-inventaire-contenu"><button class="retour-button veh-retour" onclick="vehInventaireAfficherZones()">← Coffres</button><h1>${vehInventaireHTML(z.nom)}</h1><p class="veh-muted">Sélectionne un état pour chaque matériel.</p><div id="veh-materiels">${materiels.length?materiels.map(m=>{const valeur=precedent[m.id]||{};return `<div class="veh-card" data-materiel="${m.id}"><strong>${vehInventaireHTML(m.nom)}</strong><p class="veh-muted">Quantité prévue : ${m.quantite}</p><div class="veh-etat">${[["bon","Bon"],["a_surveiller","À surveiller"],["hs","HS"]].map(([val,lib])=>`<label><input type="radio" name="etat-${m.id}" value="${val}" ${valeur.etat===val?"checked":""}> ${lib}</label>`).join("")}</div><textarea class="veh-note" rows="2" placeholder="Observation (facultatif)">${vehInventaireHTML(valeur.observation||"")}</textarea></div>`}).join(""):'<p>Aucun matériel configuré pour cette zone.</p>'}</div><button class="veh-action" onclick="vehInventaireEnregistrerZone('${id}')">Enregistrer ce coffre</button></div>`);
+ vehInventaireAfficher(`<div class="veh-inventaire-contenu"><button class="retour-button veh-retour" onclick="vehInventaireAfficherZones()">← Coffres</button><h1>${vehInventaireHTML(z.nom)}</h1>${vehPhotoMiniature(z.photo_path,"detail")}<p class="veh-muted">Sélectionne un état pour chaque matériel.</p><div id="veh-materiels">${materiels.length?materiels.map(m=>{const valeur=precedent[m.id]||{};return `<div class="veh-card" data-materiel="${m.id}"><strong>${vehInventaireHTML(m.nom)}</strong>${vehPhotoMiniature(m.photo_path,"materiel")}<p class="veh-muted">Quantité prévue : ${m.quantite}</p><div class="veh-etat">${[["bon","Bon"],["a_surveiller","À surveiller"],["hs","HS"]].map(([val,lib])=>`<label><input type="radio" name="etat-${m.id}" value="${val}" ${valeur.etat===val?"checked":""}> ${lib}</label>`).join("")}</div><textarea class="veh-note" rows="2" placeholder="Observation (facultatif)">${vehInventaireHTML(valeur.observation||"")}</textarea></div>`}).join(""):'<p>Aucun matériel configuré pour cette zone.</p>'}</div><button class="veh-action" onclick="vehInventaireEnregistrerZone('${id}')">Enregistrer ce coffre</button></div>`);
 }
 function vehInventaireEnregistrerZone(id){
  const session=vehInventaireSession;if(!session)return;
