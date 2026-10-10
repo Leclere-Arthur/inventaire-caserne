@@ -8005,7 +8005,7 @@ function afficherMenuGlobal(theme) {
     const options = {
         accueil:{classe:"menu-navigation-principal", entete:"menu-top-principal", petit:"CIS LE CHESNE", retour:"Retour à l'accueil", action:"afficherPortailPrincipal()", actif:"accueil"},
         pharmacie:{classe:"menu-navigation-pharmacie", entete:"menu-top-pharmacie", petit:"ESPACE PHARMACIE", retour:"Retour à la pharmacie", action:"afficherAccueil()", actif:"pharmacie"},
-        caserne:{classe:"menu-navigation-caserne", entete:"menu-top-caserne", petit:"ESPACE CASERNE", retour:"Retour aux informations", action:"afficherActualitesCaserne()", actif:"caserne"}
+        caserne:{classe:"menu-navigation-caserne", entete:"menu-top-caserne", petit:"ESPACE CASERNE", retour:"Retour aux actualités", action:"afficherActualitesCaserne()", actif:"caserne"}
     };
     const option = options[theme] || options.accueil;
     if (document.querySelector(`.caserne-menu-page.${option.classe}`)) {
@@ -8100,7 +8100,7 @@ async function afficherAnnuaireCentre() {
     document.getElementById("app").innerHTML = `
       <main class="page caserne-shell caserne-public-simple navigation-fixe-page">
         <header class="caserne-top caserne-top-simple"><small>ESPACE CASERNE</small><h1>Annuaire du centre</h1></header>
-        <button type="button" class="caserne-retour-actualites" onclick="afficherActualitesCaserne()">← Retour aux informations</button>
+        <button type="button" class="caserne-retour-actualites" onclick="afficherActualitesCaserne()">← Retour aux actualités</button>
         <input class="annuaire-centre-recherche" type="search" placeholder="Rechercher un nom…" oninput="rendreListeAnnuaireCentre(this.value)">
         <section id="annuaire-centre-liste" class="annuaire-centre-liste"><div class="caserne-vide"><strong>Chargement…</strong></div></section>
       </main>${navigationCaserne("caserne")}`;
@@ -9531,7 +9531,7 @@ async function afficherAgendaGeneralCaserne(decalage=0){
  const uid=String(utilisateurConnecte?.id||"");
  const contenu=[...groupes.values()].map(g=>{const date=g[0].d,jour=date.toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long"});return `<section><h2 class="agenda-general-jour">${echapperHTML(jour.charAt(0).toUpperCase()+jour.slice(1))}</h2>${g.map(x=>{const present=(x.p.reponses||[]).some(r=>r.contexte===x.ctx&&String(r.user_id)===uid&&r.reponse==="present");const titre=(x.p.titre||obtenirConfigurationPublicationCaserne(x.p.type_publication).titre)+(x.ctx==="preparation"?" · Préparation":"");return `<div class="agenda-general-ligne ${present?"present":""}" onclick="afficherRubriqueCaserne('${x.p.type_publication}')"><div class="agenda-general-heure">${x.d.toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"})}</div><div class="agenda-general-info"><strong>${echapperHTML(titre)}</strong><small class="agenda-general-type">${echapperHTML(obtenirLibelleTypeCaserne(x.p.type_publication))}</small>${present?'<small class="agenda-general-present">Présent</small>':""}</div></div>`}).join("")}</section>`}).join("");
  const mois=agendaGeneralMoisCaserne.toLocaleDateString("fr-FR",{month:"long",year:"numeric"});
- document.getElementById("app").innerHTML=`<main class="caserne-shell agenda-general-page"><header class="caserne-top caserne-top-simple"><small>ESPACE CASERNE</small><h1>Agenda général</h1><p>Toutes les activités visibles avec tes permissions.</p></header><button class="caserne-retour-actualites agenda-general-retour" onclick="afficherActualitesCaserne()">← Retour aux informations</button><div class="agenda-general-controles"><button onclick="afficherAgendaGeneralCaserne(-1)">‹</button><div class="agenda-general-mois">${echapperHTML(mois)}</div><button onclick="afficherAgendaGeneralCaserne(1)">›</button></div>${contenu||'<div class="agenda-general-vide">Aucune activité ce mois-ci.</div>'}</main>${navigationCaserne("caserne")}`;actualiserInterfaceBureau();window.scrollTo({top:0,behavior:"auto"});
+ document.getElementById("app").innerHTML=`<main class="caserne-shell agenda-general-page"><header class="caserne-top caserne-top-simple"><small>ESPACE CASERNE</small><h1>Agenda général</h1><p>Toutes les activités visibles avec tes permissions.</p></header><button class="caserne-retour-actualites agenda-general-retour" onclick="afficherActualitesCaserne()">← Retour aux actualités</button><div class="agenda-general-controles"><button onclick="afficherAgendaGeneralCaserne(-1)">‹</button><div class="agenda-general-mois">${echapperHTML(mois)}</div><button onclick="afficherAgendaGeneralCaserne(1)">›</button></div>${contenu||'<div class="agenda-general-vide">Aucune activité ce mois-ci.</div>'}</main>${navigationCaserne("caserne")}`;actualiserInterfaceBureau();window.scrollTo({top:0,behavior:"auto"});
 }
 window.afficherAgendaGeneralCaserne=afficherAgendaGeneralCaserne;
 
@@ -9599,8 +9599,8 @@ async function afficherActualitesCaserne(synchronisationDejaFaite = false) {
         <main class="caserne-shell caserne-shell-actualites caserne-public-simple">
             <header class="caserne-top caserne-top-simple">
                 <small>ESPACE CASERNE</small>
-                <h1>Informations</h1>
-                <p>Les informations importantes et les prochains rendez-vous sont ici.</p>
+                <h1>Actualités</h1>
+                
             </header>
 
             <section class="caserne-raccourcis-publics" aria-label="Raccourcis">
@@ -9682,7 +9682,7 @@ async function afficherRubriqueCaserne(type) {
         document.getElementById("app").innerHTML = `
             <main class="caserne-shell ${estAdmin ? "caserne-avec-admin" : "caserne-public-simple"}">
                 <header class="caserne-top ${estAdmin ? "" : "caserne-top-simple"}"><small>ESPACE CASERNE</small><h1>${echapperHTML(rubrique[1])}</h1><p>${estAdmin ? "Planification · réponses · créneaux" : "Choisis ton rendez-vous en appuyant sur un créneau disponible."}</p></header>
-                ${estAdmin ? formulaireAdminEntretienCaserne() : `<button type="button" class="caserne-retour-actualites" onclick="afficherActualitesCaserne()">← Retour aux informations</button>`}
+                ${estAdmin ? formulaireAdminEntretienCaserne() : `<button type="button" class="caserne-retour-actualites" onclick="afficherActualitesCaserne()">← Retour aux actualités</button>`}
                 <section class="caserne-fil caserne-entretiens-fil">
                     ${entretiens.length ? entretiens.map(e => carteEntretienCaserne(e, estAdmin)).join("") : '<div class="caserne-vide"><strong>Aucun entretien planifié</strong><p>Tu n’as rien à faire pour le moment.</p></div>'}
                 </section>
@@ -9701,7 +9701,7 @@ async function afficherRubriqueCaserne(type) {
     document.getElementById("app").innerHTML = `
         <main class="caserne-shell ${estAdmin ? "caserne-avec-admin" : "caserne-public-simple"}">
             <header class="caserne-top ${estAdmin ? "" : "caserne-top-simple"}"><small>ESPACE CASERNE</small><h1>${echapperHTML(rubrique[1])}</h1><p>${estAdmin ? "Vue publique · administration" : echapperHTML(presentation.aide)}</p></header>
-            ${estAdmin ? formulaireAdmin : `<button type="button" class="caserne-retour-actualites" onclick="afficherActualitesCaserne()">← Retour aux informations</button>`}
+            ${estAdmin ? formulaireAdmin : `<button type="button" class="caserne-retour-actualites" onclick="afficherActualitesCaserne()">← Retour aux actualités</button>`}
             <section class="caserne-fil">
                 ${publications.length ? publications.map(p => cartePublicationCaserne(p, {admin:estAdmin,retour:type})).join("") : '<div class="caserne-vide"><strong>Aucune information pour le moment</strong><p>Tu n’as rien à faire dans cette rubrique.</p></div>'}
             </section>
@@ -11395,7 +11395,7 @@ async function afficherRetourIntervention() {
                 <strong>Contrôles au retour d’intervention</strong>
                 <label style="display:flex;align-items:center;gap:12px;margin:12px 0"><input type="checkbox" id="controle-meducore-retour" style="width:22px;height:22px"> Contrôle du Meducore</label>
                 <label style="display:flex;align-items:center;gap:12px;margin:12px 0"><input type="checkbox" id="entretien-vsav-retour" style="width:22px;height:22px"> Entretien du VSAV</label>
-                <small>Les contrôles cochés alimentent leurs fiches de traçabilité distinctes.</small>
+                
             </section>
 
             <div class="recherche">
