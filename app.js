@@ -995,7 +995,7 @@ let minuteurVerificationMiseAJour =
  * Elle permet de détecter une nouvelle version même si seul app.js change.
  */
 const VERSION_APPLICATION_JS =
-    "2026-10-10-tracabilite-pharmacie-v45";
+    "2026-10-10-agenda-moderne-v46";
 
 async function verifierNouvelleVersionAppJs() {
 
@@ -9507,33 +9507,74 @@ function carteEntretienPasseActualitesCaserne(entretien, dateReference) {
 function initialiserStyleAgendaGeneralCaserne(){
  if(document.getElementById("style-agenda-general-caserne"))return;
  const st=document.createElement("style");st.id="style-agenda-general-caserne";st.textContent=`
- .caserne-actu-card.caserne-actu-present{border:3px solid #178447!important;background:#e8f7ee!important;box-shadow:0 5px 18px rgba(23,132,71,.18)!important}
- .caserne-actu-card.caserne-actu-present:before{content:"PRÉSENT";display:inline-block;margin-bottom:9px;padding:5px 9px;border-radius:999px;background:#178447;color:white;font-size:11px;font-weight:950}
- .agenda-general-page{padding-bottom:115px}.agenda-general-controles{display:flex;align-items:center;gap:8px;margin:14px 0 20px}.agenda-general-controles button{border:0;border-radius:10px;padding:10px 14px;font-weight:900}.agenda-general-mois{flex:1;text-align:center;font-size:19px;font-weight:950;text-transform:capitalize}
- .agenda-general-jour{margin:20px 0 8px;padding:9px 12px;border-radius:10px;background:#efe5e2;color:#652427;font-size:16px}.agenda-general-ligne{display:grid;grid-template-columns:64px 1fr;gap:11px;padding:13px;margin:8px 0;border:1px solid #e4d9d6;border-radius:13px;background:#fff;box-shadow:0 2px 9px rgba(0,0,0,.06);cursor:pointer}.agenda-general-ligne.present{background:#e8f7ee;border:2px solid #178447}.agenda-general-heure{font-weight:950;color:#6f292b;padding-top:1px}.agenda-general-info strong,.agenda-general-info small{display:block}.agenda-general-info strong{font-size:15px;line-height:1.25}.agenda-general-info small{color:#687078;margin-top:4px}.agenda-general-type{font-weight:800;text-transform:uppercase;font-size:10px;letter-spacing:.5px}.agenda-general-present{display:inline-block!important;width:max-content!important;background:#178447;color:#fff!important;border-radius:999px;padding:4px 8px;font-weight:900}.agenda-general-vide{padding:20px;background:#fff;border-radius:13px;text-align:center}.agenda-general-retour{margin:10px 0 14px!important}
+ .caserne-actu-card.caserne-actu-present{border:3px solid #178447!important;background:#e8f7ee!important}
+ .agenda-general-page{padding-bottom:120px;color:#232535}
+ .agenda-general-panel{background:#fff;border-radius:20px;padding:17px 13px;box-shadow:0 8px 28px rgba(25,30,65,.08);margin-top:16px}
+ .agenda-general-controles{display:flex;align-items:center;gap:8px;margin:4px 0 16px}
+ .agenda-general-controles button,.agenda-general-switch button{border:0;background:#f1f0f8;color:#33334d;border-radius:12px;padding:10px 13px;font-weight:800;cursor:pointer}
+ .agenda-general-mois{flex:1;text-align:center;font-size:18px;font-weight:900;text-transform:capitalize}
+ .agenda-general-switch{display:flex;background:#f4f3f9;padding:4px;border-radius:13px;gap:4px;margin-bottom:15px}
+ .agenda-general-switch button{flex:1;background:transparent}.agenda-general-switch button.actif{background:#fff;color:#6846d9;box-shadow:0 2px 7px #0001}
+ .agenda-general-semaine,.agenda-general-grille{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px;text-align:center}
+ .agenda-general-semaine{font-size:11px;font-weight:800;color:#9192a0;margin-bottom:8px}
+ .agenda-general-date{border:0;min-height:49px;border-radius:12px;background:transparent;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;font-weight:800;color:#333;cursor:pointer}
+ .agenda-general-date.hors-mois{color:#b9b9c1}.agenda-general-date.selection{background:#7048dd;color:#fff}.agenda-general-date.aujourdhui:not(.selection){outline:2px solid #7048dd;outline-offset:-2px}
+ .agenda-general-points{display:flex;gap:3px;min-height:5px}.agenda-general-point{width:5px;height:5px;border-radius:50%;background:#a48be9}.agenda-general-date.selection .agenda-general-point{background:#fff}
+ .agenda-general-jour-titre{font-size:16px;font-weight:900;text-transform:capitalize;margin:21px 3px 15px}
+ .agenda-general-timeline{display:grid;grid-template-columns:58px minmax(0,1fr);gap:10px;align-items:stretch;margin:10px 0}
+ .agenda-general-heure{font-size:12px;font-weight:850;color:#9294a5;text-align:right;padding-top:14px}
+ .agenda-general-ligne{border:0;border-left:4px solid var(--agenda-couleur,#7654d9);border-radius:12px;background:var(--agenda-fond,#f1edff);padding:13px 14px;min-height:67px;text-align:left;cursor:pointer;color:#27263a;width:100%;box-shadow:0 2px 6px #00000008}
+ .agenda-general-ligne strong{display:block;font-size:14px;line-height:1.35}.agenda-general-ligne small{display:block;font-size:11px;font-weight:800;opacity:.72;margin-top:5px}
+ .agenda-general-ligne.present{border-left-color:#16844b!important;background:#e8f7ee!important}
+ .agenda-general-present{display:inline-block!important;color:#087b3c;font-weight:900!important;opacity:1!important}
+ .agenda-general-vide{padding:25px 12px;text-align:center;color:#888b9a;background:#f8f8fb;border-radius:13px;font-size:14px}
+ .agenda-general-retour{margin:10px 0 14px!important}
+ @media(min-width:720px){.agenda-general-panel{max-width:680px;margin-left:auto;margin-right:auto;padding:24px}.agenda-general-date{min-height:65px}}
  `;document.head.appendChild(st);
 }
 let agendaGeneralMoisCaserne=null;
+let agendaGeneralDateSelectionneeCaserne=null;
+let agendaGeneralVueCaserne="mois";
+let agendaGeneralItemsCaserne=[];
+function agendaGeneralCouleurCaserne(type){
+ const palette={sport:["#168c6b","#e2f7ed"],manoeuvre:["#e4a222","#fff6dc"],reunion:["#4879db","#eaf1ff"],amical:["#db6483","#ffedf2"],casernement:["#8659d3","#f1eaff"]};
+ return palette[Object.keys(palette).find(k=>String(type).includes(k))]||["#7351d8","#f1edff"];
+}
+function agendaGeneralRenduCaserne(){
+ const app=document.getElementById("app");if(!app)return;
+ const selection=agendaGeneralDateSelectionneeCaserne;
+ const an=agendaGeneralMoisCaserne.getFullYear(),mo=agendaGeneralMoisCaserne.getMonth();
+ const mois=agendaGeneralMoisCaserne.toLocaleDateString("fr-FR",{month:"long",year:"numeric"});
+ const aujourdHui=dateISOlocale(new Date());
+ const compte=new Map();agendaGeneralItemsCaserne.forEach(x=>{const k=dateISOlocale(x.d);compte.set(k,(compte.get(k)||0)+1)});
+ const debut=new Date(an,mo,1,12);const decalage=(debut.getDay()+6)%7;
+ const jours=Array.from({length:42},(_,i)=>{const d=new Date(an,mo,1-decalage+i,12),cle=dateISOlocale(d),nombre=compte.get(cle)||0;return `<button type="button" class="agenda-general-date ${d.getMonth()!==mo?'hors-mois':''} ${cle===selection?'selection':''} ${cle===aujourdHui?'aujourdhui':''}" onclick="selectionnerJourAgendaGeneralCaserne('${cle}')" aria-label="${echapperHTML(d.toLocaleDateString('fr-FR',{day:'numeric',month:'long'}))}"><span>${d.getDate()}</span><span class="agenda-general-points">${nombre?'<i class="agenda-general-point"></i>'.repeat(Math.min(nombre,3)):''}</span></button>`}).join("");
+ const date=new Date(selection+"T12:00:00");
+ const duJour=agendaGeneralItemsCaserne.filter(x=>dateISOlocale(x.d)===selection);
+ const titreJour=date.toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long"});
+ const elements=duJour.map(x=>{const present=(x.p.reponses||[]).some(r=>r.contexte===x.ctx&&String(r.user_id)===String(utilisateurConnecte?.id||"")&&r.reponse==="present");const titre=(x.p.titre||obtenirConfigurationPublicationCaserne(x.p.type_publication).titre)+(x.ctx==="preparation"?" · Préparation":"");const [couleur,fond]=agendaGeneralCouleurCaserne(x.p.type_publication);return `<div class="agenda-general-timeline"><div class="agenda-general-heure">${x.d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})}</div><button type="button" class="agenda-general-ligne ${present?'present':''}" style="--agenda-couleur:${couleur};--agenda-fond:${fond}" onclick="afficherRubriqueCaserne('${x.p.type_publication}')"><strong>${echapperHTML(titre)}</strong><small>${echapperHTML(obtenirLibelleTypeCaserne(x.p.type_publication))}</small>${present?'<small class="agenda-general-present">✓ Présent</small>':''}</button></div>`}).join("");
+ const joursDuMois=[...new Set(agendaGeneralItemsCaserne.filter(x=>x.d.getMonth()===mo&&x.d.getFullYear()===an).map(x=>dateISOlocale(x.d)))];
+ const listeMois=joursDuMois.map(k=>{const d=new Date(k+"T12:00:00");return `<section><h3 class="agenda-general-jour-titre">${echapperHTML(d.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'}))}</h3>${agendaGeneralItemsCaserne.filter(x=>dateISOlocale(x.d)===k).map(x=>{const [c,f]=agendaGeneralCouleurCaserne(x.p.type_publication);const titre=x.p.titre||obtenirConfigurationPublicationCaserne(x.p.type_publication).titre;return `<div class="agenda-general-timeline"><div class="agenda-general-heure">${x.d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})}</div><button class="agenda-general-ligne" style="--agenda-couleur:${c};--agenda-fond:${f}" onclick="afficherRubriqueCaserne('${x.p.type_publication}')"><strong>${echapperHTML(titre)}${x.ctx==='preparation'?' · Préparation':''}</strong><small>${echapperHTML(obtenirLibelleTypeCaserne(x.p.type_publication))}</small></button></div>`}).join('')}</section>`}).join('');
+ app.innerHTML=`<main class="caserne-shell agenda-general-page"><header class="caserne-top caserne-top-simple"><small>ESPACE CASERNE</small><h1>Agenda général</h1></header><button class="caserne-retour-actualites agenda-general-retour" onclick="afficherActualitesCaserne()">← Retour aux actualités</button><div class="agenda-general-panel"><div class="agenda-general-controles"><button onclick="afficherAgendaGeneralCaserne(-1)" aria-label="Mois précédent">‹</button><div class="agenda-general-mois">${echapperHTML(mois)}</div><button onclick="afficherAgendaGeneralCaserne(1)" aria-label="Mois suivant">›</button></div><div class="agenda-general-switch"><button class="${agendaGeneralVueCaserne==='jour'?'actif':''}" onclick="changerVueAgendaGeneralCaserne('jour')">Journée</button><button class="${agendaGeneralVueCaserne==='mois'?'actif':''}" onclick="changerVueAgendaGeneralCaserne('mois')">Mois</button></div><div class="agenda-general-semaine">${['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'].map(j=>`<span>${j}</span>`).join('')}</div><div class="agenda-general-grille">${jours}</div><h2 class="agenda-general-jour-titre">${agendaGeneralVueCaserne==='jour'?echapperHTML(titreJour):'Événements du mois'}</h2>${agendaGeneralVueCaserne==='jour'?(elements||'<div class="agenda-general-vide">Aucune activité pour cette journée.</div>'):(listeMois||'<div class="agenda-general-vide">Aucune activité ce mois-ci.</div>')}</div></main>${navigationCaserne("caserne")}`;
+ actualiserInterfaceBureau();
+}
+function changerVueAgendaGeneralCaserne(vue){agendaGeneralVueCaserne=vue==='jour'?'jour':'mois';agendaGeneralRenduCaserne()}
+function selectionnerJourAgendaGeneralCaserne(cle){if(!/^\d{4}-\d{2}-\d{2}$/.test(cle))return;agendaGeneralDateSelectionneeCaserne=cle;const d=new Date(cle+'T12:00:00');if(d.getMonth()!==agendaGeneralMoisCaserne.getMonth()||d.getFullYear()!==agendaGeneralMoisCaserne.getFullYear()){agendaGeneralMoisCaserne=new Date(d.getFullYear(),d.getMonth(),1,12);void afficherAgendaGeneralCaserne();return}agendaGeneralVueCaserne='jour';agendaGeneralRenduCaserne()}
 async function afficherAgendaGeneralCaserne(decalage=0){
  initialiserStyleEspaceCaserne();initialiserStyleAgendaGeneralCaserne();
  if(!agendaGeneralMoisCaserne){const n=new Date();agendaGeneralMoisCaserne=new Date(n.getFullYear(),n.getMonth(),1,12)}
- if(decalage)agendaGeneralMoisCaserne=new Date(agendaGeneralMoisCaserne.getFullYear(),agendaGeneralMoisCaserne.getMonth()+decalage,1,12);
- document.getElementById("app").innerHTML=`<main class="caserne-shell agenda-general-page"><header class="caserne-top caserne-top-simple"><small>ESPACE CASERNE</small><h1>Agenda général</h1><p>Toutes les activités visibles avec tes permissions.</p></header><div class="garde-planning-attente">Chargement de l’agenda…</div></main>${navigationCaserne("caserne")}`;actualiserInterfaceBureau();
- let pubs=await chargerPublicationsCaserne();
- pubs=pubs.filter(p=>p.type_publication!=="entretien_individuel"&&p.type_publication!=="administratif"&&p.date_evenement);
- // Respecte les permissions de rubrique en plus des règles RLS Supabase.
- const rubriques=new Map(obtenirRubriquesCaserne().map(r=>[r[0],r]));
- pubs=pubs.filter(p=>{const r=rubriques.get(p.type_publication);return r?utilisateurPeutVoirRubriqueCaserne(r):false});
- pubs=await chargerDetailsPublicationsCaserne(pubs);
+ if(decalage){agendaGeneralMoisCaserne=new Date(agendaGeneralMoisCaserne.getFullYear(),agendaGeneralMoisCaserne.getMonth()+decalage,1,12);agendaGeneralDateSelectionneeCaserne=dateISOlocale(new Date(agendaGeneralMoisCaserne.getFullYear(),agendaGeneralMoisCaserne.getMonth(),1,12))}
+ if(!agendaGeneralDateSelectionneeCaserne)agendaGeneralDateSelectionneeCaserne=dateISOlocale(new Date());
+ document.getElementById('app').innerHTML=`<main class="caserne-shell agenda-general-page"><header class="caserne-top caserne-top-simple"><small>ESPACE CASERNE</small><h1>Agenda général</h1></header><div class="garde-planning-attente">Chargement de l’agenda…</div></main>${navigationCaserne('caserne')}`;actualiserInterfaceBureau();
+ let pubs=await chargerPublicationsCaserne();pubs=pubs.filter(p=>p.type_publication!=='entretien_individuel'&&p.type_publication!=='administratif'&&p.date_evenement);
+ const rubriques=new Map(obtenirRubriquesCaserne().map(r=>[r[0],r]));pubs=pubs.filter(p=>{const r=rubriques.get(p.type_publication);return r?utilisateurPeutVoirRubriqueCaserne(r):false});pubs=await chargerDetailsPublicationsCaserne(pubs);
  const debut=new Date(agendaGeneralMoisCaserne.getFullYear(),agendaGeneralMoisCaserne.getMonth(),1),fin=new Date(agendaGeneralMoisCaserne.getFullYear(),agendaGeneralMoisCaserne.getMonth()+1,1);
- const items=[];pubs.forEach(p=>{const d=new Date(p.date_evenement);if(d>=debut&&d<fin)items.push({d,p,ctx:"evenement"});if(p.date_preparation){const x=new Date(p.date_preparation);if(x>=debut&&x<fin)items.push({d:x,p,ctx:"preparation"})}});
- items.sort((a,b)=>a.d-b.d);const groupes=new Map();items.forEach(x=>{const k=dateISOlocale(x.d);if(!groupes.has(k))groupes.set(k,[]);groupes.get(k).push(x)});
- const uid=String(utilisateurConnecte?.id||"");
- const contenu=[...groupes.values()].map(g=>{const date=g[0].d,jour=date.toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long"});return `<section><h2 class="agenda-general-jour">${echapperHTML(jour.charAt(0).toUpperCase()+jour.slice(1))}</h2>${g.map(x=>{const present=(x.p.reponses||[]).some(r=>r.contexte===x.ctx&&String(r.user_id)===uid&&r.reponse==="present");const titre=(x.p.titre||obtenirConfigurationPublicationCaserne(x.p.type_publication).titre)+(x.ctx==="preparation"?" · Préparation":"");return `<div class="agenda-general-ligne ${present?"present":""}" onclick="afficherRubriqueCaserne('${x.p.type_publication}')"><div class="agenda-general-heure">${x.d.toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"})}</div><div class="agenda-general-info"><strong>${echapperHTML(titre)}</strong><small class="agenda-general-type">${echapperHTML(obtenirLibelleTypeCaserne(x.p.type_publication))}</small>${present?'<small class="agenda-general-present">Présent</small>':""}</div></div>`}).join("")}</section>`}).join("");
- const mois=agendaGeneralMoisCaserne.toLocaleDateString("fr-FR",{month:"long",year:"numeric"});
- document.getElementById("app").innerHTML=`<main class="caserne-shell agenda-general-page"><header class="caserne-top caserne-top-simple"><small>ESPACE CASERNE</small><h1>Agenda général</h1><p>Toutes les activités visibles avec tes permissions.</p></header><button class="caserne-retour-actualites agenda-general-retour" onclick="afficherActualitesCaserne()">← Retour aux actualités</button><div class="agenda-general-controles"><button onclick="afficherAgendaGeneralCaserne(-1)">‹</button><div class="agenda-general-mois">${echapperHTML(mois)}</div><button onclick="afficherAgendaGeneralCaserne(1)">›</button></div>${contenu||'<div class="agenda-general-vide">Aucune activité ce mois-ci.</div>'}</main>${navigationCaserne("caserne")}`;actualiserInterfaceBureau();window.scrollTo({top:0,behavior:"auto"});
+ const items=[];pubs.forEach(p=>{const d=new Date(p.date_evenement);if(!Number.isNaN(d.getTime())&&d>=debut&&d<fin)items.push({d,p,ctx:'evenement'});if(p.date_preparation){const x=new Date(p.date_preparation);if(!Number.isNaN(x.getTime())&&x>=debut&&x<fin)items.push({d:x,p,ctx:'preparation'})}});
+ items.sort((a,b)=>a.d-b.d);agendaGeneralItemsCaserne=items;agendaGeneralRenduCaserne();window.scrollTo({top:0,behavior:'auto'});
 }
 window.afficherAgendaGeneralCaserne=afficherAgendaGeneralCaserne;
+window.selectionnerJourAgendaGeneralCaserne=selectionnerJourAgendaGeneralCaserne;
+window.changerVueAgendaGeneralCaserne=changerVueAgendaGeneralCaserne;
 
 async function afficherActualitesCaserne(synchronisationDejaFaite = false) {
     initialiserStyleAgendaGeneralCaserne();
