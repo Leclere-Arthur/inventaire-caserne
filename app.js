@@ -945,6 +945,7 @@ let validationRetourInterventionEnCours = false;
 document.addEventListener("DOMContentLoaded", async function () {
 
     initialiserIndicateurSynchronisation();
+    initialiserCentreNotifications();
     initialiserBandeauConnexion();
 
     void initialiserSystemeMiseAJourApplication();
@@ -964,6 +965,8 @@ document.addEventListener("DOMContentLoaded", async function () {
     await initialiserSynchronisationSupabase();
 
     afficherPortailPrincipal();
+    window.__cisNotificationsApplicationPrete=true;
+    void traiterNotificationEnAttente();
 
 });
 
@@ -1016,7 +1019,7 @@ let minuteurVerificationMiseAJour =
  * Elle permet de détecter une nouvelle version même si seul app.js change.
  */
 const VERSION_APPLICATION_JS =
-    "2026-10-11-barre-origine-v49";
+    "2026-10-11-historique-notifications-v50";
 
 async function verifierNouvelleVersionAppJs() {
 
@@ -3259,6 +3262,8 @@ async function seConnecterApplication() {
 
 
         afficherAccueil();
+        window.__cisNotificationsApplicationPrete=true;
+        void traiterNotificationEnAttente();
 
     } catch (erreur) {
 
@@ -4806,6 +4811,7 @@ async function enregistrerAbonnementPushSupabase(
     if (error) {
         throw error;
     }
+    await associerHistoriqueNotifications(abonnement, utilisateurConnecte?.id || profilUtilisateurConnecte?.id);
 
 }
 
@@ -21444,6 +21450,7 @@ function obtenirRubriqueBureauActive() {
 
 
 function actualiserInterfaceBureau() {
+    actualiserVisibiliteCentreNotifications();
 
     const navigation =
         document.getElementById(
@@ -23062,4 +23069,90 @@ function creerCalendrierEquipePDF(PDF,type,rows,personnes,id){
   month=new Date(y,mo+1,1,12);
  }
  return doc;
+}
+
+
+/* Centre de notifications : même stockage que le service worker. */
+function chargerHistoriqueNotificationsModule(){
+ if(window.CISNotifications)return Promise.resolve(window.CISNotifications);
+ if(window.__cisNotificationsModule)return window.__cisNotificationsModule;
+ window.__cisNotificationsModule=new Promise((resolve,reject)=>{
+  const s=document.createElement('script');s.src='./notifications-history.js';
+  s.onload=()=>resolve(window.CISNotifications);
+  s.onerror=()=>{s.remove();window.__cisNotificationsModule=null;reject(new Error('Historique des notifications indisponible.'));};
+  document.head.appendChild(s);
+ });return window.__cisNotificationsModule;
+}
+function initialiserCentreNotifications(){
+ if(document.getElementById('btn-historique-notifications'))return;
+ const style=document.createElement('style');style.id='style-centre-notifications';
+ style.textContent=`
+ #btn-historique-notifications{position:fixed;top:calc(12px + env(safe-area-inset-top,0px));right:calc(58px + env(safe-area-inset-right,0px));width:38px;height:38px;display:flex;align-items:center;justify-content:center;z-index:99999;border:0;padding:0;margin:0;background:transparent;color:#1687ff;cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+ #btn-historique-notifications[hidden]{display:none!important}#btn-historique-notifications svg{width:27px;height:27px}#btn-historique-notifications:focus-visible{outline:2px solid #1687ff;outline-offset:2px;border-radius:50%}
+ .notifications-page{max-width:780px;margin:0 auto;padding:64px 16px 125px;box-sizing:border-box}.notifications-page h1{font-size:28px;margin:24px 0 8px}.notif-sous-titre{color:#68717b;font-size:14px;margin:0 0 24px;line-height:1.5}.notif-retour{border:1px solid #dce1e6;background:#fff;color:#222a32;padding:11px 15px;border-radius:12px;font:inherit;font-weight:700;cursor:pointer}.notif-liste{display:grid;gap:10px}.notif-ligne{width:100%;display:flex;align-items:center;gap:18px;padding:18px;text-align:left;border:1px solid #dfe4e9;border-radius:14px;background:#fff;color:#222a32;font:inherit;cursor:pointer;box-sizing:border-box}.notif-ligne.non-lue{border-left:3px solid #1687ff}.notif-contenu{min-width:0;flex:1}.notif-contenu strong{display:block;font-size:16px;line-height:1.4;overflow-wrap:anywhere}.notif-contenu p{font-size:14px;line-height:1.5;margin:6px 0 10px;overflow-wrap:anywhere}.notif-contenu time{font-size:12px;color:#68717b;display:block}.notif-ligne svg{width:18px;height:18px;flex-shrink:0;color:#79838e}.notif-vide{border:1px solid #dfe4e9;border-radius:14px;background:#fff;color:#68717b;padding:24px;line-height:1.5}.notif-ligne:focus-visible,.notif-retour:focus-visible{outline:2px solid #1687ff;outline-offset:3px}
+ @media(min-width:1000px){body:not(.mode-connexion) .notif-ligne,body:not(.mode-connexion) .notif-retour,body:not(.mode-connexion) .notif-vide{background:#151f28;border-color:#34414c;color:#f2f5f7}body:not(.mode-connexion) .notif-ligne.non-lue{border-left-color:#1687ff}.notif-sous-titre,.notif-contenu time{color:#8796a6}}
+ `;document.head.appendChild(style);
+ const button=document.createElement('button');button.id='btn-historique-notifications';button.type='button';button.hidden=true;button.setAttribute('aria-label','Historique des notifications');button.title='Notifications';
+ button.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9Z"/><path d="M10 21h4"/></svg>';
+ button.addEventListener('click',afficherHistoriqueNotifications);document.body.appendChild(button);
+ const app=document.getElementById('app');if(app)new MutationObserver(actualiserVisibiliteCentreNotifications).observe(app,{childList:true});
+ new MutationObserver(actualiserVisibiliteCentreNotifications).observe(document.body,{attributes:true,attributeFilter:['class']});
+ if(navigator.serviceWorker)navigator.serviceWorker.addEventListener('message',event=>{
+  const data=event.data||{};
+  if(data.type==='CIS_NOTIFICATIONS_UPDATED'&&String(data.userId)===String(utilisateurConnecte?.id||'')&&document.getElementById('notifications-liste'))void remplirHistoriqueNotifications();
+  if(data.type==='CIS_OPEN_NOTIFICATION'){window.__cisNotificationEnAttente=data.id;void traiterNotificationEnAttente();}
+ });
+ const url=new URL(window.location.href),id=url.searchParams.get('notification');
+ if(id){window.__cisNotificationEnAttente=id;url.searchParams.delete('notification');window.history.replaceState(window.history.state,'',url.href);}
+ actualiserVisibiliteCentreNotifications();
+}
+function actualiserVisibiliteCentreNotifications(){
+ const button=document.getElementById('btn-historique-notifications');if(!button)return;
+ // Les menus pharmacie/principal réutilisent caserne-shell pour leur style.
+ const caserne=document.querySelector('#app .caserne-shell:not(.menu-navigation-pharmacie):not(.menu-navigation-principal)');
+ button.hidden=!profilUtilisateurConnecte||document.body.classList.contains('mode-connexion')||Boolean(caserne);
+}
+async function associerHistoriqueNotifications(abonnement,userId){
+ if(!abonnement?.endpoint||!userId)return;
+ try{const store=await chargerHistoriqueNotificationsModule();await store.bind(abonnement.endpoint,userId);}catch(e){console.warn('Association historique notifications :',e);}
+}
+async function afficherHistoriqueNotifications(){
+ if(!utilisateurConnecte?.id||!profilUtilisateurConnecte)return;
+ initialiserCentreNotifications();
+ document.getElementById('app').innerHTML=`<main id="notifications-historique-page" class="notifications-page navigation-fixe-page"><button type="button" class="notif-retour" onclick="retourPagePrecedente()">Retour</button><h1>Notifications</h1><p class="notif-sous-titre">Les dernières notifications reçues sur cet appareil, de la plus récente à la plus ancienne.</p><div id="notifications-liste" class="notif-liste" role="status">Chargement…</div></main>${navigationPrincipale('','accueil')}`;
+ actualiserInterfaceBureau();window.scrollTo({top:0,behavior:'auto'});await remplirHistoriqueNotifications();
+}
+async function remplirHistoriqueNotifications(){
+ const zone=document.getElementById('notifications-liste'),uid=utilisateurConnecte?.id;if(!zone||!uid)return;
+ try{
+  const store=await chargerHistoriqueNotificationsModule(),rows=await store.list(uid);
+  if(!zone.isConnected||String(utilisateurConnecte?.id)!==String(uid))return;
+  zone.innerHTML=rows.length?rows.map(r=>`<button type="button" class="notif-ligne ${r.read?'':'non-lue'}" data-notification-id="${echapperHTML(r.id)}"><span class="notif-contenu"><strong>${echapperHTML(r.title)}</strong>${r.body?`<p>${echapperHTML(r.body)}</p>`:''}<time datetime="${echapperHTML(r.receivedAt)}">${echapperHTML(new Date(r.receivedAt).toLocaleString('fr-FR',{timeZone:'Europe/Paris',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}))}</time></span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></button>`).join(''):'<p class="notif-vide">Aucune notification reçue depuis l’activation de cet historique.</p>';
+  zone.querySelectorAll('[data-notification-id]').forEach(b=>b.addEventListener('click',()=>ouvrirNotificationHistorique(b.dataset.notificationId)));
+ }catch(e){if(zone.isConnected)zone.innerHTML='<p class="notif-vide">Impossible de lire l’historique sur cet appareil. Réessayez en rouvrant l’application.</p>';console.warn('Historique notifications :',e);}
+}
+async function traiterNotificationEnAttente(){
+ if(!window.__cisNotificationsApplicationPrete||!utilisateurConnecte?.id||!window.__cisNotificationEnAttente)return;
+ const id=window.__cisNotificationEnAttente;window.__cisNotificationEnAttente=null;await ouvrirNotificationHistorique(id);
+}
+async function ouvrirNotificationHistorique(id){
+ const uid=utilisateurConnecte?.id;if(!uid)return;
+ try{
+  const store=await chargerHistoriqueNotificationsModule(),r=await store.get(id,uid);
+  if(String(utilisateurConnecte?.id)!==String(uid))return;
+  if(!r)return alert('Cette notification n’est pas disponible pour ce compte.');
+  const target=r.target;
+  if(target==='menage-inventaire'&&!utilisateurAPermission('acces_admin_menage'))return alert('Vous n’avez plus accès à l’inventaire ménage.');
+  if(target==='vehicules-inventaire'&&!utilisateurAPermission('acces_admin_menage'))return alert('Vous n’avez plus accès aux inventaires véhicules.');
+  if(target.startsWith('caserne:')){const rubrique=obtenirRubriquesCaserne().find(x=>x[0]===target.slice(8));if(!rubrique||!utilisateurPeutVoirRubriqueCaserne(rubrique))return alert('Vous n’avez plus accès à cette rubrique.');}
+  if(target==='pharmacie'&&!utilisateurPeutAccederPharmacie())return alert('Vous n’avez plus accès à la pharmacie.');
+  await store.read(id,uid);
+  if(String(utilisateurConnecte?.id)!==String(uid))return;
+  if(target==='menage-inventaire'){rubriqueEquipeOrigine='menage';return afficherInventaireMenage();}
+  if(target==='vehicules-inventaire'){rubriqueEquipeOrigine='vehicules';return afficherAdminInventairesEquipe();}
+  if(target==='heures')return ouvrirRubriqueEquipe('heures');
+  if(target.startsWith('caserne:'))return afficherRubriqueCaserne(target.slice(8));
+  if(target==='pharmacie')return utilisateurAPermission('acces_inventaire')?afficherInventaire():afficherAccueil();
+  return afficherPortailPrincipal();
+ }catch(e){console.warn('Ouverture notification :',e);alert('Impossible d’ouvrir cette notification pour le moment.');}
 }

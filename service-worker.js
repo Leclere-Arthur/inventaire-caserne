@@ -1,4 +1,5 @@
 "use strict";
+importScripts("./notifications-history.js");
 
 /* =========================================================
    INVENTAIRE CASERNE
@@ -14,7 +15,7 @@
  * à récupérer le nouvel app.js.
  */
 
-const CACHE_NAME = "inventaire-caserne-v88-barre-origine";
+const CACHE_NAME = "inventaire-caserne-v89-notifications";
 
 
 /*
@@ -29,6 +30,8 @@ const FICHIERS_APPLICATION = [
     "./index.html",
 
     "./app.js",
+
+    "./notifications-history.js",
 
     "./style.css",
 
@@ -229,148 +232,39 @@ self.addEventListener(
    Compatible Android + PWA iPhone/iPad
    ========================================================= */
 
-self.addEventListener(
-    "push",
-    function (event) {
-
-        let donnees = {};
-
-        try {
-
-            donnees =
-                event.data
-                    ? event.data.json()
-                    : {};
-
-        } catch (erreur) {
-
-            donnees = {
-                body:
-                    event.data
-                        ? event.data.text()
-                        : ""
-            };
-
-        }
-
-
-        const titre =
-            donnees.title ||
-            "Inventaire Caserne";
-
-        const options = {
-            ...(donnees.tag ? {tag: String(donnees.tag)} : {}),
-            body:
-                donnees.body ||
-                "Nouvelle notification",
-            icon:
-                donnees.icon ||
-                "./icon-192.png",
-            badge:
-                donnees.badge ||
-                "./icon-192.png",
-            data: {
-                url:
-                    donnees.url ||
-                    "./"
-            }
-        };
-
-
-        event.waitUntil(
-            self.registration
-                .showNotification(
-                    titre,
-                    options
-                )
-        );
-
-    }
-);
-
-
-self.addEventListener(
-    "notificationclick",
-    function (event) {
-
-        event.notification.close();
-
-        const urlCible =
-            new URL(
-                event.notification
-                    .data?.url ||
-                "./",
-                self.location.origin
-            ).href;
-
-
-        event.waitUntil(
-
-            clients
-                .matchAll({
-                    type: "window",
-                    includeUncontrolled: true
-                })
-                .then(
-                    function (fenetres) {
-
-                        for (
-                            const fenetre
-                            of fenetres
-                        ) {
-
-                            if (
-                                "focus" in fenetre
-                            ) {
-
-                                try {
-
-                                    const urlFenetre =
-                                        new URL(
-                                            fenetre.url
-                                        );
-
-                                    const urlNotification =
-                                        new URL(
-                                            urlCible
-                                        );
-
-
-                                    if (
-                                        urlFenetre.origin ===
-                                        urlNotification.origin
-                                    ) {
-
-                                        return fenetre.focus();
-
-                                    }
-
-                                } catch (_) {
-                                    // On continue.
-                                }
-
-                            }
-
-                        }
-
-
-                        if (
-                            clients.openWindow
-                        ) {
-
-                            return clients.openWindow(
-                                urlCible
-                            );
-
-                        }
-
-                    }
-                )
-
-        );
-
-    }
-);
+self.addEventListener('push', event => {
+ let data={};try{data=event.data?event.data.json():{};}catch(_){data={body:event.data?.text()||''};}
+ if(!data||typeof data!=='object')data={body:String(data||'')};
+ event.waitUntil((async()=>{
+  let record=null;
+  try{
+   const subscription=await self.registration.pushManager.getSubscription();
+   const owner=await CISNotifications.owner(subscription?.endpoint);
+   // Le propriétaire est enregistré après l'association réussie côté Supabase.
+   record=await CISNotifications.receive(data,owner);
+  }catch(e){console.warn('Historique Push indisponible',e);}
+  const url=new URL('./',self.registration.scope);if(record)url.searchParams.set('notification',record.id);
+  await self.registration.showNotification(data.title||'Inventaire Caserne',{
+   ...(data.tag?{tag:String(data.tag)}:{}),body:data.body||'Nouvelle notification',icon:data.icon||'./icon-192.png',badge:data.badge||'./icon-192.png',
+   data:{url:record?url.href:(data.url||'./'),notificationId:record?.id||null,userId:record?.userId||null}
+  });
+  if(record){const windows=await self.clients.matchAll({type:'window',includeUncontrolled:true});for(const client of windows)client.postMessage({type:'CIS_NOTIFICATIONS_UPDATED',userId:record.userId});}
+ })());
+});
+self.addEventListener('notificationclick',event=>{
+ event.notification.close();
+ event.waitUntil((async()=>{
+  const data=event.notification.data||{};let url;
+  try{url=new URL(data.url||'./',self.registration.scope);if(url.origin!==self.location.origin)url=new URL('./',self.registration.scope);}catch(_){url=new URL('./',self.registration.scope);}
+  const windows=await self.clients.matchAll({type:'window',includeUncontrolled:true});
+  for(const client of windows){
+   if(!client.url.startsWith(self.registration.scope))continue;
+   if(data.notificationId){client.postMessage({type:'CIS_OPEN_NOTIFICATION',id:data.notificationId});return client.focus();}
+   if('navigate' in client)await client.navigate(url.href);return client.focus();
+  }
+  return self.clients.openWindow(url.href);
+ })());
+});
 
 
 self.addEventListener(
