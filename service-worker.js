@@ -14,7 +14,7 @@
  * à récupérer le nouvel app.js.
  */
 
-const CACHE_NAME = "inventaire-caserne-v85-menage-stock";
+const CACHE_NAME = "inventaire-caserne-v86-equipe-quantites-pdf";
 
 
 /*
