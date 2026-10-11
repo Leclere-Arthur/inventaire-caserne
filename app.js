@@ -725,7 +725,7 @@ const DOMAINE_EMAIL_INTERNE =
     "inventaire-caserne.local";
 
 const VERSION_APPLICATION =
-    "2.9.43";
+    "2.9.44";
 
 const CLE_PROFIL_UTILISATEUR_CACHE =
     "profil_utilisateur_connecte_v1";
@@ -1024,7 +1024,7 @@ let minuteurVerificationMiseAJour =
  * Elle permet de détecter une nouvelle version même si seul app.js change.
  */
 const VERSION_APPLICATION_JS =
-    "2026-10-11-menu-menage-v56";
+    "2026-10-11-envoi-mail-v57";
 
 async function verifierNouvelleVersionAppJs() {
 
@@ -7850,6 +7850,7 @@ function optionsRaccourcisAccueil(){
  if(utilisateurAPermission("acces_espace_caserne")){o.push({id:"caserne",libelle:"Espace Caserne",icone:"🏠",action:"afficherEspaceCaserne()"});o.push({id:"agenda",libelle:"Agenda général",icone:"📅",action:"afficherAgendaGeneralCaserne()"});}
  if(utilisateurPeutAccederPharmacie())o.push({id:"pharmacie",libelle:"Espace Pharmacie",icone:"💊",action:"afficherAccueil()"});
  o.push({id:"equipe",libelle:"Espace équipe",icone:"🚒",action:"afficherEspaceGarde()"});
+ o.push({id:"envoi_mail",libelle:"Envoi par mail",icone:"✉",action:"afficherEnvoiDocumentsEquipe()"});
  for(const x of obtenirOngletsPharmacieAccessibles())o.push({id:"pharma_"+x.libelle.toLowerCase().replace(/[^a-z0-9]+/g,"_"),libelle:x.libelle,icone:x.icone,action:x.action});
 
  if(utilisateurAPermission("acces_espace_caserne")){
@@ -8430,7 +8431,7 @@ function iconePDFHTML() {
     </svg>`;
 }
 
-async function exporterPublicationCasernePDF(publicationId) {
+async function exporterPublicationCasernePDF(publicationId, modeMail=false) {
     const publication = window.__publicationsCaserneParId?.[publicationId];
     if (!publication) {
         alert("Publication introuvable.");
@@ -8535,13 +8536,15 @@ async function exporterPublicationCasernePDF(publicationId) {
         }
 
         ajouterPiedDePagePDF(doc);
+        if(modeMail)return pieceJointeDocumentMail(doc.output("blob"), nomFichierPDF(`${type}-${titre}`));
         await enregistrerPDFSansApercuNavigateur(doc, nomFichierPDF(`${type}-${titre}`));
     } catch (erreur) {
+        if(modeMail)throw erreur;
         afficherErreurExportPDF(erreur);
     }
 }
 
-async function exporterEntretienPDF(entretienId) {
+async function exporterEntretienPDF(entretienId, modeMail=false) {
     if (!utilisateurEstSPVAdmin() && !utilisateurAPermission("acces_entretien_individuel_admin")) {
         alert("Export PDF réservé aux administrateurs.");
         return;
@@ -8617,13 +8620,15 @@ async function exporterEntretienPDF(entretienId) {
             y = doc.lastAutoTable.finalY + 8;
         }
         ajouterPiedDePagePDF(doc);
+        if(modeMail)return pieceJointeDocumentMail(doc.output("blob"), nomFichierPDF(`entretien-${titreEntretien}`));
         await enregistrerPDFSansApercuNavigateur(doc, nomFichierPDF(`entretien-${titreEntretien}`));
     } catch (erreur) {
+        if(modeMail)throw erreur;
         afficherErreurExportPDF(erreur);
     }
 }
 
-async function exporterEntretiensPDF() {
+async function exporterEntretiensPDF( modeMail=false) {
     if (!utilisateurEstSPVAdmin() && !utilisateurAPermission("acces_entretien_individuel_admin")) {
         alert("Export PDF reserve aux administrateurs.");
         return;
@@ -8686,8 +8691,10 @@ async function exporterEntretiensPDF() {
         }
 
         ajouterPiedDePagePDF(doc);
+        if(modeMail)return pieceJointeDocumentMail(doc.output("blob"), nomFichierPDF("planning-entretiens"));
         await enregistrerPDFSansApercuNavigateur(doc, nomFichierPDF("planning-entretiens"));
     } catch (erreur) {
+        if(modeMail)throw erreur;
         afficherErreurExportPDF(erreur);
     }
 }
@@ -8696,7 +8703,7 @@ function utilisateurPeutExporterPharmaciePDF() {
     return utilisateurEstSPVAdmin() || utilisateurAPermission("acces_administration");
 }
 
-async function exporterCommandeArchivePDF(archiveId) {
+async function exporterCommandeArchivePDF(archiveId, modeMail=false) {
     if (!utilisateurPeutExporterPharmaciePDF()) {
         alert("Export PDF reserve aux administrateurs.");
         return;
@@ -8818,8 +8825,10 @@ async function exporterCommandeArchivePDF(archiveId) {
         }
 
         ajouterPiedDePagePDF(doc);
+        if(modeMail)return pieceJointeDocumentMail(doc.output("blob"), nomFichierPDF(`commande-${archive.date || "pharmacie"}`));
         await enregistrerPDFSansApercuNavigateur(doc, nomFichierPDF(`commande-${archive.date || "pharmacie"}`));
     } catch (erreur) {
+        if(modeMail)throw erreur;
         afficherErreurExportPDF(erreur);
     }
 }
@@ -22101,6 +22110,7 @@ function afficherEspaceGarde(){
           <button class="garde-menu-carte" onclick="ouvrirRubriqueEquipe('vehicules')"><span class="ico">🚒</span><span><strong>Inventaire véhicule</strong></span><b class="fleche">›</b></button>
           <button class="garde-menu-carte" onclick="afficherPlanningEspaceGarde()"><span class="ico">📅</span><span><strong>Planning</strong></span><b class="fleche">›</b></button>
           <button class="garde-menu-carte" onclick="ouvrirRubriqueEquipe('heures')"><span class="ico">⏱️</span><span><strong>Enregistrer des heures</strong></span><b class="fleche">›</b></button>
+          <button type="button" class="garde-menu-carte" onclick="afficherEnvoiDocumentsEquipe()"><span class="ico" aria-hidden="true"><svg width="27" height="27" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 6 9 7 9-7"/></svg></span><span><strong>Envoi par mail</strong></span><b class="fleche">›</b></button>
           ${utilisateurAccesAdministratifCentral() ? `<button class="garde-menu-carte" onclick="afficherAdministrationEquipe()"><span class="ico">⚙️</span><span><strong>Administratif</strong></span><b class="fleche">›</b></button>` : ""}
 
         </div>
@@ -22805,7 +22815,7 @@ async function remplirLignesControlesPharmacie(pdf, lignes, type, lib) {
  }
 }
 
-async function exporterControlePharmaciePDF(type,index){
+async function exporterControlePharmaciePDF(type,index,modeMail=false){
  try{
  const lignes=archivesControlesPharmacie[type]?.[index];if(!lignes?.length)throw new Error("Feuille introuvable");
  const lib=await bibliothequePDFControlesPharmacie();
@@ -22813,8 +22823,10 @@ async function exporterControlePharmaciePDF(type,index){
  const r=await fetch("./"+fichier);if(!r.ok)throw new Error("Modèle PDF manquant : "+fichier);
  const pdf=await lib.PDFDocument.load(await r.arrayBuffer());
  await remplirLignesControlesPharmacie(pdf,lignes,type,lib);
- const bytes=await pdf.save();const blob=new Blob([bytes],{type:"application/pdf"}),url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download=`${type}-${lignes[0].date_intervention}-au-${lignes[lignes.length-1].date_intervention}-feuille-${index+1}.pdf`;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),30000);
- }catch(e){alert("Export impossible : "+e.message);}
+ const bytes=await pdf.save();
+ if(modeMail)return pieceJointeDocumentMail(new Blob([bytes],{type:"application/pdf"}),`${type}-${lignes[0].date_intervention}-au-${lignes[lignes.length-1].date_intervention}-feuille-${index+1}.pdf`);
+ const blob=new Blob([bytes],{type:"application/pdf"}),url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download=`${type}-${lignes[0].date_intervention}-au-${lignes[lignes.length-1].date_intervention}-feuille-${index+1}.pdf`;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),30000);
+ }catch(e){if(modeMail)throw e;alert("Export impossible : "+e.message);}
 }
 
 
@@ -22884,13 +22896,13 @@ function basculerQuantiteProduitMenage(caseProduit){
  const q=caseProduit.closest('[data-menage-produit]')?.querySelector('[data-menage-quantite]');if(!q)return;
  q.disabled=!caseProduit.checked;if(!caseProduit.checked)q.value='1';
 }
-async function chargerLignesEquipePDF(type,id){
+async function chargerLignesEquipePDF(type,id,periodeMail=null){
  const sb=obtenirClientSupabase();
  const table=type==='menage'?'menages_garde':type==='heures'?'heures_equipe':'cis_inventaires_vehicules';
  const select=type==='heures'?'id,created_at,duree_minutes,details,enregistre_par,personnes_concernees,motifs_heures(nom)':'*';
  const date=type==='menage'?'date_menage':'created_at';
  const filtreVehicule=type==='vehicules'&&!id?(document.getElementById('inventaires-admin-filtre')?.value||''):'';
- const periode=type!=='vehicules'&&!id?lirePeriodePDFEquipe(type):null;
+ const periode=type!=='vehicules'&&!id?(periodeMail||lirePeriodePDFEquipe(type)):null;
  const rows=[];
  for(let debut=0;;debut+=500){
   let req=sb.from(table).select(select).order(date,{ascending:false}).order('id');
@@ -22902,32 +22914,33 @@ async function chargerLignesEquipePDF(type,id){
  }
  return rows;
 }
-async function exporterEquipePDF(type,id=null){
+async function exporterEquipePDF(type,id=null,modeMail=false,periodeMail=null){
  const cfg=rubriquesEquipeConfig[type];if(!cfg||!utilisateurAPermission(cfg.permission))return alert('Accès non autorisé.');
  const cle=type+':'+(id||'tous');if(exportsEquipePDFEnCours.has(cle))return;
  exportsEquipePDFEnCours.add(cle);
  // Ouvrir pendant le geste utilisateur pour éviter le blocage Safari après await.
  const estApple=/iPad|iPhone|iPod/.test(navigator.userAgent)||(/Macintosh/.test(navigator.userAgent)&&navigator.maxTouchPoints>1);
- let apercu=estApple?window.open('about:blank','_blank'):null;
+ let apercu=!modeMail&&estApple?window.open('about:blank','_blank'):null;
  const statut=document.getElementById('equipe-pdf-statut');
  if(statut)statut.textContent='Création du PDF…';
  try{
-  const [rows,personnes]=await Promise.all([chargerLignesEquipePDF(type,id),chargerUtilisateursEspaceGarde()]);
+  const [rows,personnes]=await Promise.all([chargerLignesEquipePDF(type,id,periodeMail),chargerUtilisateursEspaceGarde()]);
   if(!rows.length)throw new Error('Aucun enregistrement à exporter.');
   const PDF=await obtenirBibliothequesPDF();
   let doc;
   if(type==='vehicules'){
    if(rows.length!==1)throw new Error('Sélectionne un véhicule puis un inventaire précis.');
    doc=creerRapportInventaireEquipePDF(PDF,rows[0],personnes);
-  }else doc=creerCalendrierEquipePDF(PDF,type,rows,personnes,id);
+  }else doc=creerCalendrierEquipePDF(PDF,type,rows,personnes,id,periodeMail);
   if(!utilisateurAPermission(cfg.permission))throw new Error('Accès non autorisé.');
   const nom=nomFichierPDF(type==='vehicules'?`inventaire-${rows[0].numero_inventaire??rows[0].id}-${rows[0].vehicule_nom||'vehicule'}`:`${type}-cis-le-chesne-${id||'periode'}`);
+  if(modeMail)return pieceJointeDocumentMail(doc.output('blob'),nom);
   const url=URL.createObjectURL(doc.output('blob'));
   if(apercu){apercu.location.href=url;apercu=null;}
   else {const a=document.createElement('a');a.href=url;a.download=nom;document.body.appendChild(a);a.click();a.remove();}
   if(statut)statut.textContent=estApple?'PDF ouvert. Sur iPhone : Partager → Enregistrer dans Fichiers.':'PDF téléchargé.';
   setTimeout(()=>URL.revokeObjectURL(url),120000);
- }catch(e){if(apercu)apercu.close();if(statut)statut.textContent=e.message||String(e);afficherErreurExportPDF(e);}finally{exportsEquipePDFEnCours.delete(cle);}
+ }catch(e){if(apercu)apercu.close();if(modeMail)throw e;if(statut)statut.textContent=e.message||String(e);afficherErreurExportPDF(e);}finally{exportsEquipePDFEnCours.delete(cle);}
 }
 const exportsEquipePDFEnCours=new Set();
 
@@ -23050,9 +23063,9 @@ function lirePeriodePDFEquipe(type){
  if(!Number.isFinite(debut.getTime())||!Number.isFinite(fin.getTime()))throw new Error('Dates invalides.');
  return {from,to,startISO:debut.toISOString(),endISO:fin.toISOString()};
 }
-function creerCalendrierEquipePDF(PDF,type,rows,personnes,id){
+function creerCalendrierEquipePDF(PDF,type,rows,personnes,id,periodeMail=null){
  const noms=ids=>(ids||[]).map(uid=>{const u=personnes.find(p=>String(p.id)===String(uid));return u?nomPersonnelHeures(u):'Utilisateur';}).join(', ');
- const periode=id?{from:dateISOlocale(new Date(rows[0][type==='menage'?'date_menage':'created_at'])),to:dateISOlocale(new Date(rows[0][type==='menage'?'date_menage':'created_at']))}:lirePeriodePDFEquipe(type);
+ const periode=id?{from:dateISOlocale(new Date(rows[0][type==='menage'?'date_menage':'created_at'])),to:dateISOlocale(new Date(rows[0][type==='menage'?'date_menage':'created_at']))}:(periodeMail||lirePeriodePDFEquipe(type));
  const entries=rows.map(r=>({date:r[type==='menage'?'date_menage':'created_at'],names:noms(r[type==='menage'?'personnes_presentes':'personnes_concernees']),motif:type==='menage'?'Ménage':r.motifs_heures?.nom||'Heures enregistrées',duration:libelleDureeHeures(r.duree_minutes||0)})).sort((a,b)=>new Date(a.date)-new Date(b.date));
  const doc=new PDF({orientation:'portrait',unit:'mm',format:'a4'});
  const first=new Date(periode.from+'T12:00:00'),last=new Date(periode.to+'T12:00:00');let month=new Date(first.getFullYear(),first.getMonth(),1,12),page=0;
@@ -23202,4 +23215,109 @@ function initialiserStyleAdministratifCarres(){
  #app .administratif-carres .garde-menu-carte{aspect-ratio:1/1;width:100%!important;min-width:0!important;min-height:0!important;height:auto!important;box-sizing:border-box;display:flex!important;flex-direction:column!important;align-items:center!important;justify-content:center!important;gap:10px!important;text-align:center!important;padding:12px!important}
  #app .administratif-carres .garde-menu-carte .ico{margin:0!important;width:48px;height:48px;font-size:26px}#app .administratif-carres .garde-menu-carte strong{font-size:15px;line-height:1.3;overflow-wrap:anywhere}#app .administratif-carres .garde-menu-carte span{margin:0!important}#app .administratif-carres .garde-menu-carte .fleche{display:none!important}
  `;document.head.appendChild(style);
+}
+
+// Documents par mail : mêmes modèles que les téléchargements existants.
+let envoiDocumentsEquipeEtat=null;
+async function pieceJointeDocumentMail(blob,filename){
+ if(blob.size>10*1024*1024)throw new Error('Ce document dépasse 10 Mo. Choisis une période plus courte.');
+ const content=await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(String(r.result).split(',')[1]);r.onerror=()=>reject(new Error('Lecture du document impossible.'));r.readAsDataURL(blob);});
+ return {filename,content};
+}
+async function lireDocumentsMail(table,select='*',order='id'){
+ const rows=[],sb=obtenirClientSupabase();
+ for(let offset=0;;offset+=500){const {data,error}=await sb.from(table).select(select).order(order).order('id').range(offset,offset+499);if(error)throw error;rows.push(...(data||[]));if((data?.length||0)<500)break;}
+ return rows;
+}
+function styleEnvoiDocumentsEquipe(){
+ if(document.getElementById('envoi-documents-style'))return;
+ const s=document.createElement('style');s.id='envoi-documents-style';s.textContent=`.mail-doc-section{background:#fff;border-radius:14px;padding:16px;margin:15px 0}.mail-doc-section h2,.mail-doc-section summary{font-size:18px;font-weight:750;margin:0 0 12px}.mail-doc-section summary{cursor:pointer}.mail-doc-ligne{display:flex;gap:12px;align-items:flex-start;padding:13px 0;border-top:1px solid #e5e9ec;cursor:pointer}.mail-doc-ligne input{width:22px;height:22px;accent-color:#176b45;flex:0 0 auto;margin:1px 0}.mail-doc-ligne strong{display:block}.mail-doc-ligne small{display:block;color:#657079;margin-top:5px}.mail-doc-ligne:has(input:checked){background:#e7f4ec;border-radius:8px;padding-left:10px;padding-right:10px}.mail-doc-ligne[hidden]{display:none}.mail-doc-periode{display:grid;grid-template-columns:1fr 1fr;gap:12px}.mail-doc-periode input,.mail-doc-recherche{box-sizing:border-box;width:100%;padding:12px;border:1px solid #cdd5dc;border-radius:9px;background:white;font:inherit}.mail-doc-destinataire{overflow-wrap:anywhere;color:#53616b}.mail-doc-statut{white-space:pre-line;overflow-wrap:anywhere}.mail-doc-statut.erreur{color:#a22020}.mail-doc-statut.succes{color:#176b45}.mail-doc-envoi{width:100%;border:0;border-radius:12px;padding:16px;background:#176b45;color:white;font:inherit;font-weight:750;cursor:pointer}.mail-doc-envoi:disabled{opacity:.5;cursor:default}.mail-doc-compteur{font-weight:700}.mail-doc-section a{color:#176b45}`;document.head.appendChild(s);
+}
+async function afficherEnvoiDocumentsEquipe(){
+ if(!profilUtilisateurConnecte?.actif)return;
+ initialiserStyleEspaceGardeUtilisateur();initialiserStyleActionsEquipe();styleEnvoiDocumentsEquipe();
+ const d=new Date(),etat={documents:[],email:'',enCours:false,pending:null};envoiDocumentsEquipeEtat=etat;
+ const periode=utilisateurAPermission('acces_admin_menage')||utilisateurAPermission('acces_admin_heures');
+ document.getElementById('app').innerHTML=`<main class="garde-section"><button type="button" class="retour-button" data-navigation-equipe onclick="afficherEspaceGarde()">← Espace équipe</button><h1>Envoi par mail</h1><p id="mail-doc-destinataire" class="mail-doc-destinataire">Chargement de l’adresse mail…</p>${periode?`<section class="mail-doc-section"><h2>Période des ménages et des heures</h2><input id="equipe-pdf-mode" type="hidden" value="custom"><div class="mail-doc-periode"><label>Du<input id="equipe-pdf-debut" type="date" value="${dateISOlocale(new Date(d.getFullYear(),d.getMonth(),1))}" onchange="actualiserSelectionDocumentsMail()"></label><label>Au<input id="equipe-pdf-fin" type="date" value="${dateISOlocale(new Date(d.getFullYear(),d.getMonth()+1,0))}" onchange="actualiserSelectionDocumentsMail()"></label></div></section>`:''}<label for="mail-doc-recherche">Rechercher un document</label><input class="mail-doc-recherche" id="mail-doc-recherche" type="search" placeholder="Véhicule, date, document…" oninput="filtrerDocumentsMail(this.value)"><div id="mail-doc-liste" aria-busy="true"></div><p id="mail-doc-compteur" class="mail-doc-compteur">Aucun document sélectionné.</p><button type="button" id="mail-doc-envoyer" class="mail-doc-envoi" onclick="envoyerDocumentsEquipeParMail()" disabled>Recevoir les documents par mail</button><p id="mail-doc-statut" class="mail-doc-statut" role="status" aria-live="polite"></p></main>${navigationPrincipale('','accueil')}`;
+ actualiserInterfaceBureau();window.scrollTo({top:0,behavior:'auto'});
+ const liste=document.getElementById('mail-doc-liste');
+ const ajouter=(type,label,groupe,extra={})=>etat.documents.push({key:etat.documents.length,type,label,groupe,...extra});
+ ajouter('planning','Planning des gardes','Équipe',{detail:'Image PNG — planning actuellement affiché dans l’application'});
+ if(utilisateurAPermission('acces_admin_menage'))ajouter('menage','Ménages de la période','Équipe',{detail:'PDF — période choisie ci-dessus'});
+ if(utilisateurAPermission('acces_admin_heures'))ajouter('heures','Heures de la période','Équipe',{detail:'PDF — période choisie ci-dessus'});
+ const afficher=()=>{
+  if(!liste.isConnected||envoiDocumentsEquipeEtat!==etat)return;
+  liste.innerHTML=[...new Set(etat.documents.map(x=>x.groupe))].map(g=>`<details class="mail-doc-section" ${g==='Équipe'?'open':''}><summary>${echapperHTML(g)}</summary>${etat.documents.filter(x=>x.groupe===g).map(x=>`<label class="mail-doc-ligne" data-mail-document="${x.key}"><input type="checkbox" value="${x.key}" onchange="actualiserSelectionDocumentsMail()"><span><strong>${echapperHTML(x.label)}</strong><small>${echapperHTML(x.detail||'PDF')}</small></span></label>`).join('')}</details>`).join('');
+  actualiserSelectionDocumentsMail();
+ };
+ const travaux=[{nom:'Adresse mail',run:async()=>{
+  const {data,error}=await obtenirClientSupabase().from('profils_utilisateurs').select('email_contact').eq('id',utilisateurConnecte.id).single();if(error)throw error;
+  etat.email=String(data.email_contact||'').trim();
+  const p=document.getElementById('mail-doc-destinataire');if(!liste.isConnected||!p)return;
+  p.innerHTML=/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(etat.email)?`Envoi à <strong>${echapperHTML(etat.email)}</strong>`:`Aucune adresse mail valide enregistrée. Demande à un administrateur de compléter ton adresse mail dans l’annuaire.`;
+ }}];
+ if(utilisateurAPermission('acces_admin_menage'))travaux.push({nom:'Inventaires véhicules',run:async()=>{
+  const rows=await lireDocumentsMail('cis_inventaires_vehicules','*','created_at');
+  for(const r of rows.reverse())ajouter('vehicules',`${r.vehicule_nom||'Véhicule'} — ${inventairesAdminNom(r)}`,'Inventaires véhicules',{id:r.id,detail:new Date(r.created_at).toLocaleString('fr-FR')});
+ }});
+ if(utilisateurPeutExporterPharmaciePDF())travaux.push({nom:'Traçabilité pharmacie',run:async()=>{
+  const rows=await lireDocumentsMail('cis_controles_pharmacie','id,type_controle,date_intervention,numero_intervention,agent_nom,signature_png,created_at','created_at');
+  const feuilles={meducore:[],vsav:[]};
+  for(const type of ['meducore','vsav']){const lignes=rows.filter(x=>x.type_controle===type);for(let i=0;i<lignes.length;i+=CAPACITE_CONTROLES_PHARMACIE[type])feuilles[type].push(lignes.slice(i,i+CAPACITE_CONTROLES_PHARMACIE[type]));
+   feuilles[type].forEach((p,index)=>ajouter(type,`${type==='meducore'?'Contrôles du Meducore':'Entretiens du VSAV'} — feuille ${index+1}`,'Pharmacie',{index,detail:`Du ${p[0].date_intervention} au ${p[p.length-1].date_intervention}`}));
+  }etat.feuilles=feuilles;
+  for(const r of archivesHistorique||[])ajouter('commande',`Commande du ${formaterDate(r.date)}`,'Pharmacie',{id:r.id,detail:'Archive des consommations'});
+ }});
+ const rubriques=obtenirRubriquesCaserne().filter(r=>r[0]!=='entretien_individuel'&&(utilisateurEstSPVAdmin()||utilisateurAPermission(r[3])));
+ if(rubriques.length)travaux.push({nom:'Événements caserne',run:async()=>{
+  const rows=await lireDocumentsMail('caserne_publications','*','created_at');
+  for(const r of rows.reverse())if(rubriques.some(x=>x[0]===r.type_publication))ajouter('publication',`${obtenirLibelleTypeCaserne(r.type_publication)} — ${r.titre||'Événement'}`,'Caserne',{id:r.id,rubrique:r.type_publication,detail:r.date_evenement?formaterDateHeureCaserne(r.date_evenement):'Date non renseignée'});
+ }});
+ if(utilisateurEstSPVAdmin()||utilisateurAPermission('acces_entretien_individuel_admin'))ajouter('entretiens','Planning des entretiens individuels','Caserne',{detail:'PDF — ensemble des rendez-vous réservés'});
+ const resultats=await Promise.allSettled(travaux.map(async x=>{let timer;try{return await Promise.race([x.run(),new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error("Délai de chargement dépassé.")),20000);})]);}finally{clearTimeout(timer);}}));
+ if(!liste.isConnected||envoiDocumentsEquipeEtat!==etat)return;
+ const echecs=resultats.flatMap((r,i)=>r.status==='rejected'?[travaux[i].nom]:[]);
+ afficher();liste.setAttribute('aria-busy','false');
+ if(echecs.length){document.getElementById('mail-doc-statut').textContent='Chargement impossible : '+echecs.join(', ')+'. Rouvre cette page pour réessayer.';if(echecs.includes('Adresse mail'))document.getElementById('mail-doc-destinataire').textContent='Adresse mail indisponible.';}
+}
+function selectionDocumentsMail(){return [...document.querySelectorAll('[data-mail-document] input:checked')].map(x=>envoiDocumentsEquipeEtat?.documents.find(d=>String(d.key)===x.value)).filter(Boolean);}
+function actualiserSelectionDocumentsMail(){
+ const e=envoiDocumentsEquipeEtat,btn=document.getElementById('mail-doc-envoyer');if(!e||!btn)return;e.pending=null;
+ const n=selectionDocumentsMail().length;document.getElementById('mail-doc-compteur').textContent=n?`${n} document${n>1?'s':''} sélectionné${n>1?'s':''} (10 maximum).`:'Aucun document sélectionné.';
+ btn.disabled=e.enCours||!navigator.onLine||!n||n>10||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.email);
+}
+function filtrerDocumentsMail(recherche){
+ const texte=recherche.trim().toLocaleLowerCase('fr');document.querySelectorAll('[data-mail-document]').forEach(x=>{x.hidden=!!texte&&!x.textContent.toLocaleLowerCase('fr').includes(texte)&&!x.querySelector('input').checked;if(texte&&!x.hidden)x.closest('details').open=true;});
+}
+async function creerDocumentSelectionneMail(d,etat,periode){
+ if(['menage','heures','vehicules'].includes(d.type))return exporterEquipePDF(d.type,d.id||null,true,periode);
+ if(d.type==='planning'){const url=await creerPhotoPlanningGarde();return pieceJointeDocumentMail(await (await fetch(url)).blob(),'planning-des-gardes.png');}
+ if(d.type==='meducore'||d.type==='vsav'){if(!utilisateurPeutExporterPharmaciePDF())throw new Error('Accès non autorisé.');archivesControlesPharmacie=etat.feuilles;return exporterControlePharmaciePDF(d.type,d.index,true);}
+ if(d.type==='commande')return exporterCommandeArchivePDF(d.id,true);
+ if(d.type==='entretiens')return exporterEntretiensPDF(true);
+ if(d.type==='publication'){
+  const rows=await chargerDetailsPublicationsCaserne(await lireDocumentsMail('caserne_publications','*','created_at'));
+  const r=rows.find(x=>String(x.id)===String(d.id));if(!r)throw new Error('Événement introuvable.');
+  window.__publicationsCaserneParId=window.__publicationsCaserneParId||{};window.__publicationsCaserneParId[d.id]=r;
+  return exporterPublicationCasernePDF(d.id,true);
+ }
+ throw new Error('Document non disponible.');
+}
+async function envoyerDocumentsEquipeParMail(){
+ const e=envoiDocumentsEquipeEtat,btn=document.getElementById('mail-doc-envoyer'),statut=document.getElementById('mail-doc-statut');if(!e||e.enCours||!btn||!statut)return;
+ const selected=selectionDocumentsMail();if(!navigator.onLine){statut.textContent='Une connexion Internet est nécessaire.';return;}if(!selected.length||selected.length>10)return;
+ e.enCours=true;btn.disabled=true;statut.className='mail-doc-statut';
+ const inputs=[...document.querySelectorAll('[data-mail-document] input,#equipe-pdf-debut,#equipe-pdf-fin')];inputs.forEach(x=>x.disabled=true);
+ try{
+  if(!e.pending){const documents=[];let total=0;const periode=selected.some(d=>d.type==='menage'||d.type==='heures')?lirePeriodePDFEquipe():null;
+   for(let i=0;i<selected.length;i++){const d=selected[i];statut.textContent=`Préparation du document ${i+1}/${selected.length}…`;const piece=await creerDocumentSelectionneMail(d,e,periode);if(!piece)throw new Error('Impossible de préparer : '+d.label);total+=Math.floor(piece.content.length*3/4)-(piece.content.endsWith('==')?2:piece.content.endsWith('=')?1:0);if(total>10*1024*1024)throw new Error('La sélection dépasse 10 Mo. Réduis le nombre de documents.');documents.push({...piece,type:d.type,rubrique:d.rubrique});}
+   e.pending={request_id:crypto.randomUUID(),documents};
+  }
+  statut.textContent='Envoi du mail…';
+  const {data,error}=await obtenirClientSupabase().functions.invoke('envoi-documents',{body:e.pending});
+  if(error){let message=error.message;try{const details=await error.context.json();message=details.error||message;}catch(_){}throw new Error(message==='Failed to send a request to the Edge Function'?'Le service d’envoi est indisponible. Vérifie que la fonction envoi-documents est installée.':message);}
+  if(!data?.ok)throw new Error(data?.error||'L’envoi n’a pas été confirmé.');
+  if(statut.isConnected){statut.className='mail-doc-statut succes';statut.textContent=`Mail envoyé à ${data.email}. Vérifie également les courriers indésirables.`;document.querySelectorAll('[data-mail-document] input:checked').forEach(x=>x.checked=false);}e.pending=null;
+ }catch(err){if(statut.isConnected){statut.className='mail-doc-statut erreur';statut.textContent=err.message||'Envoi impossible. Réessaie dans un instant.';}}
+ finally{e.enCours=false;inputs.forEach(x=>x.disabled=false);if(envoiDocumentsEquipeEtat===e&&btn.isConnected){const pending=e.pending;actualiserSelectionDocumentsMail();e.pending=pending;}}
 }
