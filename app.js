@@ -1024,7 +1024,7 @@ let minuteurVerificationMiseAJour =
  * Elle permet de détecter une nouvelle version même si seul app.js change.
  */
 const VERSION_APPLICATION_JS =
-    "2026-10-11-notifications-non-lues-v52";
+    "2026-10-11-administratif-profil-v54";
 
 async function verifierNouvelleVersionAppJs() {
 
@@ -3676,6 +3676,7 @@ async function afficherProfilUtilisateur() {
 
                 </div>
 
+                <button class="profil-bouton-principal" type="button" id="profil-gerer-notifications" aria-expanded="false" aria-controls="profil-notifications-details" disabled onclick="basculerGestionProfil('notifications')">Gérer les notifications</button>
                 <div id="profil-notifications-details" style="display:none; margin-top:16px; padding-top:14px; border-top:1px solid rgba(0,0,0,.08);">
                     <strong style="display:block; margin-bottom:10px;">Notifications souhaitées</strong>
                     <div id="profil-notifications-choix"></div>
@@ -3689,9 +3690,12 @@ async function afficherProfilUtilisateur() {
 
             <section class="profil-carte">
                 <h3>Raccourcis rapides</h3>
-                <small class="profil-mise-a-jour-texte">Optionnel : choisis jusqu’à 2 raccourcis à afficher sur l’accueil général.</small>
+                <button class="profil-bouton-principal" type="button" id="profil-gerer-raccourcis" aria-expanded="false" aria-controls="profil-raccourcis-details" onclick="basculerGestionProfil('raccourcis')">Gérer les raccourcis</button>
+                <div id="profil-raccourcis-details" style="display:none;margin-top:16px">
+                <small class="profil-mise-a-jour-texte">Optionnel : choisis jusqu’à 6 raccourcis à afficher sur l’accueil général.</small>
                 <div style="margin:10px 0 14px">${(()=>{const selection=new Set(lireRaccourcisAccueil());return optionsRaccourcisAccueil().map(x=>`<label style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid rgba(0,0,0,.06)"><input type="checkbox" data-raccourci-profil value="${echapperHTML(x.id)}" ${selection.has(x.id)?"checked":""} onchange="verifierRaccourcisProfil(this)" style="width:20px;height:20px"><span style="display:flex;align-items:center;gap:9px">${x.logo?`<img src="${echapperHTML(x.logo)}" alt="" style="width:32px;height:32px;border-radius:8px;object-fit:cover">`:`<span>${x.icone}</span>`}<span>${echapperHTML(x.libelle)}</span></span></label>`).join("")})()}</div>
                 <button class="profil-bouton-principal" type="button" onclick="enregistrerRaccourcisProfil()">Enregistrer mes raccourcis</button>
+                </div>
             </section>
 
             <section class="profil-carte">
@@ -3932,7 +3936,8 @@ async function rafraichirNotificationsProfil() {
     const details = document.getElementById("profil-notifications-details");
 
     if (details) {
-        details.style.display = actif ? "block" : "none";
+        details.style.display = actif && details.dataset.ouvert === "true" ? "block" : "none";
+        const gestion=document.getElementById("profil-gerer-notifications");if(gestion){gestion.disabled=!actif;gestion.title=actif?"Choisir les notifications souhaitées":"Active les notifications sur cet appareil pour choisir les rubriques";gestion.setAttribute("aria-expanded",String(actif&&details.dataset.ouvert==="true"));}
     }
 
     if (actif) {
@@ -7846,15 +7851,30 @@ function optionsRaccourcisAccueil(){
  if(utilisateurPeutAccederPharmacie())o.push({id:"pharmacie",libelle:"Espace Pharmacie",icone:"💊",action:"afficherAccueil()"});
  o.push({id:"equipe",libelle:"Espace équipe",icone:"🚒",action:"afficherEspaceGarde()"});
  for(const x of obtenirOngletsPharmacieAccessibles())o.push({id:"pharma_"+x.libelle.toLowerCase().replace(/[^a-z0-9]+/g,"_"),libelle:x.libelle,icone:x.icone,action:x.action});
- return o;
+
+ if(utilisateurAPermission("acces_espace_caserne")){
+  o.push({id:"annuaire",libelle:"Annuaire du centre",icone:"📇",action:"afficherAnnuaireCentre()"});
+  for(const r of obtenirRubriquesCaserne().filter(utilisateurPeutVoirRubriqueCaserne)){const p=obtenirPresentationRubriqueCaserne(r[0]);o.push({id:"caserne_"+r[0],libelle:r[1],icone:p.icone,action:`afficherRubriqueCaserne('${r[0]}')`});}
+ }
+ o.push({id:"menage",libelle:"Enregistrer un ménage",icone:"🧹",action:"afficherMenageEspaceGarde()"},{id:"vehicules",libelle:"Enregistrer un inventaire véhicule",icone:"🚒",action:"afficherInventaireVehiculeEspaceGarde()"},{id:"planning",libelle:"Planning des gardes",icone:"📅",action:"afficherPlanningEspaceGarde()"},{id:"heures",libelle:"Enregistrer des heures",icone:"⏱️",action:"afficherEnregistrerHeuresEquipe()"});
+ if(utilisateurAPermission("acces_admin_menage"))o.push({id:"menage_stock",libelle:"Ménage inventaire",icone:"📦",action:"afficherInventaireMenage()"},{id:"menage_admin",libelle:"Ménage admin",icone:"🧹",action:"afficherAdminMenageEquipe()"},{id:"inventaires_admin",libelle:"Inventaires véhicules enregistrés",icone:"🚒",action:"afficherAdminInventairesEquipe()"});
+ if(utilisateurAPermission("acces_admin_heures"))o.push({id:"heures_admin",libelle:"Historique des heures",icone:"⏱️",action:"afficherHistoriqueHeuresEquipe()"});
+ if(utilisateurAccesAdministratifCentral())o.push({id:"equipe_admin",libelle:"Administratif",icone:"⚙️",action:"afficherAdministratifCaserne()"});
+ if(utilisateurAPermission("acces_archives"))o.push({id:"pharma_archives",libelle:"Archives pharmacie",icone:"📁",action:"afficherArchivesHistorique()"});
+ if(utilisateurAPermission("acces_reapprovisionnement"))o.push({id:"pharma_reappro",libelle:"Réapprovisionnement pharmacie",icone:"📦",action:"afficherReapprovisionnementAdministration()"});
+ if(utilisateurPeutExporterPharmaciePDF())o.push({id:"pharma_tracabilite",libelle:"Fiches Meducore et VSAV",icone:"📄",action:"afficherArchivesControlesPharmacie()"});
+ o.push({id:"profil",libelle:"Mon profil",icone:"○",action:"ouvrirProfilDepuisPageCourante()"});
+ o.push({id:"notifications",libelle:"Mes notifications",icone:"🔔",action:"afficherHistoriqueNotifications()"});
+ const actions=new Set();return o.filter(x=>{if(actions.has(x.action))return false;actions.add(x.action);return true;});
+
 }
-function lireRaccourcisAccueil(){try{const k=CLE_RACCOURCIS_ACCUEIL+"_"+String(profilUtilisateurConnecte?.id||"");const v=JSON.parse(localStorage.getItem(k)||"[]");return Array.isArray(v)?v.slice(0,2):[]}catch(_){return []}}
+function lireRaccourcisAccueil(){try{const k=CLE_RACCOURCIS_ACCUEIL+"_"+String(profilUtilisateurConnecte?.id||"");const v=JSON.parse(localStorage.getItem(k)||"[]");return Array.isArray(v)?[...new Set(v)].filter(id=>optionsRaccourcisAccueil().some(o=>o.id===id)).slice(0,6):[]}catch(_){return []}}
 function enregistrerRaccourcisProfil(){
  const cases=[...document.querySelectorAll("[data-raccourci-profil]:checked")];
- if(cases.length>2){alert("Tu peux choisir au maximum 2 raccourcis.");return}
+ if(cases.length>6){alert("Tu peux choisir au maximum 6 raccourcis.");return}
  try{const k=CLE_RACCOURCIS_ACCUEIL+"_"+String(profilUtilisateurConnecte?.id||"");localStorage.setItem(k,JSON.stringify(cases.map(x=>x.value)));alert("Raccourcis enregistrés.")}catch(_){alert("Impossible d’enregistrer les raccourcis.")}
 }
-function verifierRaccourcisProfil(el){const c=[...document.querySelectorAll("[data-raccourci-profil]:checked")];if(c.length>2){el.checked=false;alert("Tu peux choisir au maximum 2 raccourcis.")}}
+function verifierRaccourcisProfil(el){const c=[...document.querySelectorAll("[data-raccourci-profil]:checked")];if(c.length>6){el.checked=false;alert("Tu peux choisir au maximum 6 raccourcis.")}}
 function htmlRaccourcisAccueil(){const ids=lireRaccourcisAccueil(),opts=optionsRaccourcisAccueil();const a=ids.map(id=>opts.find(x=>x.id===id)).filter(Boolean);if(!a.length)return "";return `<section class="raccourcis-accueil-rapides">${a.map(x=>`<button type="button" onclick="${x.action}">${x.logo?`<img class="raccourci-logo-appli" src="${echapperHTML(x.logo)}" alt="Logo ${echapperHTML(x.libelle)}">`:`<span>${x.icone}</span>`}<strong>${echapperHTML(x.libelle)}</strong></button>`).join("")}</section>`}
 
 function afficherPortailPrincipal() {
@@ -9707,6 +9727,7 @@ function afficherAdministratifCaserne() {
         alert("Accès non autorisé."); return;
     }
     initialiserStyleEspaceGardeUtilisateur();
+    initialiserStyleAdministratifCarres();
     const admin = utilisateurEstSPVAdmin();
     const autorise = permission => admin || utilisateurAPermission(permission);
     const cartes = [
@@ -9714,19 +9735,10 @@ function afficherAdministratifCaserne() {
         ["🧹", "Ménage Admin", "afficherAdminMenageEquipe()", autorise("acces_admin_menage")],
         ["🚒", "Inventaires Admin", "afficherAdminInventairesEquipe()", autorise("acces_admin_menage")],
         ["⏱️", "Historique des heures", "afficherHistoriqueHeuresEquipe()", autorise("acces_admin_heures")],
-        ["🏃", "Sport Admin", "afficherRubriqueCaserne('sport')", autorise("acces_sport_admin")],
-        ["📋", "Manœuvres Admin", "afficherRubriqueCaserne('manoeuvre')", autorise("acces_manoeuvre_admin")],
-        ["🏢", "Casernement Admin", "afficherRubriqueCaserne('casernement')", autorise("acces_casernement_admin")],
-        ["📅", "Réunions Admin", "afficherRubriqueCaserne('reunion')", autorise("acces_reunion_admin")],
-        ["🤝", "Amicale Admin", "afficherRubriqueCaserne('amical')", autorise("acces_amical_admin")],
-        ["👥", "Comité de centre Admin", "afficherRubriqueCaserne('comite_centre')", autorise("acces_comite_centre_admin")],
-        ["📝", "Entretiens individuels Admin", "afficherRubriqueCaserne('entretien_individuel')", autorise("acces_entretien_individuel_admin")],
         ["🔔", "Notifications", "afficherNotificationsAdministration()", autorise("acces_notifications")],
-        ["👤", "Utilisateurs et rôles", "afficherGestionUtilisateurs()", admin && autorise("acces_gestion_utilisateurs")],
-        ["⚙️", "Administration application", "afficherMenuAdministrateurAppli()", admin]
     ].filter(carte => carte[3]);
     const app = document.getElementById("app");
-    app.innerHTML = `<main class="garde-menu-page">
+    app.innerHTML = `<main class="garde-menu-page administratif-carres">
         <button class="retour-button" onclick="afficherEspaceGarde()">← Retour</button>
         <header class="garde-menu-entete"><h1>Administratif</h1></header>
         <div class="garde-menu-cartes">${cartes.map(([icone, titre, action]) => `
@@ -23180,4 +23192,18 @@ async function actualiserPointNotifications(){
   if(sequence!==window.__cisPointNotificationsSequence||String(utilisateurConnecte?.id)!==String(uid))return;
   afficherEtatPointNotifications(rows.some(r=>!r.read));
  }catch(e){console.warn('État notifications :',e);}
+}
+
+function basculerGestionProfil(type){
+ const id=type==='notifications'?'profil-notifications-details':'profil-raccourcis-details',zone=document.getElementById(id),button=document.getElementById('profil-gerer-'+type);if(!zone||!button)return;
+ const open=zone.dataset.ouvert!=='true';zone.dataset.ouvert=String(open);zone.style.display=open?'block':'none';button.setAttribute('aria-expanded',String(open));
+}
+
+function initialiserStyleAdministratifCarres(){
+ if(document.getElementById('administratif-carres-style'))return;
+ const style=document.createElement('style');style.id='administratif-carres-style';style.textContent=`
+ #app .administratif-carres .garde-menu-cartes{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:12px!important;max-width:520px;margin:0 auto}
+ #app .administratif-carres .garde-menu-carte{aspect-ratio:1/1;width:100%!important;min-width:0!important;min-height:0!important;height:auto!important;box-sizing:border-box;display:flex!important;flex-direction:column!important;align-items:center!important;justify-content:center!important;gap:10px!important;text-align:center!important;padding:12px!important}
+ #app .administratif-carres .garde-menu-carte .ico{margin:0!important;width:48px;height:48px;font-size:26px}#app .administratif-carres .garde-menu-carte strong{font-size:15px;line-height:1.3;overflow-wrap:anywhere}#app .administratif-carres .garde-menu-carte span{margin:0!important}#app .administratif-carres .garde-menu-carte .fleche{display:none!important}
+ `;document.head.appendChild(style);
 }
