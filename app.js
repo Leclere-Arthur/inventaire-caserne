@@ -838,6 +838,11 @@ function retourPagePrecedente() {
         void afficherMenageEspaceGarde();
         return;
     }
+    if (app.querySelector('#notifications-historique-page')) {
+        restaurationNavigationEnCours = false;
+        void afficherHistoriqueNotifications();
+        return;
+    }
     // Une page inventaire restaurée doit retrouver ses données et ses photos.
     // La restauration HTML seule ne relance pas les chargements asynchrones.
     if (app.querySelector(".veh-inventaire-liste")) {
@@ -1019,7 +1024,7 @@ let minuteurVerificationMiseAJour =
  * Elle permet de détecter une nouvelle version même si seul app.js change.
  */
 const VERSION_APPLICATION_JS =
-    "2026-10-11-notifications-fond-v51";
+    "2026-10-11-notifications-non-lues-v52";
 
 async function verifierNouvelleVersionAppJs() {
 
@@ -23088,20 +23093,21 @@ function initialiserCentreNotifications(){
  const style=document.createElement('style');style.id='style-centre-notifications';
  style.textContent=`
  #btn-historique-notifications{position:fixed;top:calc(12px + env(safe-area-inset-top,0px));right:calc(58px + env(safe-area-inset-right,0px));width:38px;height:38px;display:flex;align-items:center;justify-content:center;z-index:99999;border:0;padding:0;margin:0;background:transparent;color:#1687ff;cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
- #btn-historique-notifications[hidden]{display:none!important}#btn-historique-notifications svg{width:27px;height:27px}#btn-historique-notifications:focus-visible{outline:2px solid #1687ff;outline-offset:2px;border-radius:50%}
- html:has(#notifications-historique-page),body:has(#notifications-historique-page){background:#f3f4f6!important}.notifications-page{min-height:100vh;min-height:100dvh;max-width:780px;margin:0 auto;padding:64px 16px 125px;box-sizing:border-box}.notifications-page h1{font-size:28px;margin:24px 0}.notif-retour{border:1px solid #dce1e6;background:#fff;color:#222a32;padding:11px 15px;border-radius:12px;font:inherit;font-weight:700;cursor:pointer}.notif-liste{display:grid;gap:10px}.notif-ligne{width:100%;display:flex;align-items:center;gap:18px;padding:18px;text-align:left;border:1px solid #dfe4e9;border-radius:14px;background:#fff;color:#222a32;font:inherit;cursor:pointer;box-sizing:border-box}.notif-ligne.non-lue{border-left:3px solid #1687ff}.notif-contenu{min-width:0;flex:1}.notif-contenu strong{display:block;font-size:16px;line-height:1.4;overflow-wrap:anywhere}.notif-contenu p{font-size:14px;line-height:1.5;margin:6px 0 10px;overflow-wrap:anywhere}.notif-contenu time{font-size:12px;color:#68717b;display:block}.notif-ligne svg{width:18px;height:18px;flex-shrink:0;color:#79838e}.notif-vide{border:1px solid #dfe4e9;border-radius:14px;background:#fff;color:#68717b;padding:24px;line-height:1.5}.notif-ligne:focus-visible,.notif-retour:focus-visible{outline:2px solid #1687ff;outline-offset:3px}
- @media(min-width:1000px){html:has(#notifications-historique-page),body:has(#notifications-historique-page){background:var(--pc-fond,#0d141b)!important}body:not(.mode-connexion) .notif-ligne,body:not(.mode-connexion) .notif-retour,body:not(.mode-connexion) .notif-vide{background:#151f28;border-color:#34414c;color:#f2f5f7}body:not(.mode-connexion) .notif-ligne.non-lue{border-left-color:#1687ff}.notif-contenu time{color:#8796a6}}
+ #btn-historique-notifications .notif-point{position:absolute;top:0;right:0;width:13px;height:13px;border-radius:50%;background:#dc2626;border:2px solid #fff;box-shadow:0 0 0 1px #dc2626;pointer-events:none}#btn-historique-notifications .notif-point[hidden]{display:none}#btn-historique-notifications[hidden]{display:none!important}#btn-historique-notifications svg{width:27px;height:27px}#btn-historique-notifications:focus-visible{outline:2px solid #1687ff;outline-offset:2px;border-radius:50%}
+ html:has(#notifications-historique-page),body:has(#notifications-historique-page){background:#f3f4f6!important}.notifications-page{min-height:100vh;min-height:100dvh;max-width:780px;margin:0 auto;padding:64px 16px 125px;box-sizing:border-box}.notifications-page h1{font-size:28px;margin:24px 0}.notif-retour{border:1px solid #dce1e6;background:#fff;color:#222a32;padding:11px 15px;border-radius:12px;font:inherit;font-weight:700;cursor:pointer}.notif-liste{display:grid;gap:10px}.notif-ligne{width:100%;display:flex;align-items:center;gap:18px;padding:18px;text-align:left;border:1px solid #dfe4e9;border-radius:14px;background:#fff;color:#222a32;font:inherit;cursor:pointer;box-sizing:border-box}.notif-ligne.non-lue{background:#1687ff;border-color:#1687ff;color:#fff}.notif-ligne.non-lue .notif-contenu time,.notif-ligne.non-lue svg{color:#fff}.notif-contenu{min-width:0;flex:1}.notif-contenu strong{display:block;font-size:16px;line-height:1.4;overflow-wrap:anywhere}.notif-contenu p{font-size:14px;line-height:1.5;margin:6px 0 10px;overflow-wrap:anywhere}.notif-contenu time{font-size:12px;color:#68717b;display:block}.notif-ligne svg{width:18px;height:18px;flex-shrink:0;color:#79838e}.notif-vide{border:1px solid #dfe4e9;border-radius:14px;background:#fff;color:#68717b;padding:24px;line-height:1.5}.notif-ligne:focus-visible,.notif-retour:focus-visible{outline:2px solid #1687ff;outline-offset:3px}
+ @media(min-width:1000px){html:has(#notifications-historique-page),body:has(#notifications-historique-page){background:var(--pc-fond,#0d141b)!important}body:not(.mode-connexion) .notif-ligne,body:not(.mode-connexion) .notif-retour,body:not(.mode-connexion) .notif-vide{background:#151f28;border-color:#34414c;color:#f2f5f7}body:not(.mode-connexion) .notif-ligne.non-lue{background:#1687ff;border-color:#1687ff;color:#fff}body:not(.mode-connexion) .notif-ligne.non-lue .notif-contenu time,body:not(.mode-connexion) .notif-ligne.non-lue svg{color:#fff}.notif-contenu time{color:#8796a6}}
  `;document.head.appendChild(style);
  const button=document.createElement('button');button.id='btn-historique-notifications';button.type='button';button.hidden=true;button.setAttribute('aria-label','Historique des notifications');button.title='Notifications';
- button.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9Z"/><path d="M10 21h4"/></svg>';
+ button.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9Z"/><path d="M10 21h4"/></svg><span class="notif-point" hidden aria-hidden="true"></span>';
  button.addEventListener('click',afficherHistoriqueNotifications);document.body.appendChild(button);
  const app=document.getElementById('app');if(app)new MutationObserver(actualiserVisibiliteCentreNotifications).observe(app,{childList:true});
  new MutationObserver(actualiserVisibiliteCentreNotifications).observe(document.body,{attributes:true,attributeFilter:['class']});
  if(navigator.serviceWorker)navigator.serviceWorker.addEventListener('message',event=>{
   const data=event.data||{};
-  if(data.type==='CIS_NOTIFICATIONS_UPDATED'&&String(data.userId)===String(utilisateurConnecte?.id||'')&&document.getElementById('notifications-liste'))void remplirHistoriqueNotifications();
+  if(data.type==='CIS_NOTIFICATIONS_UPDATED'&&String(data.userId)===String(utilisateurConnecte?.id||'')){void actualiserPointNotifications();if(document.getElementById('notifications-liste'))void remplirHistoriqueNotifications();}
   if(data.type==='CIS_OPEN_NOTIFICATION'){window.__cisNotificationEnAttente=data.id;void traiterNotificationEnAttente();}
  });
+ document.addEventListener('visibilitychange',()=>{if(!document.hidden){void actualiserPointNotifications();if(document.getElementById('notifications-liste'))void remplirHistoriqueNotifications();}});
  const url=new URL(window.location.href),id=url.searchParams.get('notification');
  if(id){window.__cisNotificationEnAttente=id;url.searchParams.delete('notification');window.history.replaceState(window.history.state,'',url.href);}
  actualiserVisibiliteCentreNotifications();
@@ -23111,10 +23117,11 @@ function actualiserVisibiliteCentreNotifications(){
  // Les menus pharmacie/principal réutilisent caserne-shell pour leur style.
  const caserne=document.querySelector('#app .caserne-shell:not(.menu-navigation-pharmacie):not(.menu-navigation-principal)');
  button.hidden=!profilUtilisateurConnecte||document.body.classList.contains('mode-connexion')||Boolean(caserne);
+ void actualiserPointNotifications();
 }
 async function associerHistoriqueNotifications(abonnement,userId){
  if(!abonnement?.endpoint||!userId)return;
- try{const store=await chargerHistoriqueNotificationsModule();await store.bind(abonnement.endpoint,userId);}catch(e){console.warn('Association historique notifications :',e);}
+ try{const store=await chargerHistoriqueNotificationsModule();await store.bind(abonnement.endpoint,userId);await actualiserPointNotifications();}catch(e){console.warn('Association historique notifications :',e);}
 }
 async function afficherHistoriqueNotifications(){
  if(!utilisateurConnecte?.id||!profilUtilisateurConnecte)return;
@@ -23128,6 +23135,7 @@ async function remplirHistoriqueNotifications(){
   const store=await chargerHistoriqueNotificationsModule(),rows=await store.list(uid);
   if(!zone.isConnected||String(utilisateurConnecte?.id)!==String(uid))return;
   zone.innerHTML=rows.length?rows.map(r=>`<button type="button" class="notif-ligne ${r.read?'':'non-lue'}" data-notification-id="${echapperHTML(r.id)}"><span class="notif-contenu"><strong>${echapperHTML(r.title)}</strong>${r.body?`<p>${echapperHTML(r.body)}</p>`:''}<time datetime="${echapperHTML(r.receivedAt)}">${echapperHTML(new Date(r.receivedAt).toLocaleString('fr-FR',{timeZone:'Europe/Paris',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}))}</time></span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></button>`).join(''):'<p class="notif-vide">Aucune notification reçue depuis l’activation de cet historique.</p>';
+  afficherEtatPointNotifications(rows.some(r=>!r.read));
   zone.querySelectorAll('[data-notification-id]').forEach(b=>b.addEventListener('click',()=>ouvrirNotificationHistorique(b.dataset.notificationId)));
  }catch(e){if(zone.isConnected)zone.innerHTML='<p class="notif-vide">Impossible de lire l’historique sur cet appareil. Réessayez en rouvrant l’application.</p>';console.warn('Historique notifications :',e);}
 }
@@ -23147,6 +23155,7 @@ async function ouvrirNotificationHistorique(id){
   if(target.startsWith('caserne:')){const rubrique=obtenirRubriquesCaserne().find(x=>x[0]===target.slice(8));if(!rubrique||!utilisateurPeutVoirRubriqueCaserne(rubrique))return alert('Vous n’avez plus accès à cette rubrique.');}
   if(target==='pharmacie'&&!utilisateurPeutAccederPharmacie())return alert('Vous n’avez plus accès à la pharmacie.');
   await store.read(id,uid);
+  await actualiserPointNotifications();
   if(String(utilisateurConnecte?.id)!==String(uid))return;
   if(target==='menage-inventaire'){rubriqueEquipeOrigine='menage';return afficherInventaireMenage();}
   if(target==='vehicules-inventaire'){rubriqueEquipeOrigine='vehicules';return afficherAdminInventairesEquipe();}
@@ -23155,4 +23164,20 @@ async function ouvrirNotificationHistorique(id){
   if(target==='pharmacie')return utilisateurAPermission('acces_inventaire')?afficherInventaire():afficherAccueil();
   return afficherPortailPrincipal();
  }catch(e){console.warn('Ouverture notification :',e);alert('Impossible d’ouvrir cette notification pour le moment.');}
+}
+
+function afficherEtatPointNotifications(nonLues){
+ const button=document.getElementById('btn-historique-notifications'),point=button?.querySelector('.notif-point');if(!button||!point)return;
+ point.hidden=!nonLues;button.setAttribute('aria-label',nonLues?'Notifications non ouvertes':'Historique des notifications');button.title=nonLues?'Notifications non ouvertes':'Notifications';
+}
+async function actualiserPointNotifications(){
+ const uid=utilisateurConnecte?.id;
+ if(!uid||!profilUtilisateurConnecte){afficherEtatPointNotifications(false);return;}
+ // Une lecture plus récente ou un changement de compte invalide une réponse tardive.
+ const sequence=(window.__cisPointNotificationsSequence||0)+1;window.__cisPointNotificationsSequence=sequence;
+ try{
+  const store=await chargerHistoriqueNotificationsModule(),rows=await store.list(uid);
+  if(sequence!==window.__cisPointNotificationsSequence||String(utilisateurConnecte?.id)!==String(uid))return;
+  afficherEtatPointNotifications(rows.some(r=>!r.read));
+ }catch(e){console.warn('État notifications :',e);}
 }
