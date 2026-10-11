@@ -9693,6 +9693,7 @@ function afficherAdministratifCaserne() {
     const admin = utilisateurEstSPVAdmin();
     const autorise = permission => admin || utilisateurAPermission(permission);
     const cartes = [
+        ["📦", "Ménage inventaire", "afficherInventaireMenage()", utilisateurAPermission("acces_admin_menage")],
         ["🧹", "Ménage Admin", "afficherAdminMenageEquipe()", autorise("acces_admin_menage")],
         ["🚒", "Inventaires Admin", "afficherAdminInventairesEquipe()", autorise("acces_admin_menage")],
         ["⏱️", "Historique des heures", "afficherHistoriqueHeuresEquipe()", autorise("acces_admin_heures")],
@@ -22134,10 +22135,14 @@ async function afficherMenageEspaceGarde(){
          <option value="">Sélectionner</option><option value="15">15 min</option><option value="30">30 min</option><option value="45">45 min</option>
          <option value="60">1 h</option><option value="90">1 h 30</option><option value="120">2 h</option><option value="150">2 h 30</option><option value="180">3 h</option>
        </select>
+       <h2 class="garde-sous-titre">Matériel terminé</h2>
+       <p>Ne cocher uniquement un produit vidé. Chaque produit coché retire une unité du stock.</p>
+       <div id="menage-produits-vides" aria-live="polite">Chargement des produits…</div>
+       ${utilisateurAPermission("acces_admin_menage")?'<button type="button" class="retour-button" onclick="afficherInventaireMenage()">📦 Ménage inventaire</button>':""}
        <div id="garde-menage-statut" class="garde-menage-statut" aria-live="polite"></div>
        <button type="button" class="garde-menage-enregistrer" onclick="enregistrerMenageEquipe()">Enregistrer la saisie</button>
       </main>${navigationPrincipale("","accueil")}`;
-    actualiserInterfaceBureau();actualiserPlanMenageGarde();window.scrollTo({top:0,behavior:"auto"});
+    actualiserInterfaceBureau();actualiserPlanMenageGarde();chargerProduitsVidesMenage();window.scrollTo({top:0,behavior:"auto"});
 }
 
 
@@ -22449,9 +22454,15 @@ async function enregistrerMenageEquipe(){
         if(!supabase)throw new Error("Connexion à la base indisponible.");
         const garde=await chargerGardeSemaineCourante();
         const ligne={date_menage:new Date().toISOString(),date_garde:garde?.date_debut||dateISOlocale(vendrediReferenceGarde(new Date())),equipe_id:garde?.equipe?.id||null,zones_nettoyees:zones,personnes_presentes:personnes,duree_minutes:duree,enregistre_par:profilUtilisateurConnecte?.id||null};
-        const {data,error}=await supabase.from("menages_garde").insert(ligne).select("id,date_menage").single();
+        if(!menageProduitsCharges)throw new Error("Les produits ne sont pas chargés. Actualise la rubrique avant d’enregistrer.");
+        const produits=[...document.querySelectorAll("[data-menage-vide]:checked")].map(x=>x.value);
+        const {date_menage:dateIgnoree,...saisieStable}=ligne;
+        const signature=JSON.stringify([saisieStable,produits.sort()]);
+        if(signature!==menageSaisieSignature){menageSaisieSignature=signature;menageSaisieCle=crypto.randomUUID();}
+        const {data,error}=await supabase.rpc("menage_enregistrer",{p_ligne:ligne,p_produits:produits,p_cle:menageSaisieCle});
         if(error)throw error;
         if(!data?.id)throw new Error("La base n’a pas confirmé l’enregistrement.");
+        menageSaisieCle=null;
         localStorage.removeItem(cleSelectionMenageGarde());
         document.querySelectorAll("[data-garde-zone],[data-garde-personne]").forEach(x=>x.checked=false);
         const dureeEl=document.getElementById("garde-menage-duree");if(dureeEl)dureeEl.value="";
@@ -22775,4 +22786,44 @@ async function exporterControlePharmaciePDF(type,index){
  await remplirLignesControlesPharmacie(pdf,lignes,type,lib);
  const bytes=await pdf.save();const blob=new Blob([bytes],{type:"application/pdf"}),url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download=`${type}-${lignes[0].date_intervention}-au-${lignes[lignes.length-1].date_intervention}-feuille-${index+1}.pdf`;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),30000);
  }catch(e){alert("Export impossible : "+e.message);}
+}
+
+
+// Produits de ménage : le serveur applique les mouvements et les permissions.
+let menageProduitsCharges=false,menageSaisieCle=null,menageSaisieSignature="";
+async function chargerProduitsVidesMenage(){
+ menageProduitsCharges=false;menageSaisieCle=null;menageSaisieSignature="";
+ const box=document.getElementById('menage-produits-vides');if(!box)return;
+ try{
+  const {data,error}=await obtenirClientSupabase().from('menage_produits').select('id,nom,stock').order('nom');if(error)throw error;
+  if(!box.isConnected)return;
+  box.innerHTML=(data||[]).map(p=>`<label class="garde-zone"><input type="checkbox" data-menage-vide value="${echapperHTML(p.id)}" ${p.stock<=0?'disabled':''}><span>${echapperHTML(p.nom)}${p.stock<=0?' — rupture de stock':''}</span></label>`).join('')||'<p>Aucun produit configuré.</p>';
+  menageProduitsCharges=true;
+ }catch(e){if(box.isConnected)box.textContent='Produits indisponibles : '+e.message;}
+}
+function styleInventaireMenage(){
+ if(document.getElementById('menage-stock-style'))return;
+ const s=document.createElement('style');s.id='menage-stock-style';s.textContent='.menage-rupture{background:#ffe5e5!important;border:3px solid #c40000!important;color:#970000!important}.menage-rupture strong{color:#b00000!important}.menage-stock-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:12px}.menage-stock-actions input{width:85px;padding:10px;border:1px solid #ccd5df;border-radius:8px;font:inherit}.menage-stock-actions button{padding:10px 14px;font:inherit;border-radius:8px;cursor:pointer}';document.head.appendChild(s);
+}
+async function afficherInventaireMenage(){
+ if(!utilisateurAPermission('acces_admin_menage'))return alert('Accès non autorisé.');
+ initialiserStyleEspaceGardeUtilisateur();styleInventaireMenage();
+ document.getElementById('app').innerHTML=`<main class="garde-section"><button class="retour-button" onclick="afficherAdministratifCaserne()">← Administratif</button><h1>Ménage inventaire</h1><button class="retour-button" onclick="afficherInventaireMenage()">Actualiser</button><div id="menage-stock-liste" aria-live="polite">Chargement…</div></main>${navigationPrincipale('','accueil')}`;actualiserInterfaceBureau();
+ const box=document.getElementById('menage-stock-liste');
+ try{
+  const {data,error}=await obtenirClientSupabase().from('menage_produits').select('id,nom,stock').order('nom');if(error)throw error;if(!box.isConnected)return;
+  box.innerHTML=(data||[]).map(p=>`<div class="garde-admin-card ${p.stock===0?'menage-rupture':''}"><strong>${echapperHTML(p.nom)}</strong><p><b>${p.stock===0?'⚠ RUPTURE DE STOCK':'Stock actuel : '+p.stock+' unité(s)'}</b></p><div class="menage-stock-actions"><label>Quantité <input type="number" min="1" step="1" value="1" data-stock-quantite></label><button type="button" data-stock-id="${echapperHTML(p.id)}" onclick="ajusterStockMenage(this,1)">+ Ajouter</button><button type="button" data-stock-id="${echapperHTML(p.id)}" onclick="ajusterStockMenage(this,-1)">− Diminuer</button></div><p data-stock-statut role="status"></p></div>`).join('')||'<div class="garde-admin-card">Aucun produit. Ajoute les produits dans l’application admin.</div>';
+ }catch(e){if(box.isConnected)box.textContent='Inventaire indisponible : '+e.message;}
+}
+async function ajusterStockMenage(btn,sens){
+ if(!utilisateurAPermission('acces_admin_menage'))return;
+ const card=btn.closest('.garde-admin-card'),input=card.querySelector('[data-stock-quantite]'),st=card.querySelector('[data-stock-statut]'),n=Number(input.value);
+ if(!Number.isInteger(n)||n<1){st.textContent='Saisis une quantité entière supérieure à zéro.';return;}
+ if(!confirm((sens>0?'Ajouter ':'Retirer ')+n+' unité(s) ?'))return;
+ card.querySelectorAll('button').forEach(b=>b.disabled=true);
+ // Conserve la clé en cas de réponse réseau perdue pour éviter un double mouvement.
+ const signature=btn.dataset.stockId+':'+sens+':'+n;
+ if(btn.dataset.signature!==signature){btn.dataset.signature=signature;btn.dataset.cle=crypto.randomUUID();}
+ try{const {error}=await obtenirClientSupabase().rpc('menage_ajuster_stock',{p_id:btn.dataset.stockId,p_delta:sens*n,p_cle:btn.dataset.cle});if(error)throw error;await afficherInventaireMenage();}
+ catch(e){st.textContent='Échec : '+e.message;card.querySelectorAll('button').forEach(b=>b.disabled=false);}
 }

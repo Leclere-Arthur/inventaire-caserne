@@ -14,7 +14,7 @@
  * à récupérer le nouvel app.js.
  */
 
-const CACHE_NAME = "inventaire-caserne-v84";
+const CACHE_NAME = "inventaire-caserne-v85-menage-stock";
 
 
 /*
@@ -259,6 +259,7 @@ self.addEventListener(
             "Inventaire Caserne";
 
         const options = {
+            ...(donnees.tag ? {tag: String(donnees.tag)} : {}),
             body:
                 donnees.body ||
                 "Nouvelle notification",
