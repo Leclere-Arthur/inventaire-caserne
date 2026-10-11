@@ -808,7 +808,7 @@ function installerHistoriqueNavigationApplication() {
         if (!bouton) return;
         // Les retours de l'inventaire véhicules ont leur propre navigation :
         // restaurer un ancien HTML laisserait les photos et listes non initialisées.
-        if (bouton.classList.contains("veh-retour")) return;
+        if (bouton.classList.contains("veh-retour") || bouton.hasAttribute("data-navigation-equipe")) return;
         event.preventDefault();
         event.stopImmediatePropagation();
         retourPagePrecedente();
@@ -833,6 +833,11 @@ function retourPagePrecedente() {
 
     app.innerHTML = precedent.html;
     etatNavigationCourante = precedent;
+    if (app.querySelector('#garde-menage-duree')) {
+        restaurationNavigationEnCours = false;
+        void afficherMenageEspaceGarde();
+        return;
+    }
     // Une page inventaire restaurée doit retrouver ses données et ses photos.
     // La restauration HTML seule ne relance pas les chargements asynchrones.
     if (app.querySelector(".veh-inventaire-liste")) {
@@ -1011,7 +1016,7 @@ let minuteurVerificationMiseAJour =
  * Elle permet de détecter une nouvelle version même si seul app.js change.
  */
 const VERSION_APPLICATION_JS =
-    "2026-10-10-photos-vehicules-v47";
+    "2026-10-11-equipe-pdf-admin-v48";
 
 async function verifierNouvelleVersionAppJs() {
 
@@ -21439,6 +21444,7 @@ function obtenirRubriqueBureauActive() {
 
 
 function actualiserInterfaceBureau() {
+    actualiserNavigationEquipe();
 
     const navigation =
         document.getElementById(
@@ -22069,7 +22075,7 @@ function afficherEspaceGarde(){
     initialiserStyleEspaceGardeUtilisateur();
     document.getElementById("app").innerHTML=`
       <main class="garde-menu-page">
-        <button class="retour-button" onclick="retourAccueilDepuisEspaceEquipe()">← Retour</button>
+        <button class="retour-button" data-navigation-equipe onclick="retourAccueilDepuisEspaceEquipe()">← Retour</button>
         <header class="garde-menu-entete"><h1>Espace équipe</h1></header>
         <div class="garde-menu-cartes">
           <button class="garde-menu-carte" onclick="ouvrirRubriqueEquipe('menage')"><span class="ico">🧹</span><span><strong>Ménage</strong></span><b class="fleche">›</b></button>
@@ -22091,7 +22097,7 @@ async function afficherMenageEspaceGarde(){
     initialiserStyleEspaceGardeUtilisateur();
     menageProduitsCharges=false;menageSaisieCle=null;menageSaisieSignature="";
     try{localStorage.removeItem(cleSelectionMenageGarde())}catch(_){}
-    document.getElementById("app").innerHTML=`<main class="garde-section"><button class="retour-button" onclick="retourSaisieEquipe('menage')">← Retour</button><h1>Ménage</h1><div id="menage-garde-chargement" class="garde-planning-attente">Chargement…</div></main>${navigationPrincipale("","accueil")}`;
+    document.getElementById("app").innerHTML=`<main class="garde-section"><button class="retour-button" data-navigation-equipe onclick="retourSaisieEquipe('menage')">← Retour</button><h1>Ménage</h1><div id="menage-garde-chargement" class="garde-planning-attente">Chargement…</div></main>${navigationPrincipale("","accueil")}`;
     actualiserInterfaceBureau();
     const chargement=document.getElementById("menage-garde-chargement");
     if(!utilisateursEspaceGarde.length)utilisateursEspaceGarde=await chargerUtilisateursEspaceGarde();
@@ -22108,7 +22114,7 @@ async function afficherMenageEspaceGarde(){
     if(!chargement.isConnected)return;
     document.getElementById("app").innerHTML=`
       <main class="garde-section">
-       <button class="retour-button" onclick="retourSaisieEquipe('menage')">← Retour</button>
+       <button class="retour-button" data-navigation-equipe onclick="retourSaisieEquipe('menage')">← Retour</button>
        <h1>Ménage</h1>
        <div class="plan-menage-wrap"><div class="plan-menage">
          <img src="./plan-caserne.png?v=13" alt="Plan de la caserne">
@@ -22136,7 +22142,7 @@ async function afficherMenageEspaceGarde(){
        <h2 class="garde-sous-titre">Matériel terminé</h2>
        <p>Ne cocher uniquement un produit vidé. Indique la quantité de produits entièrement vidés. Seules les cases cochées sont enregistrées.</p>
        <div id="menage-produits-vides" aria-live="polite">Chargement des produits…</div>
-       ${utilisateurAPermission("acces_admin_menage")?'<button type="button" class="retour-button" onclick="afficherInventaireMenage()">📦 Ménage inventaire</button>':""}
+       ${utilisateurAPermission("acces_admin_menage")?'<button type="button" class="equipe-action-button" onclick="afficherInventaireMenage()">📦 Ménage inventaire</button>':""}
        <div id="garde-menage-statut" class="garde-menage-statut" aria-live="polite"></div>
        <button type="button" class="garde-menage-enregistrer" onclick="enregistrerMenageEquipe()">Enregistrer la saisie</button>
       </main>${navigationPrincipale("","accueil")}`;
@@ -22333,7 +22339,7 @@ window.vehInventaireQuitter=vehInventaireQuitter;
 async function afficherPlanningEspaceGarde(){
     initialiserStyleEspaceGardeUtilisateur();
     document.getElementById("app").innerHTML=`
-      <main class="garde-section"><button class="retour-button" onclick="afficherEspaceGarde()">← Espace équipe</button><h1>Planning</h1>
+      <main class="garde-section"><button class="retour-button" data-navigation-equipe onclick="afficherEspaceGarde()">← Espace équipe</button><h1>Planning</h1>
       <div id="garde-planning-photo" class="garde-planning-attente">Création du planning…</div></main>${navigationPrincipale("","accueil")}`;
     actualiserInterfaceBureau();
     try{
@@ -22497,7 +22503,7 @@ function htmlPlanMenageHistorique(zones){
 async function afficherAdminMenageEquipe(){
     if(!utilisateurAPermission("acces_admin_menage")){alert("Accès non autorisé.");return}
     initialiserStyleEspaceGardeUtilisateur();
-    document.getElementById("app").innerHTML=`<main class="garde-section"><button class="retour-button" onclick="retourAdminRubriqueEquipe('menage')">← Retour</button><h1>Administration ménage</h1><button type="button" class="retour-button" onclick="exporterEquipePDF('menage')">Télécharger le PDF des ménages</button><div id="admin-menage-chargement" class="garde-planning-attente">Chargement…</div></main>${navigationPrincipale("","accueil")}`;
+    document.getElementById("app").innerHTML=`<main class="garde-section"><button class="retour-button" data-navigation-equipe onclick="retourAdminRubriqueEquipe('menage')">← Retour</button><h1>Administration ménage</h1><button type="button" class="equipe-action-button" onclick="afficherChoixPDFEquipe('menage')">Télécharger le PDF des ménages</button><div id="admin-menage-chargement" class="garde-planning-attente">Chargement…</div></main>${navigationPrincipale("","accueil")}`;
     actualiserInterfaceBureau();
     const supabase=obtenirClientSupabase();
     const [hist,membres]=await Promise.all([
@@ -22516,7 +22522,7 @@ async function afficherAdminMenageEquipe(){
     const totalPresences=[...presence.values()].reduce((a,b)=>a+b,0);
     const personnes=[...presence.keys()];
     document.getElementById("app").innerHTML=`<main class="garde-section">
-      <button class="retour-button" onclick="retourAdminRubriqueEquipe('menage')">← Retour</button><h1>Administration ménage</h1><button type="button" class="retour-button" onclick="exporterEquipePDF('menage')">Télécharger le PDF des ménages</button>
+      <button class="retour-button" data-navigation-equipe onclick="retourAdminRubriqueEquipe('menage')">← Retour</button><h1>Administration ménage</h1><button type="button" class="equipe-action-button" onclick="afficherChoixPDFEquipe('menage')">Télécharger le PDF des ménages</button>
       <h2 class="garde-sous-titre">Dernier nettoyage par zone</h2>
       ${zoneStats.map(s=>`<div class="garde-stat-ligne"><strong>${echapperHTML(s.z)}</strong><small class="${classeDateMenage(s.date)}">${s.date?formaterDateMenageLongue(s.date):"Jamais"}</small></div>`).join("")}
       <h2 class="garde-sous-titre">Présences</h2>
@@ -22528,7 +22534,7 @@ async function afficherAdminMenageEquipe(){
 async function afficherDetailMenageEquipe(id){
     if(!utilisateurAPermission("acces_admin_menage"))return alert("Accès non autorisé.");
     initialiserStyleEspaceGardeUtilisateur();
-    document.getElementById("app").innerHTML=`<main class="garde-section"><button class="retour-button" onclick="afficherAdminMenageEquipe()">← Retour</button><h1>Détail du ménage</h1><button type="button" class="retour-button" onclick="exporterEquipePDF('menage','${echapperHTML(String(id))}')">Télécharger le PDF</button><div id="detail-menage-chargement" class="garde-planning-attente">Chargement…</div></main>${navigationPrincipale("","accueil")}`;
+    document.getElementById("app").innerHTML=`<main class="garde-section"><button class="retour-button" data-navigation-equipe onclick="afficherAdminMenageEquipe()">← Retour</button><h1>Détail du ménage</h1><button type="button" class="equipe-action-button" onclick="exporterEquipePDF('menage','${echapperHTML(String(id))}')">Télécharger le PDF</button><div id="detail-menage-chargement" class="garde-planning-attente">Chargement…</div></main>${navigationPrincipale("","accueil")}`;
     actualiserInterfaceBureau();
     const supabase=obtenirClientSupabase();const {data:r,error}=await supabase.from("menages_garde").select("*").eq("id",id).single();
     if(!document.getElementById("detail-menage-chargement"))return;
@@ -22536,7 +22542,7 @@ async function afficherDetailMenageEquipe(id){
     if(!utilisateursEspaceGarde.length)utilisateursEspaceGarde=await chargerUtilisateursEspaceGarde();
     if(!document.getElementById("detail-menage-chargement"))return;
     const nom=id=>{const u=utilisateursEspaceGarde.find(x=>String(x.id)===String(id));return u?([u.prenom,u.nom].filter(Boolean).join(" ")||u.identifiant):"Utilisateur"};
-    document.getElementById("app").innerHTML=`<main class="garde-section"><button class="retour-button" onclick="afficherAdminMenageEquipe()">← Retour</button><h1>Détail du ménage</h1><button type="button" class="retour-button" onclick="exporterEquipePDF('menage','${echapperHTML(String(id))}')">Télécharger le PDF</button>
+    document.getElementById("app").innerHTML=`<main class="garde-section"><button class="retour-button" data-navigation-equipe onclick="afficherAdminMenageEquipe()">← Retour</button><h1>Détail du ménage</h1><button type="button" class="equipe-action-button" onclick="exporterEquipePDF('menage','${echapperHTML(String(id))}')">Télécharger le PDF</button>
     ${htmlPlanMenageHistorique(r.zones_nettoyees||[])}
     <div class="garde-admin-card"><strong>Enregistrement créé par</strong><p>${echapperHTML(nom(r.enregistre_par))}</p><strong>Date</strong><p>${new Date(r.date_menage).toLocaleString("fr-FR")}</p><strong>Temps passé</strong><p>${r.duree_minutes||0} min</p><strong>Zones nettoyées</strong><p>${(r.zones_nettoyees||[]).map(echapperHTML).join(" · ")}</p><strong>Personnes présentes</strong><p>${(r.personnes_presentes||[]).map(x=>echapperHTML(nom(x))).join(" · ")}</p>${(r.produits_vides||[]).length?`<strong>Produits vidés</strong><p>${r.produits_vides.map(p=>echapperHTML(p.nom||"Produit")+" × "+Number(p.quantite)).join(" · ")}</p>`:""}</div></main>${navigationPrincipale("","accueil")}`;
     actualiserInterfaceBureau();
@@ -22556,7 +22562,7 @@ function inventairesAdminAuteur(r){
 async function afficherAdminInventairesEquipe(){
  if(!utilisateurAPermission('acces_admin_menage')){alert('Accès non autorisé.');return;}
  initialiserStyleEspaceGardeUtilisateur();
- document.getElementById('app').innerHTML=`<main class="garde-section"><button class="retour-button" onclick="retourAdminRubriqueEquipe('vehicules')">← Retour</button><h1>Administration inventaires</h1><button type="button" class="retour-button" onclick="exporterEquipePDF('vehicules')">Télécharger le PDF des inventaires</button><div id="admin-inventaires-chargement" class="garde-planning-attente">Chargement…</div></main>${navigationPrincipale('','accueil')}`;
+ document.getElementById('app').innerHTML=`<main class="garde-section"><button class="retour-button" data-navigation-equipe onclick="retourAdminRubriqueEquipe('vehicules')">← Retour</button><h1>Administration inventaires</h1><button type="button" class="equipe-action-button" onclick="afficherChoixPDFEquipe('vehicules')">Télécharger le PDF des inventaires</button><div id="admin-inventaires-chargement" class="garde-planning-attente">Chargement…</div></main>${navigationPrincipale('','accueil')}`;
  actualiserInterfaceBureau();
  const sb=obtenirClientSupabase();
  if(!sb){document.getElementById('admin-inventaires-chargement').textContent='Connexion indisponible.';return;}
@@ -22568,7 +22574,7 @@ async function afficherAdminInventairesEquipe(){
  if(!utilisateursEspaceGarde.length){try{utilisateursEspaceGarde=await chargerUtilisateursEspaceGarde();}catch(e){console.warn('Noms des contrôleurs indisponibles',e);}}
  if(!document.getElementById('admin-inventaires-chargement'))return;
  const vehicules=[...new Set(inventairesAdminCache.map(r=>r.vehicule_nom).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'fr'));
- document.getElementById('app').innerHTML=`<main class="garde-section"><button class="retour-button" onclick="retourAdminRubriqueEquipe('vehicules')">← Retour</button><h1>Administration inventaires</h1><button type="button" class="retour-button" onclick="exporterEquipePDF('vehicules')">Télécharger le PDF des inventaires</button>
+ document.getElementById('app').innerHTML=`<main class="garde-section"><button class="retour-button" data-navigation-equipe onclick="retourAdminRubriqueEquipe('vehicules')">← Retour</button><h1>Administration inventaires</h1><button type="button" class="equipe-action-button" onclick="afficherChoixPDFEquipe('vehicules')">Télécharger le PDF des inventaires</button>
  <h2 class="garde-sous-titre">Dernier inventaire par véhicule</h2>
  ${vehicules.map(v=>{const r=inventairesAdminCache.find(x=>x.vehicule_nom===v);return `<div class="garde-stat-ligne"><strong>${echapperHTML(v)}</strong><small class="${classeDateMenage(r.created_at)}">${inventairesAdminDate(r.created_at)}</small></div>`}).join('')||'<div class="garde-stat-ligne">Aucun inventaire enregistré.</div>'}
  <h2 class="garde-sous-titre">Contrôles réalisés</h2>
@@ -22589,7 +22595,7 @@ function afficherDetailInventaireAdminEquipe(id){
  initialiserStyleEspaceGardeUtilisateur();
  const zones=inventairesAdminZones(r),materiels=inventairesAdminMateriels(r);
  const etat=m=>m.etat==='bon'?'Bon':m.etat==='a_surveiller'?'À surveiller':m.etat==='hs'?'HS':'Non renseigné';
- document.getElementById('app').innerHTML=`<main class="garde-section"><button class="retour-button" onclick="afficherAdminInventairesEquipe()">← Retour</button><h1>Détail de l’inventaire</h1><button type="button" class="retour-button" onclick="exporterEquipePDF('vehicules','${echapperHTML(String(id))}')">Télécharger le PDF</button>
+ document.getElementById('app').innerHTML=`<main class="garde-section"><button class="retour-button" data-navigation-equipe onclick="afficherAdminInventairesEquipe()">← Retour</button><h1>Détail de l’inventaire</h1><button type="button" class="equipe-action-button" onclick="exporterEquipePDF('vehicules','${echapperHTML(String(id))}')">Télécharger le PDF</button>
  <div class="garde-admin-card"><strong>${echapperHTML(inventairesAdminNom(r))}</strong><p><strong>Véhicule :</strong> ${echapperHTML(r.vehicule_nom||'Non renseigné')}</p><p><strong>Date :</strong> <span class="${classeDateMenage(r.created_at)}">${inventairesAdminDate(r.created_at)}</span></p><p><strong>Enregistré par :</strong> ${echapperHTML(inventairesAdminAuteur(r))}</p><p><strong>Zones contrôlées :</strong> ${zones.length}</p><p><strong>Matériel :</strong> ${materiels.filter(m=>m.etat==='bon').length} Bon · ${materiels.filter(m=>m.etat==='a_surveiller').length} À surveiller · ${materiels.filter(m=>m.etat==='hs').length} HS</p></div>
  ${zones.map(z=>`<h2 class="garde-sous-titre">${echapperHTML(z.zone_nom||'Zone')}</h2>${(Array.isArray(z.materiels)?z.materiels:[]).map(m=>`<div class="garde-stat-ligne"><strong>${echapperHTML(m.nom||'Matériel')} × ${Number(m.quantite)||1}${m.quantite_constatee!=null&&Number(m.quantite_constatee)!==Number(m.quantite)?` <span style="color:#b42323;font-weight:900">— QUANTITÉ CONSTATÉE : ${Number(m.quantite_constatee)} (prévu : ${Number(m.quantite)})</span>`:''}</strong><small>${echapperHTML(etat(m))}</small>${m.observation?`<p>Observation : ${echapperHTML(m.observation)}</p>`:''}</div>`).join('')||'<div class="garde-stat-ligne">Aucun matériel.</div>'}`).join('')||'<div class="garde-stat-ligne">Aucune zone enregistrée.</div>'}
  </main>${navigationPrincipale('','accueil')}`;
@@ -22617,12 +22623,12 @@ function ajouterPersonneHeures(id){personnesHeuresSelectionnees.add(String(id));
 function retirerPersonneHeures(id){if(String(id)===String(profilUtilisateurConnecte?.id))return;personnesHeuresSelectionnees.delete(String(id));actualiserPersonnesHeures()}
 function verifierMotifHeures(){const s=document.getElementById("heures-motif"),d=document.getElementById("heures-details");if(!s||!d)return;const opt=s.options[s.selectedIndex];const autre=opt?.dataset?.autre==="1";d.required=autre;d.placeholder=autre?"Détail obligatoire pour le motif Autre":"Détails (facultatif)"}
 async function afficherEnregistrerHeuresEquipe(){
- initialiserStyleEspaceGardeUtilisateur();document.getElementById("app").innerHTML=`<main class="garde-section"><button class="retour-button" onclick="retourSaisieEquipe('heures')">← Retour</button><h1>Enregistrer des heures</h1><div class="garde-planning-attente">Chargement…</div></main>${navigationPrincipale("","accueil")}`;actualiserInterfaceBureau();
+ initialiserStyleEspaceGardeUtilisateur();document.getElementById("app").innerHTML=`<main class="garde-section"><button class="retour-button" data-navigation-equipe onclick="retourSaisieEquipe('heures')">← Retour</button><h1>Enregistrer des heures</h1><div class="garde-planning-attente">Chargement…</div></main>${navigationPrincipale("","accueil")}`;actualiserInterfaceBureau();
  const sb=obtenirClientSupabase();const [motifs,personnes]=await Promise.all([sb.from("motifs_heures").select("id,nom,est_autre").eq("actif",true).order("nom"),chargerUtilisateursEspaceGarde()]);
  if(!document.querySelector('.garde-section'))return;if(motifs.error){alert("Impossible de charger les motifs : "+motifs.error.message);return}
  personnesHeuresCache=personnes||[];personnesHeuresSelectionnees=new Set([String(profilUtilisateurConnecte?.id)]);
  const durees=[];for(let m=30;m<=720;m+=30)durees.push(`<option value="${m}">${libelleDureeHeures(m)}</option>`);
- document.getElementById("app").innerHTML=`<main class="garde-section"><button class="retour-button" onclick="retourSaisieEquipe('heures')">← Retour</button><h1>Enregistrer des heures</h1>
+ document.getElementById("app").innerHTML=`<main class="garde-section"><button class="retour-button" data-navigation-equipe onclick="retourSaisieEquipe('heures')">← Retour</button><h1>Enregistrer des heures</h1>
  <div class="heures-form"><label><strong>Personnes concernées</strong></label><div id="heures-personnes-selectionnees" class="heures-chips"></div><div class="heures-recherche-wrap"><input id="heures-recherche" class="heures-input" placeholder="Écris les premières lettres d’un nom…" oninput="rechercherPersonnesHeures()" autocomplete="off"><div id="heures-resultats" class="heures-resultats"></div></div>
  <label><strong>Motif</strong><select id="heures-motif" class="heures-input" onchange="verifierMotifHeures()">${(motifs.data||[]).map(m=>`<option value="${m.id}" data-autre="${m.est_autre?1:0}">${echapperHTML(m.nom)}</option>`).join("")}</select></label>
  <label><strong>Durée</strong><select id="heures-duree" class="heures-input">${durees.join("")}</select></label>
@@ -22635,9 +22641,9 @@ async function enregistrerHeuresEquipe(){
  try{btn.disabled=true;btn.textContent="Enregistrement…";const sb=obtenirClientSupabase();const ids=[...personnesHeuresSelectionnees];if(!ids.includes(String(profilUtilisateurConnecte?.id)))ids.unshift(String(profilUtilisateurConnecte.id));const {error}=await sb.from("heures_equipe").insert({enregistre_par:profilUtilisateurConnecte.id,motif_id:motif.value,duree_minutes:duree,details:details||null,personnes_concernees:ids});if(error)throw error;await animationValidationEnregistrementCIS("Heures enregistrées", () => afficherEspaceGarde())}catch(e){st.textContent="Échec : "+(e?.message||"erreur inconnue");st.className="garde-menage-statut err"}finally{if(btn){btn.disabled=false;btn.textContent="Enregistrer les heures"}}
 }
 async function afficherHistoriqueHeuresEquipe(){
- if(!utilisateurAPermission("acces_admin_heures")){alert("Accès non autorisé.");return}initialiserStyleEspaceGardeUtilisateur();document.getElementById("app").innerHTML=`<main class="garde-section"><button class="retour-button" onclick="retourAdminRubriqueEquipe('heures')">← Retour</button><h1>Historique des heures</h1><button type="button" class="retour-button" onclick="exporterEquipePDF('heures')">Télécharger le PDF des heures</button><div id="heures-hist" class="garde-planning-attente">Chargement…</div></main>${navigationPrincipale("","accueil")}`;actualiserInterfaceBureau();
+ if(!utilisateurAPermission("acces_admin_heures")){alert("Accès non autorisé.");return}initialiserStyleEspaceGardeUtilisateur();document.getElementById("app").innerHTML=`<main class="garde-section"><button class="retour-button" data-navigation-equipe onclick="retourAdminRubriqueEquipe('heures')">← Retour</button><h1>Historique des heures</h1><button type="button" class="equipe-action-button" onclick="afficherChoixPDFEquipe('heures')">Télécharger le PDF des heures</button><div id="heures-hist" class="garde-planning-attente">Chargement…</div></main>${navigationPrincipale("","accueil")}`;actualiserInterfaceBureau();
  const sb=obtenirClientSupabase();const {data,error}=await sb.from("heures_equipe").select("id,created_at,duree_minutes,details,enregistre_par,personnes_concernees,motifs_heures(nom)").order("created_at",{ascending:false});if(error){document.getElementById("heures-hist").textContent="Historique indisponible : "+error.message;return}if(!utilisateursEspaceGarde.length)utilisateursEspaceGarde=await chargerUtilisateursEspaceGarde();const nom=id=>nomPersonnelHeures(utilisateursEspaceGarde.find(x=>String(x.id)===String(id)));
- document.getElementById("heures-hist").outerHTML=`<div>${(data||[]).map(r=>`<div class="garde-admin-card"><strong>${new Date(r.created_at).toLocaleString("fr-FR")}</strong><p><b>${echapperHTML(r.motifs_heures?.nom||"Motif")}</b> · ${libelleDureeHeures(r.duree_minutes)}</p><p>${(r.personnes_concernees||[]).map(id=>echapperHTML(nom(id))).join(" · ")}</p>${r.details?`<p>${echapperHTML(r.details)}</p>`:""}<small>Enregistré par ${echapperHTML(nom(r.enregistre_par))}</small><p><button type="button" class="retour-button" onclick="exporterEquipePDF('heures','${echapperHTML(String(r.id))}')">Télécharger le PDF</button></p></div>`).join("")||"Aucune heure enregistrée."}</div>`;
+ document.getElementById("heures-hist").outerHTML=`<div>${(data||[]).map(r=>`<div class="garde-admin-card"><strong>${new Date(r.created_at).toLocaleString("fr-FR")}</strong><p><b>${echapperHTML(r.motifs_heures?.nom||"Motif")}</b> · ${libelleDureeHeures(r.duree_minutes)}</p><p>${(r.personnes_concernees||[]).map(id=>echapperHTML(nom(id))).join(" · ")}</p>${r.details?`<p>${echapperHTML(r.details)}</p>`:""}<small>Enregistré par ${echapperHTML(nom(r.enregistre_par))}</small><p><button type="button" class="equipe-action-button" onclick="exporterEquipePDF('heures','${echapperHTML(String(r.id))}')">Télécharger le PDF</button></p></div>`).join("")||"Aucune heure enregistrée."}</div>`;
 }
 window.afficherEnregistrerHeuresEquipe=afficherEnregistrerHeuresEquipe;window.enregistrerHeuresEquipe=enregistrerHeuresEquipe;window.rechercherPersonnesHeures=rechercherPersonnesHeures;window.ajouterPersonneHeures=ajouterPersonneHeures;window.retirerPersonneHeures=retirerPersonneHeures;window.verifierMotifHeures=verifierMotifHeures;window.afficherHistoriqueHeuresEquipe=afficherHistoriqueHeuresEquipe;
 
@@ -22813,7 +22819,7 @@ function styleInventaireMenage(){
 async function afficherInventaireMenage(){
  if(!utilisateurAPermission('acces_admin_menage'))return alert('Accès non autorisé.');
  initialiserStyleEspaceGardeUtilisateur();styleInventaireMenage();
- document.getElementById('app').innerHTML=`<main class="garde-section"><button class="retour-button" onclick="retourAdminRubriqueEquipe('menage')">← Retour</button><h1>Ménage inventaire</h1><button class="retour-button" onclick="afficherInventaireMenage()">Actualiser</button><div id="menage-stock-liste" aria-live="polite">Chargement…</div></main>${navigationPrincipale('','accueil')}`;actualiserInterfaceBureau();
+ document.getElementById('app').innerHTML=`<main class="garde-section"><button class="retour-button" data-navigation-equipe onclick="retourAdminRubriqueEquipe('menage')">← Retour</button><h1>Ménage inventaire</h1><button class="equipe-action-button" onclick="afficherInventaireMenage()">Actualiser</button><div id="menage-stock-liste" aria-live="polite">Chargement…</div></main>${navigationPrincipale('','accueil')}`;actualiserInterfaceBureau();
  const box=document.getElementById('menage-stock-liste');
  try{
   const {data,error}=await obtenirClientSupabase().from('menage_produits').select('id,nom,stock').order('nom');if(error)throw error;if(!box.isConnected)return;
@@ -22836,16 +22842,16 @@ async function ajusterStockMenage(btn,sens){
 // Choix de rubrique réservés aux permissions admin existantes.
 let rubriqueEquipeOrigine=null;
 const rubriquesEquipeConfig={
- menage:{titre:'Ménage',permission:'acces_admin_menage',saisie:()=>afficherMenageEspaceGarde(),cartes:[['🧹','Enregistrer un ménage','afficherMenageEspaceGarde()'],['📦','Ménage inventaire','afficherInventaireMenage()'],['📋','Ménage admin','afficherAdminMenageEquipe()']]},
- vehicules:{titre:'Inventaire véhicule',permission:'acces_admin_menage',saisie:()=>afficherInventaireVehiculeEspaceGarde(),cartes:[['🚒','Enregistrer un inventaire','afficherInventaireVehiculeEspaceGarde()'],['📋','Inventaires admin','afficherAdminInventairesEquipe()'],['📄','Télécharger le PDF des inventaires',"exporterEquipePDF('vehicules')"]]},
- heures:{titre:'Heures',permission:'acces_admin_heures',saisie:()=>afficherEnregistrerHeuresEquipe(),cartes:[['⏱️','Enregistrer des heures','afficherEnregistrerHeuresEquipe()'],['📋','Heures admin','afficherHistoriqueHeuresEquipe()'],['📄','Télécharger le PDF des heures',"exporterEquipePDF('heures')"]]}
+ menage:{titre:'Ménage',permission:'acces_admin_menage',saisie:()=>afficherMenageEspaceGarde(),cartes:[['🧹','Enregistrer un ménage','afficherMenageEspaceGarde()'],['📦','Ménage inventaire','afficherInventaireMenage()'],['📋','Ménage admin','afficherAdminMenageEquipe()'],['📄','Télécharger le PDF des ménages',"afficherChoixPDFEquipe('menage')"]]},
+ vehicules:{titre:'Inventaire véhicule',permission:'acces_admin_menage',saisie:()=>afficherInventaireVehiculeEspaceGarde(),cartes:[['🚒','Enregistrer un inventaire','afficherInventaireVehiculeEspaceGarde()'],['📋','Inventaires admin','afficherAdminInventairesEquipe()'],['📄','Télécharger le PDF des inventaires',"afficherChoixPDFEquipe('vehicules')"]]},
+ heures:{titre:'Heures',permission:'acces_admin_heures',saisie:()=>afficherEnregistrerHeuresEquipe(),cartes:[['⏱️','Enregistrer des heures','afficherEnregistrerHeuresEquipe()'],['📋','Heures admin','afficherHistoriqueHeuresEquipe()'],['📄','Télécharger le PDF des heures',"afficherChoixPDFEquipe('heures')"]]}
 };
 function ouvrirRubriqueEquipe(type){
  const cfg=rubriquesEquipeConfig[type];if(!cfg)return;
  rubriqueEquipeOrigine=type;
  if(!utilisateurAPermission(cfg.permission))return cfg.saisie();
  initialiserStyleEspaceGardeUtilisateur();
- document.getElementById('app').innerHTML=`<main class="garde-menu-page"><button class="retour-button" onclick="afficherEspaceGarde()">← Espace équipe</button><header class="garde-menu-entete"><h1>${cfg.titre}</h1></header><div class="garde-menu-cartes">${cfg.cartes.map(([ico,nom,action])=>`<button type="button" class="garde-menu-carte" onclick="${action}"><span class="ico">${ico}</span><span><strong>${nom}</strong></span><b class="fleche">›</b></button>`).join('')}</div></main>${navigationPrincipale('','accueil')}`;
+ document.getElementById('app').innerHTML=`<main class="garde-menu-page"><button class="retour-button" data-navigation-equipe onclick="afficherEspaceGarde()">← Espace équipe</button><header class="garde-menu-entete"><h1>${cfg.titre}</h1></header><div class="garde-menu-cartes">${cfg.cartes.map(([ico,nom,action])=>`<button type="button" class="garde-menu-carte" onclick="${action}"><span class="ico">${ico}</span><span><strong>${nom}</strong></span><b class="fleche">›</b></button>`).join('')}</div></main>${navigationPrincipale('','accueil')}`;
  actualiserInterfaceBureau();window.scrollTo({top:0,behavior:'auto'});
 }
 function retourSaisieEquipe(type){
@@ -22865,10 +22871,12 @@ async function chargerLignesEquipePDF(type,id){
  const select=type==='heures'?'id,created_at,duree_minutes,details,enregistre_par,personnes_concernees,motifs_heures(nom)':'*';
  const date=type==='menage'?'date_menage':'created_at';
  const filtreVehicule=type==='vehicules'&&!id?(document.getElementById('inventaires-admin-filtre')?.value||''):'';
+ const periode=type!=='vehicules'&&!id?lirePeriodePDFEquipe(type):null;
  const rows=[];
  for(let debut=0;;debut+=500){
   let req=sb.from(table).select(select).order(date,{ascending:false}).order('id');
   if(id)req=req.eq('id',id);
+  if(periode)req=req.gte(date,periode.startISO).lt(date,periode.endISO);
   if(filtreVehicule)req=req.eq('vehicule_nom',filtreVehicule);
   const {data,error}=await req.range(debut,debut+499);if(error)throw error;
   rows.push(...(data||[]));if((data?.length||0)<500)break;
@@ -22879,41 +22887,200 @@ async function exporterEquipePDF(type,id=null){
  const cfg=rubriquesEquipeConfig[type];if(!cfg||!utilisateurAPermission(cfg.permission))return alert('Accès non autorisé.');
  const cle=type+':'+(id||'tous');if(exportsEquipePDFEnCours.has(cle))return;
  exportsEquipePDFEnCours.add(cle);
+ // Ouvrir pendant le geste utilisateur pour éviter le blocage Safari après await.
+ const estApple=/iPad|iPhone|iPod/.test(navigator.userAgent)||(/Macintosh/.test(navigator.userAgent)&&navigator.maxTouchPoints>1);
+ let apercu=estApple?window.open('about:blank','_blank'):null;
+ const statut=document.getElementById('equipe-pdf-statut');
+ if(statut)statut.textContent='Création du PDF…';
  try{
   const [rows,personnes]=await Promise.all([chargerLignesEquipePDF(type,id),chargerUtilisateursEspaceGarde()]);
-  if(!rows.length)return alert('Aucun enregistrement à exporter.');
-  const nom=uid=>{const u=personnes.find(p=>String(p.id)===String(uid));return u?nomPersonnelHeures(u):'Utilisateur non identifié';};
-  const noms=ids=>(ids||[]).map(nom).join(', ');
-  const date=v=>new Date(v).toLocaleString('fr-FR');
-  const jsPDF=await obtenirBibliothequesPDF();
-  const doc=new jsPDF({orientation:type==='vehicules'?'landscape':'portrait',unit:'mm',format:'a4'});
-  const titre=type==='menage'?'MENAGES':type==='heures'?'HEURES ENREGISTREES':'INVENTAIRES VEHICULES';
-  const y=ajouterEntetePDF(doc,titre,`${rows.length} enregistrement(s) · ${id?'Détail':type==='vehicules'&&document.getElementById('inventaires-admin-filtre')?.value?'Véhicule sélectionné':'Historique complet'}`);
-  let head,body;
-  if(type==='menage'){
-   head=['Date','Zones nettoyées','Présents','Durée','Enregistré par','Produits vidés'];
-   body=rows.map(r=>[date(r.date_menage),(r.zones_nettoyees||[]).join(', '),noms(r.personnes_presentes),libelleDureeHeures(r.duree_minutes||0),nom(r.enregistre_par),(r.produits_vides||[]).map(p=>(p.nom||'Produit')+' × '+p.quantite).join(', ')]);
-  }else if(type==='heures'){
-   head=['Date','Personnes','Motif','Durée','Détails','Enregistré par'];
-   body=rows.map(r=>[date(r.created_at),noms(r.personnes_concernees),r.motifs_heures?.nom||'Motif',libelleDureeHeures(r.duree_minutes||0),r.details||'',nom(r.enregistre_par)]);
-  }else{
-   head=['Inventaire / Date / Auteur','Véhicule','Zone','Matériel','Prévu','Constaté','État','Observation'];
-   body=[];
-   for(const r of rows){
-    const ident=`${inventairesAdminNom(r)}\n${date(r.created_at)}\n${nom(r.controle_par)}`;
-    const zones=inventairesAdminZones(r);
-    if(!zones.length){body.push([ident,r.vehicule_nom||'', '','','','','','Aucun détail']);continue;}
-    for(const z of zones){const materiels=Array.isArray(z.materiels)?z.materiels:[];
-     if(!materiels.length)body.push([ident,r.vehicule_nom||'',z.zone_nom||'','','','','','']);
-     for(const m of materiels)body.push([ident,r.vehicule_nom||'',z.zone_nom||'',m.nom||'',m.quantite??'',m.quantite_constatee??'',({bon:'Bon',a_surveiller:'À surveiller',hs:'HS'})[m.etat]||'Non renseigné',m.observation||'']);
-    }
-   }
-  }
-  doc.autoTable({startY:y,head:[head.map(texteCompatiblePDF)],body:body.map(row=>row.map(texteCompatiblePDF)),margin:{top:39,bottom:20,left:12,right:12},styles:{font:'helvetica',fontSize:type==='vehicules'?8:7.5,cellPadding:2.5,overflow:'linebreak'},headStyles:{fillColor:couleurPDF().principal},didDrawPage:()=>{if(doc.internal.getCurrentPageInfo().pageNumber>1)ajouterEntetePDF(doc,titre,'Suite');}});
-  ajouterPiedDePagePDF(doc);
+  if(!rows.length)throw new Error('Aucun enregistrement à exporter.');
+  const PDF=await obtenirBibliothequesPDF();
+  let doc;
+  if(type==='vehicules'){
+   if(rows.length!==1)throw new Error('Sélectionne un véhicule puis un inventaire précis.');
+   doc=creerRapportInventaireEquipePDF(PDF,rows[0],personnes);
+  }else doc=creerCalendrierEquipePDF(PDF,type,rows,personnes,id);
   if(!utilisateurAPermission(cfg.permission))throw new Error('Accès non autorisé.');
-  const blob=doc.output('blob'),url=URL.createObjectURL(blob),a=document.createElement('a');
-  a.href=url;a.download=nomFichierPDF(`equipe-${type}-${id||'historique'}-${new Date().toISOString().slice(0,10)}`);document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);
- }catch(e){afficherErreurExportPDF(e);}finally{exportsEquipePDFEnCours.delete(cle);}
+  const nom=nomFichierPDF(type==='vehicules'?`inventaire-${rows[0].numero_inventaire??rows[0].id}-${rows[0].vehicule_nom||'vehicule'}`:`${type}-cis-le-chesne-${id||'periode'}`);
+  const url=URL.createObjectURL(doc.output('blob'));
+  if(apercu){apercu.location.href=url;apercu=null;}
+  else {const a=document.createElement('a');a.href=url;a.download=nom;document.body.appendChild(a);a.click();a.remove();}
+  if(statut)statut.textContent=estApple?'PDF ouvert. Sur iPhone : Partager → Enregistrer dans Fichiers.':'PDF téléchargé.';
+  setTimeout(()=>URL.revokeObjectURL(url),120000);
+ }catch(e){if(apercu)apercu.close();if(statut)statut.textContent=e.message||String(e);afficherErreurExportPDF(e);}finally{exportsEquipePDFEnCours.delete(cle);}
 }
 const exportsEquipePDFEnCours=new Set();
+
+function creerRapportInventaireEquipePDF(PDF,r,personnes){
+ const vehNum=inventairesAdminNom;
+ const vehDate=d=>new Date(d).toLocaleString('fr-FR');
+ const vehPerson=r=>{const u=personnes.find(p=>String(p.id)===String(r.controle_par));return u?nomPersonnelHeures(u):'Identité indisponible (ID : '+String(r.controle_par||'inconnu').slice(0,8)+')';};
+ const doc=new PDF({unit:'mm',format:'a4'});
+ const W=210,H=297,margin=14;let y=0,page=0;
+ const palette={bon:[28,134,75],a_surveiller:[189,140,20],hs:[190,43,43],autre:[111,119,130]};
+ const label={bon:'BON',a_surveiller:'À SURVEILLER',hs:'HS'};
+ const clean=v=>String(v??'').replace(/[\u0000-\u001f]/g,' ').trim();
+ const text=(value,x,yy,size=10,bold=false,color=[35,45,58])=>{doc.setFont('helvetica',bold?'bold':'normal');doc.setFontSize(size);doc.setTextColor(...color);doc.text(clean(value),x,yy);};
+ const footer=()=>{doc.setDrawColor(221,226,232);doc.line(margin,282,W-margin,282);text('CIS LE CHESNE  |  DOCUMENT DE TRAÇABILITÉ',margin,288,7,false,[110,119,130]);doc.setFont('helvetica','normal');doc.setFontSize(7);doc.setTextColor(110,119,130);doc.text('Page '+page,W-margin,288,{align:'right'});};
+ const newPage=()=>{if(page){footer();doc.addPage();}page++;y=19;text('CIS LE CHESNE',margin,y,11,true,[29,52,72]);doc.setFont('helvetica','bold');doc.setFontSize(9);doc.setTextColor(29,52,72);doc.text(vehNum(r),W-margin,y,{align:'right'});doc.setDrawColor(220,226,232);doc.line(margin,24,W-margin,24);y=31;};
+ const ensure=h=>{if(y+h>276)newPage();};
+ const wrapped=(value,x,width,size=9,color=[47,56,67],bold=false)=>{
+  doc.setFont('helvetica',bold?'bold':'normal');doc.setFontSize(size);
+  const lines=doc.splitTextToSize(clean(value),width);
+  const lineHeight=size*.48+1.3;ensure(lines.length*lineHeight+2);
+  doc.setTextColor(...color);lines.forEach(t=>{doc.text(t,x,y);y+=lineHeight;});
+ };
+ const items=(Array.isArray(r.details)?r.details:[]).flatMap(z=>Array.isArray(z.materiels)?z.materiels:[]);
+ const counts={bon:items.filter(m=>m.etat==='bon').length,a_surveiller:items.filter(m=>m.etat==='a_surveiller').length,hs:items.filter(m=>m.etat==='hs').length};
+ // jsPDF démarre avec une page vide : on la remplace par une page maîtrisée.
+ newPage();
+ text('RAPPORT D’INVENTAIRE VÉHICULE',margin,y,14,true,[25,49,72]);y+=7;
+ doc.setFillColor(242,246,249);doc.roundedRect(margin,y,W-2*margin,24,2,2,'F');
+ text('VÉHICULE',margin+5,y+5.5,7,true,[102,113,125]);text(r.vehicule_nom,margin+5,y+12,11,true);
+ doc.setFont('helvetica','bold');doc.setFontSize(9);doc.setTextColor(25,49,72);doc.text('N° '+vehNum(r),W-margin-5,y+8,{align:'right'});
+ text('Date : '+vehDate(r.created_at),margin+5,y+19,8);
+ y+=28;
+ wrapped('Contrôle réalisé par : '+vehPerson(r),margin,W-2*margin,9,[34,47,62],true);y+=1;
+ const cardW=(W-2*margin-8)/3;
+ [['bon','BON'],['a_surveiller','À SURVEILLER'],['hs','HS']].forEach(([key,t],idx)=>{
+  const x=margin+idx*(cardW+4),c=palette[key];doc.setFillColor(...c);doc.roundedRect(x,y,cardW,14,2,2,'F');
+  text(String(counts[key]),x+5,y+7,11,true,[255,255,255]);text(t,x+5,y+11.5,6.5,true,[255,255,255]);
+ });y+=19;
+ for(const z of (Array.isArray(r.details)?r.details:[])){
+  ensure(13);doc.setFillColor(36,61,83);doc.roundedRect(margin,y,W-2*margin,8,1.5,1.5,'F');
+  text((z.zone_nom||'Zone').toUpperCase(),margin+4,y+5.5,9,true,[255,255,255]);y+=11;
+  const zoneItems=Array.isArray(z.materiels)?z.materiels:[];
+  if(!zoneItems.length){wrapped('Aucun matériel enregistré',margin+3,W-2*margin-6,9);y+=3;}
+  for(const m of zoneItems){
+   const key=palette[m.etat]?m.etat:'autre',c=palette[key];
+   doc.setFont('helvetica','normal');doc.setFontSize(9);
+   const ecartQuantite=m.quantite_constatee!=null&&Number(m.quantite_constatee)!==Number(m.quantite);
+    const name=clean(m.nom||'Matériel')+'  × '+(m.quantite||1);
+    const ligneQuantite=ecartQuantite?'QUANTITÉ NON CONFORME : '+m.quantite_constatee+' constaté(s) / '+m.quantite+' prévu(s)':'';
+   const nameLines=doc.splitTextToSize(name,125);
+   const obs=m.observation?doc.splitTextToSize('Observation : '+clean(m.observation),W-2*margin-12):[];
+   const height=Math.max(9,3.5+nameLines.length*3.7+obs.length*3.6+(ecartQuantite?5:0));
+   ensure(height+2);
+   doc.setFillColor(247,249,251);doc.roundedRect(margin,y,W-2*margin,height,1.5,1.5,'F');
+   doc.setFillColor(...c);doc.roundedRect(margin+2,y+1.5,2.5,height-3,1,1,'F');
+   doc.setTextColor(42,53,65);doc.setFontSize(8.5);doc.setFont('helvetica','bold');doc.text(nameLines,margin+8,y+5.8);
+   const badge=label[key]||'NON RENSEIGNÉ';doc.setFontSize(7.5);doc.setTextColor(...c);doc.text(badge,W-margin-5,y+5.8,{align:'right'});
+   if(obs.length){doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(88,97,107);doc.text(obs,margin+8,y+5.8+nameLines.length*3.7);}
+    if(ecartQuantite){doc.setFont('helvetica','bold');doc.setFontSize(8);doc.setTextColor(190,35,35);doc.text(ligneQuantite,margin+8,y+5.8+nameLines.length*3.7+obs.length*3.6);}
+   y+=height+2;
+  }
+  y+=2;
+ }
+ ensure(13);y+=2;wrapped('Référence permanente : '+r.id,margin,W-2*margin,7,[107,117,128]);
+ footer();
+ const filename='inventaire-'+String(r.numero_inventaire??r.id).replace(/[^a-z0-9-]/gi,'-')+'-'+String(r.vehicule_nom||'vehicule').replace(/[^a-z0-9-]/gi,'-')+'.pdf';
+ return doc;
+}
+
+function initialiserStyleActionsEquipe(){
+ if(document.getElementById('equipe-actions-style'))return;
+ const s=document.createElement('style');s.id='equipe-actions-style';
+ s.textContent=`.equipe-action-button{border:1px solid #cdd5dc;background:#fff;border-radius:10px;padding:12px 15px;margin:7px 0;font:inherit;font-weight:750;color:#263238;cursor:pointer}.equipe-action-button:disabled{opacity:.5;cursor:default}.equipe-pdf-form{display:grid;gap:14px}.equipe-pdf-form label{display:grid;gap:7px;font-weight:750}.equipe-pdf-form select,.equipe-pdf-form input{box-sizing:border-box;width:100%;min-height:46px;border:1px solid #ccd5df;border-radius:10px;padding:11px;background:white;font:inherit}.garde-section,.garde-menu-page{padding-bottom:calc(125px + env(safe-area-inset-bottom,0px))!important}.caserne-nav-bas[data-equipe]{box-sizing:border-box!important;position:fixed!important;z-index:5000;max-width:calc(100vw - 24px);margin:0!important}.equipe-pdf-statut{white-space:normal;overflow-wrap:anywhere}`;
+ document.head.appendChild(s);
+}
+function actualiserNavigationEquipe(){
+ const equipe=document.querySelector('#app>.garde-section,#app>.garde-menu-page');
+ const nav=document.querySelector('#app>.caserne-nav-bas');
+ if(!equipe||!nav)return;
+ initialiserStyleActionsEquipe();nav.dataset.equipe='true';
+ if(!window.__equipeNavEcoutes){
+  window.__equipeNavEcoutes=true;
+  const planifier=()=>{if(window.__equipeNavFrame)return;window.__equipeNavFrame=requestAnimationFrame(()=>{window.__equipeNavFrame=null;actualiserNavigationEquipe();});};
+  window.addEventListener('resize',planifier,{passive:true});window.addEventListener('scroll',planifier,{passive:true});
+  if(window.visualViewport){window.visualViewport.addEventListener('resize',planifier,{passive:true});window.visualViewport.addEventListener('scroll',planifier,{passive:true});}
+ }
+ if(window.matchMedia('(min-width:1000px)').matches)return;
+ let probe=document.getElementById('equipe-safe-area');
+ if(!probe){probe=document.createElement('div');probe.id='equipe-safe-area';probe.style.cssText='position:fixed;visibility:hidden;pointer-events:none;padding-bottom:env(safe-area-inset-bottom,0px)';document.body.appendChild(probe);}
+ const safe=parseFloat(getComputedStyle(probe).paddingBottom)||0;
+ const vv=window.visualViewport;
+ const hauteur=vv?.height||window.innerHeight;
+ const top=Math.max(0,(vv?.offsetTop||0)+hauteur-(nav.getBoundingClientRect().height||68)-12-safe);
+ nav.style.setProperty('top',top+'px','important');nav.style.setProperty('bottom','auto','important');
+}
+const moisPDFEquipe=['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
+let choixInventairesPDFEquipe=[];
+async function afficherChoixPDFEquipe(type){
+ const cfg=rubriquesEquipeConfig[type];if(!cfg||!utilisateurAPermission(cfg.permission))return alert('Accès non autorisé.');
+ initialiserStyleEspaceGardeUtilisateur();initialiserStyleActionsEquipe();
+ const titre=type==='menage'?'PDF des ménages':type==='heures'?'PDF des heures':'PDF des inventaires';
+ const d=new Date();
+ document.getElementById('app').innerHTML=`<main class="garde-section"><button type="button" class="retour-button" data-navigation-equipe onclick="ouvrirRubriqueEquipe('${type}')">← Retour</button><h1>${titre}</h1><div id="equipe-pdf-form" class="garde-admin-card equipe-pdf-form">${type==='vehicules'?'Chargement des inventaires…':`<label>Période<select id="equipe-pdf-mode" onchange="basculerPeriodePDFEquipe()"><option value="month">Mois</option><option value="custom">Dates personnalisées</option></select></label><div data-pdf-mois><label>Mois<select id="equipe-pdf-mois">${moisPDFEquipe.map((m,i)=>`<option value="${i}" ${i===d.getMonth()?'selected':''}>${m}</option>`).join('')}</select></label><label>Année<input id="equipe-pdf-annee" type="number" min="2000" max="2100" value="${d.getFullYear()}"></label></div><div data-pdf-dates hidden><label>Du<input id="equipe-pdf-debut" type="date" value="${dateISOlocale(new Date(d.getFullYear(),d.getMonth(),1))}"></label><label>Au<input id="equipe-pdf-fin" type="date" value="${dateISOlocale(new Date(d.getFullYear(),d.getMonth()+1,0))}"></label></div><button type="button" class="equipe-action-button" onclick="exporterEquipePDF('${type}')">Télécharger le PDF</button>`}</div><p id="equipe-pdf-statut" class="equipe-pdf-statut" role="status"></p></main>${navigationPrincipale('','accueil')}`;
+ actualiserInterfaceBureau();window.scrollTo({top:0,behavior:'auto'});
+ if(type!=='vehicules')return;
+ const form=document.getElementById('equipe-pdf-form');
+ try{
+  const sb=obtenirClientSupabase();const records=[];
+  for(let debut=0;;debut+=500){const {data,error}=await sb.from('cis_inventaires_vehicules').select('*').order('created_at',{ascending:false}).order('id').range(debut,debut+499);if(error)throw error;records.push(...(data||[]));if((data?.length||0)<500)break;}
+  if(!form.isConnected)return;choixInventairesPDFEquipe=records;
+  const vehicules=[...new Set(records.map(r=>r.vehicule_nom||'Véhicule non renseigné'))].sort((a,b)=>a.localeCompare(b,'fr'));
+  form.innerHTML=records.length?`<label>Véhicule<select id="equipe-pdf-vehicule" onchange="actualiserInventairesPDFEquipe()"><option value="">Sélectionner un véhicule</option>${vehicules.map(v=>`<option value="${echapperHTML(v)}">${echapperHTML(v)}</option>`).join('')}</select></label><label>Inventaire enregistré<select id="equipe-pdf-inventaire" disabled onchange="document.getElementById('equipe-pdf-telecharger').disabled=!this.value"><option value="">Sélectionner d’abord un véhicule</option></select></label><button type="button" id="equipe-pdf-telecharger" class="equipe-action-button" disabled onclick="telechargerInventairePDFSelectionne()">Télécharger cet inventaire</button>`:'Aucun inventaire enregistré.';
+ }catch(e){if(form.isConnected)form.textContent='Historique indisponible : '+e.message;}
+}
+function actualiserInventairesPDFEquipe(){
+ const v=document.getElementById('equipe-pdf-vehicule')?.value,select=document.getElementById('equipe-pdf-inventaire'),btn=document.getElementById('equipe-pdf-telecharger');if(!select||!btn)return;
+ const rows=v?choixInventairesPDFEquipe.filter(r=>(r.vehicule_nom||'Véhicule non renseigné')===v):[];
+ select.innerHTML='<option value="">Sélectionner un inventaire</option>'+rows.map(r=>`<option value="${echapperHTML(String(r.id))}">${echapperHTML(inventairesAdminNom(r)+' — '+new Date(r.created_at).toLocaleString('fr-FR'))}</option>`).join('');select.disabled=!rows.length;btn.disabled=true;
+}
+function telechargerInventairePDFSelectionne(){
+ const id=document.getElementById('equipe-pdf-inventaire')?.value,v=document.getElementById('equipe-pdf-vehicule')?.value;
+ if(!id||!choixInventairesPDFEquipe.some(r=>String(r.id)===id&&(r.vehicule_nom||'Véhicule non renseigné')===v))return alert('Sélectionne un véhicule et un inventaire.');
+ return exporterEquipePDF('vehicules',id);
+}
+function basculerPeriodePDFEquipe(){
+ const custom=document.getElementById('equipe-pdf-mode')?.value==='custom';
+ document.querySelectorAll('[data-pdf-mois]').forEach(x=>x.hidden=custom);document.querySelectorAll('[data-pdf-dates]').forEach(x=>x.hidden=!custom);
+}
+function lirePeriodePDFEquipe(type){
+ let from,to;
+ if(document.getElementById('equipe-pdf-mode')?.value==='custom'){
+  from=document.getElementById('equipe-pdf-debut')?.value;to=document.getElementById('equipe-pdf-fin')?.value;
+ }else{
+  const d=new Date(),m=Number(document.getElementById('equipe-pdf-mois')?.value??d.getMonth()),y=Number(document.getElementById('equipe-pdf-annee')?.value??d.getFullYear());
+  if(!Number.isInteger(m)||m<0||m>11||!Number.isInteger(y)||y<2000||y>2100)throw new Error('Mois ou année invalide.');
+  from=dateISOlocale(new Date(y,m,1));to=dateISOlocale(new Date(y,m+1,0));
+ }
+ if(!from||!to||from>to||!/^\d{4}-\d{2}-\d{2}$/.test(from)||!/^\d{4}-\d{2}-\d{2}$/.test(to))throw new Error('Sélectionne une période valide.');
+ const debut=new Date(from+'T00:00:00'),fin=new Date(to+'T00:00:00');fin.setDate(fin.getDate()+1);
+ if(!Number.isFinite(debut.getTime())||!Number.isFinite(fin.getTime()))throw new Error('Dates invalides.');
+ return {from,to,startISO:debut.toISOString(),endISO:fin.toISOString()};
+}
+function creerCalendrierEquipePDF(PDF,type,rows,personnes,id){
+ const noms=ids=>(ids||[]).map(uid=>{const u=personnes.find(p=>String(p.id)===String(uid));return u?nomPersonnelHeures(u):'Utilisateur';}).join(', ');
+ const periode=id?{from:dateISOlocale(new Date(rows[0][type==='menage'?'date_menage':'created_at'])),to:dateISOlocale(new Date(rows[0][type==='menage'?'date_menage':'created_at']))}:lirePeriodePDFEquipe(type);
+ const entries=rows.map(r=>({date:r[type==='menage'?'date_menage':'created_at'],names:noms(r[type==='menage'?'personnes_presentes':'personnes_concernees']),motif:type==='menage'?'Ménage':r.motifs_heures?.nom||'Heures enregistrées',duration:libelleDureeHeures(r.duree_minutes||0)})).sort((a,b)=>new Date(a.date)-new Date(b.date));
+ const doc=new PDF({orientation:'portrait',unit:'mm',format:'a4'});
+ const first=new Date(periode.from+'T12:00:00'),last=new Date(periode.to+'T12:00:00');let month=new Date(first.getFullYear(),first.getMonth(),1,12),page=0;
+ while(month<=last){
+  if(page++)doc.addPage();const y=month.getFullYear(),mo=month.getMonth(),days=new Date(y,mo+1,0).getDate();
+  const title=month.toLocaleDateString('fr-FR',{month:'long',year:'numeric'}),titre=title.charAt(0).toUpperCase()+title.slice(1);
+  doc.setFont('helvetica','bold');doc.setFontSize(16);doc.text(texteCompatiblePDF('CIS Le Chesne — '+titre),105,12,{align:'center'});let yy=20;
+  const suite=()=>{doc.addPage();yy=15;doc.setFont('helvetica','bold');doc.setFontSize(11);doc.text(texteCompatiblePDF(titre+' — suite'),105,9,{align:'center'});};
+  for(let day=1;day<=days;day++){
+   const d=new Date(y,mo,day,12),key=dateISOlocale(d);if(key<periode.from||key>periode.to)continue;
+   const dayEntries=entries.filter(e=>dateISOlocale(new Date(e.date))===key),lines=[];
+   doc.setFont('helvetica','normal');doc.setFontSize(7.5);
+   for(const e of dayEntries)lines.push(...doc.splitTextToSize(texteCompatiblePDF(`${e.names||'Utilisateur'} — ${e.motif} — ${e.duration}`),154));
+   let reste=lines.length?lines:['—'];
+   while(reste.length){
+    if(yy+10>287)suite();
+    const max=Math.max(1,Math.floor((287-yy-6)/4.1)),chunk=reste.slice(0,max);reste=reste.slice(max);
+    const h=Math.max(8,6+chunk.length*4.1);
+    doc.setDrawColor(150);doc.rect(8,yy,194,h);doc.setFont('helvetica','bold');doc.setFontSize(8.5);doc.setTextColor(0);
+    doc.text(d.toLocaleDateString('fr-FR',{weekday:'short',day:'2-digit',month:'2-digit'}),10,yy+5);
+    doc.setFont('helvetica','normal');doc.setFontSize(7.5);let ly=yy+5;
+    if(!dayEntries.length)doc.setTextColor(145);
+    for(const ln of chunk){doc.text(texteCompatiblePDF(ln),46,ly);ly+=4.1;}doc.setTextColor(0);yy+=h;
+    if(reste.length)suite();
+   }
+  }
+  month=new Date(y,mo+1,1,12);
+ }
+ return doc;
+}
