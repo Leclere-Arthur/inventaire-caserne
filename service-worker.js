@@ -15,7 +15,7 @@ importScripts("./notifications-history.js");
  * à récupérer le nouvel app.js.
  */
 
-const CACHE_NAME = "inventaire-caserne-v93-administratif-profil";
+const CACHE_NAME = "inventaire-caserne-v94-accueil-general";
 
 
 /*

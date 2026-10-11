@@ -725,7 +725,7 @@ const DOMAINE_EMAIL_INTERNE =
     "inventaire-caserne.local";
 
 const VERSION_APPLICATION =
-    "2.9.41";
+    "2.9.42";
 
 const CLE_PROFIL_UTILISATEUR_CACHE =
     "profil_utilisateur_connecte_v1";
@@ -1024,7 +1024,7 @@ let minuteurVerificationMiseAJour =
  * Elle permet de détecter une nouvelle version même si seul app.js change.
  */
 const VERSION_APPLICATION_JS =
-    "2026-10-11-administratif-profil-v54";
+    "2026-10-11-accueil-general-v55";
 
 async function verifierNouvelleVersionAppJs() {
 
@@ -3266,7 +3266,7 @@ async function seConnecterApplication() {
         await initialiserSynchronisationSupabase();
 
 
-        afficherAccueil();
+        afficherPortailPrincipal();
         window.__cisNotificationsApplicationPrete=true;
         void traiterNotificationEnAttente();
 
@@ -10341,12 +10341,8 @@ function afficherAccueil() {
             <header class="accueil-header">
 
                 <h1>
-                    CIS Le Chesne
+                    Pharmacie
                 </h1>
-
-                <p>
-                    Gestion du matériel
-                </p>
 
             </header>
 
