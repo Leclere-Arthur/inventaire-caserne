@@ -1016,7 +1016,7 @@ let minuteurVerificationMiseAJour =
  * Elle permet de détecter une nouvelle version même si seul app.js change.
  */
 const VERSION_APPLICATION_JS =
-    "2026-10-11-equipe-pdf-admin-v48";
+    "2026-10-11-barre-origine-v49";
 
 async function verifierNouvelleVersionAppJs() {
 
@@ -21444,7 +21444,6 @@ function obtenirRubriqueBureauActive() {
 
 
 function actualiserInterfaceBureau() {
-    actualiserNavigationEquipe();
 
     const navigation =
         document.getElementById(
@@ -22981,28 +22980,8 @@ function creerRapportInventaireEquipePDF(PDF,r,personnes){
 function initialiserStyleActionsEquipe(){
  if(document.getElementById('equipe-actions-style'))return;
  const s=document.createElement('style');s.id='equipe-actions-style';
- s.textContent=`.equipe-action-button{border:1px solid #cdd5dc;background:#fff;border-radius:10px;padding:12px 15px;margin:7px 0;font:inherit;font-weight:750;color:#263238;cursor:pointer}.equipe-action-button:disabled{opacity:.5;cursor:default}.equipe-pdf-form{display:grid;gap:14px}.equipe-pdf-form label{display:grid;gap:7px;font-weight:750}.equipe-pdf-form select,.equipe-pdf-form input{box-sizing:border-box;width:100%;min-height:46px;border:1px solid #ccd5df;border-radius:10px;padding:11px;background:white;font:inherit}.garde-section,.garde-menu-page{padding-bottom:calc(125px + env(safe-area-inset-bottom,0px))!important}.caserne-nav-bas[data-equipe]{box-sizing:border-box!important;position:fixed!important;z-index:5000;max-width:calc(100vw - 24px);margin:0!important}.equipe-pdf-statut{white-space:normal;overflow-wrap:anywhere}`;
+ s.textContent=`.equipe-action-button{border:1px solid #cdd5dc;background:#fff;border-radius:10px;padding:12px 15px;margin:7px 0;font:inherit;font-weight:750;color:#263238;cursor:pointer}.equipe-action-button:disabled{opacity:.5;cursor:default}.equipe-pdf-form{display:grid;gap:14px}.equipe-pdf-form label{display:grid;gap:7px;font-weight:750}.equipe-pdf-form select,.equipe-pdf-form input{box-sizing:border-box;width:100%;min-height:46px;border:1px solid #ccd5df;border-radius:10px;padding:11px;background:white;font:inherit}.garde-section,.garde-menu-page{padding-bottom:calc(125px + env(safe-area-inset-bottom,0px))!important}.equipe-pdf-statut{white-space:normal;overflow-wrap:anywhere}`;
  document.head.appendChild(s);
-}
-function actualiserNavigationEquipe(){
- const equipe=document.querySelector('#app>.garde-section,#app>.garde-menu-page');
- const nav=document.querySelector('#app>.caserne-nav-bas');
- if(!equipe||!nav)return;
- initialiserStyleActionsEquipe();nav.dataset.equipe='true';
- if(!window.__equipeNavEcoutes){
-  window.__equipeNavEcoutes=true;
-  const planifier=()=>{if(window.__equipeNavFrame)return;window.__equipeNavFrame=requestAnimationFrame(()=>{window.__equipeNavFrame=null;actualiserNavigationEquipe();});};
-  window.addEventListener('resize',planifier,{passive:true});window.addEventListener('scroll',planifier,{passive:true});
-  if(window.visualViewport){window.visualViewport.addEventListener('resize',planifier,{passive:true});window.visualViewport.addEventListener('scroll',planifier,{passive:true});}
- }
- if(window.matchMedia('(min-width:1000px)').matches)return;
- let probe=document.getElementById('equipe-safe-area');
- if(!probe){probe=document.createElement('div');probe.id='equipe-safe-area';probe.style.cssText='position:fixed;visibility:hidden;pointer-events:none;padding-bottom:env(safe-area-inset-bottom,0px)';document.body.appendChild(probe);}
- const safe=parseFloat(getComputedStyle(probe).paddingBottom)||0;
- const vv=window.visualViewport;
- const hauteur=vv?.height||window.innerHeight;
- const top=Math.max(0,(vv?.offsetTop||0)+hauteur-(nav.getBoundingClientRect().height||68)-12-safe);
- nav.style.setProperty('top',top+'px','important');nav.style.setProperty('bottom','auto','important');
 }
 const moisPDFEquipe=['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
 let choixInventairesPDFEquipe=[];
