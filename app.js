@@ -725,7 +725,7 @@ const DOMAINE_EMAIL_INTERNE =
     "inventaire-caserne.local";
 
 const VERSION_APPLICATION =
-    "2.9.42";
+    "2.9.43";
 
 const CLE_PROFIL_UTILISATEUR_CACHE =
     "profil_utilisateur_connecte_v1";
@@ -1024,7 +1024,7 @@ let minuteurVerificationMiseAJour =
  * Elle permet de détecter une nouvelle version même si seul app.js change.
  */
 const VERSION_APPLICATION_JS =
-    "2026-10-11-accueil-general-v55";
+    "2026-10-11-menu-menage-v56";
 
 async function verifierNouvelleVersionAppJs() {
 
@@ -22861,7 +22861,7 @@ async function ajusterStockMenage(btn,sens){
 // Choix de rubrique réservés aux permissions admin existantes.
 let rubriqueEquipeOrigine=null;
 const rubriquesEquipeConfig={
- menage:{titre:'Ménage',permission:'acces_admin_menage',saisie:()=>afficherMenageEspaceGarde(),cartes:[['🧹','Enregistrer un ménage','afficherMenageEspaceGarde()'],['📦','Ménage inventaire','afficherInventaireMenage()'],['📋','Ménage admin','afficherAdminMenageEquipe()'],['📄','Télécharger le PDF des ménages',"afficherChoixPDFEquipe('menage')"]]},
+ menage:{titre:'Ménage',permission:'acces_admin_menage',saisie:()=>afficherMenageEspaceGarde(),cartes:[['🧹','Enregistrer un ménage','afficherMenageEspaceGarde()'],['📦','Ménage inventaire','afficherInventaireMenage()'],['📋','Ménage admin','afficherAdminMenageEquipe()']]},
  vehicules:{titre:'Inventaire véhicule',permission:'acces_admin_menage',saisie:()=>afficherInventaireVehiculeEspaceGarde(),cartes:[['🚒','Enregistrer un inventaire','afficherInventaireVehiculeEspaceGarde()'],['📋','Inventaires admin','afficherAdminInventairesEquipe()'],['📄','Télécharger le PDF des inventaires',"afficherChoixPDFEquipe('vehicules')"]]},
  heures:{titre:'Heures',permission:'acces_admin_heures',saisie:()=>afficherEnregistrerHeuresEquipe(),cartes:[['⏱️','Enregistrer des heures','afficherEnregistrerHeuresEquipe()'],['📋','Heures admin','afficherHistoriqueHeuresEquipe()'],['📄','Télécharger le PDF des heures',"afficherChoixPDFEquipe('heures')"]]}
 };
