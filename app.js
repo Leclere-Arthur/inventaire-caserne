@@ -725,7 +725,7 @@ const DOMAINE_EMAIL_INTERNE =
     "inventaire-caserne.local";
 
 const VERSION_APPLICATION =
-    "2.9.44";
+    "2.9.46";
 
 const CLE_PROFIL_UTILISATEUR_CACHE =
     "profil_utilisateur_connecte_v1";
@@ -1024,7 +1024,7 @@ let minuteurVerificationMiseAJour =
  * Elle permet de détecter une nouvelle version même si seul app.js change.
  */
 const VERSION_APPLICATION_JS =
-    "2026-10-11-envoi-mail-v57";
+    "2026-10-13-caserne-pc-entretiens-v59";
 
 async function verifierNouvelleVersionAppJs() {
 
@@ -2314,7 +2314,8 @@ async function chargerProfilUtilisateurDepuisSupabase(
                     acces_entretien_individuel,
                     acces_entretien_individuel_admin,
                     acces_admin_menage,
-                    acces_admin_heures
+                    acces_admin_heures,
+                    acces_envoi_mail
                 )
             `)
             .eq(
@@ -7850,7 +7851,7 @@ function optionsRaccourcisAccueil(){
  if(utilisateurAPermission("acces_espace_caserne")){o.push({id:"caserne",libelle:"Espace Caserne",icone:"🏠",action:"afficherEspaceCaserne()"});o.push({id:"agenda",libelle:"Agenda général",icone:"📅",action:"afficherAgendaGeneralCaserne()"});}
  if(utilisateurPeutAccederPharmacie())o.push({id:"pharmacie",libelle:"Espace Pharmacie",icone:"💊",action:"afficherAccueil()"});
  o.push({id:"equipe",libelle:"Espace équipe",icone:"🚒",action:"afficherEspaceGarde()"});
- o.push({id:"envoi_mail",libelle:"Envoi par mail",icone:"✉",action:"afficherEnvoiDocumentsEquipe()"});
+ if(utilisateurAPermission("acces_envoi_mail"))o.push({id:"envoi_mail",libelle:"Envoi par mail",icone:"✉",action:"afficherEnvoiDocumentsEquipe()"});
  for(const x of obtenirOngletsPharmacieAccessibles())o.push({id:"pharma_"+x.libelle.toLowerCase().replace(/[^a-z0-9]+/g,"_"),libelle:x.libelle,icone:x.icone,action:x.action});
 
  if(utilisateurAPermission("acces_espace_caserne")){
@@ -9332,8 +9333,6 @@ function construireCreneauxEntretienCaserne() {
 }
 
 async function creerPlanningEntretienCaserne() {
-    window.location.href = "https://admin.cis-lechesne.fr/";
-    return;
     if (!utilisateurEstSPVAdmin() && !utilisateurAPermission("acces_entretien_individuel_admin")) { alert("Accès non autorisé."); return; }
     const supabase = obtenirClientSupabase();
     if (!supabase || !navigator.onLine) { alert("Une connexion Internet est nécessaire pour publier le planning."); return; }
@@ -9345,6 +9344,7 @@ async function creerPlanningEntretienCaserne() {
     const notificationAuto = !!document.getElementById("caserne-entretien-notification-auto")?.checked;
     const notificationDelaiMinutes = Math.max(1, Number(document.getElementById("caserne-entretien-notification-delai")?.value) || 60);
     const creneaux = construireCreneauxEntretienCaserne();
+    if(!creneaux.length){alert("Ajoute au moins une date et un horaire.");return;}
     const bouton = document.querySelector(".caserne-admin-entretien .caserne-bouton-admin-principal");
     if (bouton) { bouton.disabled = true; bouton.textContent = "Publication…"; }
     try {
@@ -9591,6 +9591,26 @@ function initialiserStyleAgendaGeneralCaserne(){
  .agenda-general-vide{padding:25px 12px;text-align:center;color:#888b9a;background:#f8f8fb;border-radius:13px;font-size:14px}
  .agenda-general-retour{margin:10px 0 14px!important}
  @media(min-width:720px){.agenda-general-panel{max-width:680px;margin-left:auto;margin-right:auto;padding:24px}.agenda-general-date{min-height:65px}}
+ @media(min-width:1000px){
+  body:not(.mode-connexion) #app .caserne-shell .agenda-general-panel{background:#141e27!important;border:1px solid #34424f;color:#f5f7f9!important;box-shadow:0 8px 28px #0002}
+  body:not(.mode-connexion) #app .caserne-shell .agenda-general-panel .agenda-general-mois,
+  body:not(.mode-connexion) #app .caserne-shell .agenda-general-panel .agenda-general-jour-titre{color:#f5f7f9!important}
+  body:not(.mode-connexion) #app .caserne-shell .agenda-general-panel .agenda-general-switch{background:#1d2934!important}
+  body:not(.mode-connexion) #app .caserne-shell .agenda-general-panel .agenda-general-controles button,
+  body:not(.mode-connexion) #app .caserne-shell .agenda-general-panel .agenda-general-switch button{background:#26333f!important;color:#e4eaf0!important}
+  body:not(.mode-connexion) #app .caserne-shell .agenda-general-panel .agenda-general-switch button.actif{background:#7048dd!important;color:#fff!important}
+  body:not(.mode-connexion) #app .caserne-shell .agenda-general-panel .agenda-general-semaine,
+  body:not(.mode-connexion) #app .caserne-shell .agenda-general-panel .agenda-general-heure{color:#a6b3c0!important}
+  body:not(.mode-connexion) #app .caserne-shell .agenda-general-panel .agenda-general-date{color:#f5f7f9!important}
+  body:not(.mode-connexion) #app .caserne-shell .agenda-general-panel .agenda-general-date.hors-mois{color:#a6b3c0!important}
+  body:not(.mode-connexion) #app .caserne-shell .agenda-general-panel .agenda-general-date.selection{color:#fff!important;background:#7048dd!important}
+  body:not(.mode-connexion) #app .caserne-shell .agenda-general-panel .agenda-general-ligne,
+  body:not(.mode-connexion) #app .caserne-shell .agenda-general-panel .agenda-general-ligne strong,
+  body:not(.mode-connexion) #app .caserne-shell .agenda-general-panel .agenda-general-ligne small{color:#27263a!important}
+  body:not(.mode-connexion) #app .caserne-shell .agenda-general-panel .agenda-general-ligne .agenda-general-present{color:#087b3c!important}
+  body:not(.mode-connexion) #app .caserne-shell .agenda-general-panel .agenda-general-vide{background:#1d2934!important;color:#a6b3c0!important}
+ }
+
  `;document.head.appendChild(st);
 }
 let agendaGeneralMoisCaserne=null;
@@ -9759,14 +9779,32 @@ function afficherAdministratifCaserne() {
     window.scrollTo({top:0,behavior:"auto"});
 }
 
+// Même classement temporel que le fil d’actualité ; archives fermées par défaut.
+function separerPublicationsRubriqueCaserne(publications,maintenant=Date.now()){
+ const sansDate=[],avenir=[],passes=[];
+ for(const p of publications||[]){const date=p.date_evenement?new Date(p.date_evenement).getTime():NaN;if(!Number.isFinite(date))sansDate.push(p);else(date>=maintenant?avenir:passes).push(p);}
+ sansDate.sort((a,b)=>(Date.parse(b.created_at||'')||0)-(Date.parse(a.created_at||'')||0));
+ avenir.sort((a,b)=>new Date(a.date_evenement)-new Date(b.date_evenement));
+ passes.sort((a,b)=>new Date(b.date_evenement)-new Date(a.date_evenement));
+ return {actuels:[...sansDate,...avenir],passes};
+}
+function separerEntretiensRubriqueCaserne(entretiens,maintenant=Date.now()){
+ const actuels=[],passes=[];
+ for(const e of entretiens||[]){
+  const valides=(e.creneaux||[]).filter(c=>c.date_heure&&Number.isFinite(Date.parse(c.date_heure)));
+  const futurs=valides.filter(c=>Date.parse(c.date_heure)>=maintenant).sort((a,b)=>Date.parse(a.date_heure)-Date.parse(b.date_heure));
+  const anciens=valides.filter(c=>Date.parse(c.date_heure)<maintenant).sort((a,b)=>Date.parse(a.date_heure)-Date.parse(b.date_heure));
+  if(futurs.length)actuels.push({...e,creneaux:futurs});else if(!valides.length)actuels.push(e);
+  if(anciens.length)passes.push({entretien:{...e,creneaux:anciens},dateReference:anciens[anciens.length-1].date_heure});
+ }
+ passes.sort((a,b)=>Date.parse(b.dateReference)-Date.parse(a.dateReference));
+ return {actuels,passes};
+}
 async function afficherRubriqueCaserne(type) {
     const rubrique = obtenirRubriquesCaserne().find(r => r[0] === type);
     if (!rubrique || !utilisateurPeutVoirRubriqueCaserne(rubrique)) { alert("Accès non autorisé."); return; }
     await synchroniserCaserneAvantNavigation();
-    const estAdmin =
-        type === "entretien_individuel"
-            ? false
-            : (utilisateurEstSPVAdmin() || utilisateurAPermission(rubrique[3]));
+    const estAdmin = utilisateurEstSPVAdmin() || utilisateurAPermission(rubrique[3]);
 
     if (type === "administratif") {
         afficherAdministratifCaserne();
@@ -9775,13 +9813,15 @@ async function afficherRubriqueCaserne(type) {
 
     if (type === "entretien_individuel") {
         const entretiens = await chargerEntretiensCaserne();
+        const classement=separerEntretiensRubriqueCaserne(entretiens);
         document.getElementById("app").innerHTML = `
             <main class="caserne-shell ${estAdmin ? "caserne-avec-admin" : "caserne-public-simple"}">
                 <header class="caserne-top ${estAdmin ? "" : "caserne-top-simple"}"><small>ESPACE CASERNE</small><h1>${echapperHTML(rubrique[1])}</h1><p>${estAdmin ? "Planification · réponses · créneaux" : "Choisis ton rendez-vous en appuyant sur un créneau disponible."}</p></header>
                 ${estAdmin ? formulaireAdminEntretienCaserne() : `<button type="button" class="caserne-retour-actualites" onclick="afficherActualitesCaserne()">← Retour aux actualités</button>`}
                 <section class="caserne-fil caserne-entretiens-fil">
-                    ${entretiens.length ? entretiens.map(e => carteEntretienCaserne(e, estAdmin)).join("") : '<div class="caserne-vide"><strong>Aucun entretien planifié</strong><p>Tu n’as rien à faire pour le moment.</p></div>'}
+                    ${classement.actuels.length ? classement.actuels.map(e => carteEntretienCaserne(e, estAdmin)).join("") : '<div class="caserne-vide"><strong>Aucun entretien à venir</strong><p>Aucun créneau à venir pour le moment.</p></div>'}
                 </section>
+                ${classement.passes.length ? `<details class="caserne-anciens-evenements"><summary>Voir les événements passés</summary><section class="caserne-fil caserne-entretiens-fil">${classement.passes.map(e=>carteEntretienPasseActualitesCaserne(e.entretien,e.dateReference)).join("")}</section></details>` : ""}
             </main>${navigationCaserne("caserne")}`;
         actualiserInterfaceBureau();
         if (estAdmin && vueAdminEntretienCaserne === "reponses") remplirReponsesEntretiensAdminCaserne();
@@ -9792,6 +9832,7 @@ async function afficherRubriqueCaserne(type) {
     let publications = await chargerPublicationsCaserne(type);
     publications = await chargerDetailsPublicationsCaserne(publications);
     window.__publicationsCaserneParId = Object.fromEntries(publications.map(p => [p.id,p]));
+    const classement=separerPublicationsRubriqueCaserne(publications);
     const formulaireAdmin = estAdmin ? formulaireAdminPublicationCaserne(type) : "";
     const presentation = obtenirPresentationRubriqueCaserne(type);
     document.getElementById("app").innerHTML = `
@@ -9799,8 +9840,9 @@ async function afficherRubriqueCaserne(type) {
             <header class="caserne-top ${estAdmin ? "" : "caserne-top-simple"}"><small>ESPACE CASERNE</small><h1>${echapperHTML(rubrique[1])}</h1><p>${estAdmin ? "Vue publique · administration" : echapperHTML(presentation.aide)}</p></header>
             ${estAdmin ? formulaireAdmin : `<button type="button" class="caserne-retour-actualites" onclick="afficherActualitesCaserne()">← Retour aux actualités</button>`}
             <section class="caserne-fil">
-                ${publications.length ? publications.map(p => cartePublicationCaserne(p, {admin:estAdmin,retour:type})).join("") : '<div class="caserne-vide"><strong>Aucune information pour le moment</strong><p>Tu n’as rien à faire dans cette rubrique.</p></div>'}
+                ${classement.actuels.length ? classement.actuels.map(p => cartePublicationCaserne(p, {admin:estAdmin,retour:type})).join("") : '<div class="caserne-vide"><strong>Aucun événement à venir</strong><p>Aucune nouvelle information dans cette rubrique.</p></div>'}
             </section>
+            ${classement.passes.length ? `<details class="caserne-anciens-evenements"><summary>Voir les événements passés</summary><section class="caserne-fil">${classement.passes.map(p=>cartePublicationCaserne(p,{admin:estAdmin,retour:type,passe:true})).join("")}</section></details>` : ""}
         </main>${navigationCaserne("caserne")}`;
     actualiserInterfaceBureau();
     window.scrollTo({top:0, behavior:"auto"});
@@ -22110,7 +22152,7 @@ function afficherEspaceGarde(){
           <button class="garde-menu-carte" onclick="ouvrirRubriqueEquipe('vehicules')"><span class="ico">🚒</span><span><strong>Inventaire véhicule</strong></span><b class="fleche">›</b></button>
           <button class="garde-menu-carte" onclick="afficherPlanningEspaceGarde()"><span class="ico">📅</span><span><strong>Planning</strong></span><b class="fleche">›</b></button>
           <button class="garde-menu-carte" onclick="ouvrirRubriqueEquipe('heures')"><span class="ico">⏱️</span><span><strong>Enregistrer des heures</strong></span><b class="fleche">›</b></button>
-          <button type="button" class="garde-menu-carte" onclick="afficherEnvoiDocumentsEquipe()"><span class="ico" aria-hidden="true"><svg width="27" height="27" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 6 9 7 9-7"/></svg></span><span><strong>Envoi par mail</strong></span><b class="fleche">›</b></button>
+          ${utilisateurAPermission("acces_envoi_mail")?`<button type="button" class="garde-menu-carte" onclick="afficherEnvoiDocumentsEquipe()"><span class="ico" aria-hidden="true"><svg width="27" height="27" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 6 9 7 9-7"/></svg></span><span><strong>Envoi par mail</strong></span><b class="fleche">›</b></button>`:""}
           ${utilisateurAccesAdministratifCentral() ? `<button class="garde-menu-carte" onclick="afficherAdministrationEquipe()"><span class="ico">⚙️</span><span><strong>Administratif</strong></span><b class="fleche">›</b></button>` : ""}
 
         </div>
@@ -23234,6 +23276,7 @@ function styleEnvoiDocumentsEquipe(){
  const s=document.createElement('style');s.id='envoi-documents-style';s.textContent=`.mail-doc-section{background:#fff;border-radius:14px;padding:16px;margin:15px 0}.mail-doc-section h2,.mail-doc-section summary{font-size:18px;font-weight:750;margin:0 0 12px}.mail-doc-section summary{cursor:pointer}.mail-doc-ligne{display:flex;gap:12px;align-items:flex-start;padding:13px 0;border-top:1px solid #e5e9ec;cursor:pointer}.mail-doc-ligne input{width:22px;height:22px;accent-color:#176b45;flex:0 0 auto;margin:1px 0}.mail-doc-ligne strong{display:block}.mail-doc-ligne small{display:block;color:#657079;margin-top:5px}.mail-doc-ligne:has(input:checked){background:#e7f4ec;border-radius:8px;padding-left:10px;padding-right:10px}.mail-doc-ligne[hidden]{display:none}.mail-doc-periode{display:grid;grid-template-columns:1fr 1fr;gap:12px}.mail-doc-periode input,.mail-doc-recherche{box-sizing:border-box;width:100%;padding:12px;border:1px solid #cdd5dc;border-radius:9px;background:white;font:inherit}.mail-doc-destinataire{overflow-wrap:anywhere;color:#53616b}.mail-doc-statut{white-space:pre-line;overflow-wrap:anywhere}.mail-doc-statut.erreur{color:#a22020}.mail-doc-statut.succes{color:#176b45}.mail-doc-envoi{width:100%;border:0;border-radius:12px;padding:16px;background:#176b45;color:white;font:inherit;font-weight:750;cursor:pointer}.mail-doc-envoi:disabled{opacity:.5;cursor:default}.mail-doc-compteur{font-weight:700}.mail-doc-section a{color:#176b45}`;document.head.appendChild(s);
 }
 async function afficherEnvoiDocumentsEquipe(){
+ if(!utilisateurAPermission("acces_envoi_mail"))return alert("Tu n’as pas accès à l’envoi par mail.");
  if(!profilUtilisateurConnecte?.actif)return;
  initialiserStyleEspaceGardeUtilisateur();initialiserStyleActionsEquipe();styleEnvoiDocumentsEquipe();
  const d=new Date(),etat={documents:[],email:'',enCours:false,pending:null};envoiDocumentsEquipeEtat=etat;
@@ -23304,6 +23347,7 @@ async function creerDocumentSelectionneMail(d,etat,periode){
  throw new Error('Document non disponible.');
 }
 async function envoyerDocumentsEquipeParMail(){
+ if(!utilisateurAPermission("acces_envoi_mail"))return alert("Tu n’as pas accès à l’envoi par mail.");
  const e=envoiDocumentsEquipeEtat,btn=document.getElementById('mail-doc-envoyer'),statut=document.getElementById('mail-doc-statut');if(!e||e.enCours||!btn||!statut)return;
  const selected=selectionDocumentsMail();if(!navigator.onLine){statut.textContent='Une connexion Internet est nécessaire.';return;}if(!selected.length||selected.length>10)return;
  e.enCours=true;btn.disabled=true;statut.className='mail-doc-statut';
