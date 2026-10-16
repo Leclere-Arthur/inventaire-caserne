@@ -725,7 +725,7 @@ const DOMAINE_EMAIL_INTERNE =
     "inventaire-caserne.local";
 
 const VERSION_APPLICATION =
-    "2.9.48";
+    "2.9.49";
 
 const CLE_PROFIL_UTILISATEUR_CACHE =
     "profil_utilisateur_connecte_v1";
@@ -789,6 +789,7 @@ function memoriserTransitionNavigation() {
     } else {
         etatNavigationCourante = nouvelEtat;
     }
+    nettoyerListesHistoriquesProgressives();
 }
 
 function installerHistoriqueNavigationApplication() {
@@ -833,6 +834,7 @@ function retourPagePrecedente() {
 
     app.innerHTML = precedent.html;
     etatNavigationCourante = precedent;
+    void initialiserListesHistoriquesProgressives(app);
     if (app.querySelector('#garde-menage-duree')) {
         restaurationNavigationEnCours = false;
         void afficherMenageEspaceGarde();
@@ -1024,7 +1026,7 @@ let minuteurVerificationMiseAJour =
  * Elle permet de détecter une nouvelle version même si seul app.js change.
  */
 const VERSION_APPLICATION_JS =
-    "2026-10-16-equipe-cartes-v61";
+    "2026-10-16-historiques-progressifs-v62";
 
 async function verifierNouvelleVersionAppJs() {
 
@@ -8837,9 +8839,11 @@ async function exporterCommandeArchivePDF(archiveId, modeMail=false) {
 async function chargerPublicationsCaserne(type) {
     const supabase = obtenirClientSupabase();
     if (!supabase || !navigator.onLine) return [];
-    let q = supabase.from("caserne_publications").select("id,type_publication,titre,description,sous_type,visibilite,date_evenement,date_preparation,demande_reponse,demande_reponse_preparation,notification_auto,notification_delai_minutes,created_at").order("date_evenement", {ascending:true, nullsFirst:false});
-    if (type) q = q.eq("type_publication", type);
-    const {data,error}=await q;
+    const {data,error}=await chargerMetadonneesHistorique(() => {
+        let q = supabase.from("caserne_publications").select("id,type_publication,titre,description,sous_type,visibilite,date_evenement,date_preparation,demande_reponse,demande_reponse_preparation,notification_auto,notification_delai_minutes,created_at").order("date_evenement", {ascending:true, nullsFirst:false}).order("id", {ascending:true});
+        if (type) q = q.eq("type_publication", type);
+        return q;
+    });
     if (error) { console.warn("Publications Caserne :", error); return []; }
     return Array.isArray(data) ? data : [];
 }
@@ -9657,6 +9661,104 @@ window.afficherAgendaGeneralCaserne=afficherAgendaGeneralCaserne;
 window.selectionnerJourAgendaGeneralCaserne=selectionnerJourAgendaGeneralCaserne;
 window.changerVueAgendaGeneralCaserne=changerVueAgendaGeneralCaserne;
 
+// Les données légères restent disponibles pour les statistiques et le tri.
+// Les cartes (et leurs détails volumineux) ne sont créées que par petits lots.
+const listesHistoriquesProgressives = new Map();
+const chargementsHistoriquesProgressifs = new WeakSet();
+let sequenceHistoriqueProgressif = 0;
+
+function nettoyerListesHistoriquesProgressives() {
+    if (listesHistoriquesProgressives.size <= 60) return;
+    const html = [document.getElementById("app")?.innerHTML, etatNavigationCourante?.html, etatPageAvantProfil?.html, ...historiqueNavigationApplication.map(e=>e.html)].join("\n");
+    const conserves = new Set(html.match(/historique-progressif-\d+/g) || []);
+    for (const id of listesHistoriquesProgressives.keys()) if (!conserves.has(id)) listesHistoriquesProgressives.delete(id);
+}
+
+function creerListeHistoriqueProgressive(lignes, taille, rendreLot, classeListe = "") {
+    if (!document.getElementById("style-historiques-progressifs")) {
+        const style = document.createElement("style");
+        style.id = "style-historiques-progressifs";
+        style.textContent = `.historique-voir-plus{display:block;width:100%;box-sizing:border-box;min-height:46px;padding:12px 16px;margin:16px 0;border:1px solid #ccd5df;border-radius:12px;background:#fff;color:#007aff;font:inherit;font-weight:750;cursor:pointer}.historique-voir-plus:disabled{opacity:.6;cursor:wait}.historique-voir-plus[hidden]{display:none}.historique-pagination-statut{margin:8px 0;color:#a22020;line-height:1.4}.historique-pagination-statut:empty{display:none}@media(min-width:1000px){body:not(.mode-connexion) .historique-voir-plus{background:#202c36;border-color:#617687;color:#75b9ff}body:not(.mode-connexion) .historique-pagination-statut{color:#ff9595}}`;
+        document.head.appendChild(style);
+    }
+    const id = `historique-progressif-${++sequenceHistoriqueProgressif}`;
+    listesHistoriquesProgressives.set(id, {lignes, taille, rendreLot, utilisateur: String(profilUtilisateurConnecte?.id || "")});
+    return `<div id="${id}" data-historique-progressif data-historique-affiches="0"><div class="${classeListe}" data-historique-liste></div><button type="button" class="historique-voir-plus" onclick="chargerSuiteHistoriqueProgressif('${id}')" aria-controls="${id}-contenu">Voir plus</button><p class="historique-pagination-statut" role="status" aria-live="polite"></p></div>`
+        .replace('data-historique-liste', `id="${id}-contenu" data-historique-liste`);
+}
+
+async function chargerSuiteHistoriqueProgressif(id) {
+    const zone = document.getElementById(id), etat = listesHistoriquesProgressives.get(id);
+    if (!zone || !etat || chargementsHistoriquesProgressifs.has(zone)) return;
+    if (etat.utilisateur !== String(profilUtilisateurConnecte?.id || "")) return;
+    const liste = zone.querySelector("[data-historique-liste]");
+    const bouton = zone.querySelector(".historique-voir-plus"), statut = zone.querySelector("[role=status]");
+    const debut = Number(zone.dataset.historiqueAffiches) || 0;
+    const lot = etat.lignes.slice(debut, debut + etat.taille);
+    if (!lot.length) { bouton.hidden = true; return; }
+    zone.dataset.historiqueChargement = "true";
+    chargementsHistoriquesProgressifs.add(zone);
+    zone.setAttribute("aria-busy", "true");
+    bouton.disabled = true; bouton.textContent = "Chargement…"; statut.textContent = "";
+    try {
+        const html = await etat.rendreLot(lot);
+        if (!zone.isConnected) return;
+        liste.insertAdjacentHTML("beforeend", html);
+        zone.dataset.historiqueAffiches = String(debut + lot.length);
+        bouton.hidden = debut + lot.length >= etat.lignes.length;
+    } catch (erreur) {
+        if (zone.isConnected) statut.textContent = "Chargement impossible. Appuie sur « Voir plus » pour réessayer.";
+        console.warn("Historique :", erreur);
+    } finally {
+        zone.dataset.historiqueChargement = "false";
+        chargementsHistoriquesProgressifs.delete(zone);
+        zone.setAttribute("aria-busy", "false");
+        bouton.disabled = false; bouton.textContent = "Voir plus";
+        if (zone.isConnected) memoriserTransitionNavigation();
+    }
+}
+
+function initialiserListesHistoriquesProgressives(racine = document) {
+    const zones = [...racine.querySelectorAll("[data-historique-progressif]")];
+    // Un retour de navigation peut restaurer le HTML d'un chargement interrompu.
+    for (const zone of zones) {
+        if (!chargementsHistoriquesProgressifs.has(zone)) {
+            zone.dataset.historiqueChargement = "false";
+            zone.setAttribute("aria-busy", "false");
+            const bouton = zone.querySelector(".historique-voir-plus");
+            bouton.disabled = false; bouton.textContent = "Voir plus";
+        }
+    }
+    return Promise.all(zones
+        .filter(zone => (!zone.closest("details") || zone.closest("details").open) && !(Number(zone.dataset.historiqueAffiches) > 0))
+        .map(zone => chargerSuiteHistoriqueProgressif(zone.id)));
+}
+
+function htmlEvenementsPassesProgressifs(lignes, rendreLot, classeListe = "caserne-fil") {
+    if (!lignes.length) return "";
+    return `<details class="caserne-anciens-evenements" ontoggle="if(this.open) initialiserListesHistoriquesProgressives(this)"><summary>Voir les événements passés</summary>${creerListeHistoriqueProgressive(lignes, 10, rendreLot, classeListe)}</details>`;
+}
+
+async function cartesPublicationsPasseesProgressives(lignes, options) {
+    const publications = await chargerDetailsPublicationsCaserne(lignes);
+    window.__publicationsCaserneParId = {...window.__publicationsCaserneParId, ...Object.fromEntries(publications.map(p => [p.id, p]))};
+    return publications.map(p => cartePublicationCaserne(p, {...options, passe:true})).join("");
+}
+
+async function chargerMetadonneesHistorique(fabriquerRequete) {
+    try {
+        const lignes = [], ids = new Set();
+        for (let debut = 0; ; debut += 500) {
+            const {data, error} = await fabriquerRequete().range(debut, debut + 499);
+            if (error) return {data:null, error};
+            for (const ligne of data || []) {
+                if (!ids.has(String(ligne.id))) { ids.add(String(ligne.id)); lignes.push(ligne); }
+            }
+            if ((data || []).length < 500) return {data:lignes, error:null};
+        }
+    } catch (error) { return {data:null, error}; }
+}
+
 async function afficherActualitesCaserne(synchronisationDejaFaite = false) {
     initialiserStyleAgendaGeneralCaserne();
     if (!synchronisationDejaFaite) await synchroniserCaserneAvantNavigation();
@@ -9664,7 +9766,11 @@ async function afficherActualitesCaserne(synchronisationDejaFaite = false) {
 
     let publications = await chargerPublicationsCaserne();
     publications = publications.filter(p => p.type_publication !== "administratif");
-    publications = await chargerDetailsPublicationsCaserne(publications);
+    const dateChargement = Date.now();
+    const publicationsActuelles = publications.filter(p => !p.date_evenement || !Number.isFinite(Date.parse(p.date_evenement)) || Date.parse(p.date_evenement) >= dateChargement);
+    const detailsActuels = await chargerDetailsPublicationsCaserne(publicationsActuelles);
+    const parId = new Map(detailsActuels.map(p => [p.id, p]));
+    publications = publications.map(p => parId.get(p.id) || p);
     window.__publicationsCaserneParId = Object.fromEntries(publications.map(p => [p.id,p]));
 
     const peutVoirEntretiens = utilisateurAPermission("acces_entretien_individuel") || utilisateurAPermission("acces_entretien_individuel_admin") || utilisateurEstSPVAdmin();
@@ -9708,10 +9814,13 @@ async function afficherActualitesCaserne(synchronisationDejaFaite = false) {
         ? cartePlanningEntretienActualitesCaserne(e.valeur)
         : cartePublicationCaserne(e.valeur,{retour:"actualites"})
     ).join("");
-    const passesHTML = passes.map(e => e.type === "entretien_passe"
-        ? carteEntretienPasseActualitesCaserne(e.valeur, e.dateReference)
-        : cartePublicationCaserne(e.valeur,{retour:"actualites",passe:true})
-    ).join("");
+    const passesHTML = htmlEvenementsPassesProgressifs(passes, async lot => {
+        const pubs = lot.filter(e => e.type !== "entretien_passe").map(e => e.valeur);
+        const details = await chargerDetailsPublicationsCaserne(pubs);
+        const parId = new Map(details.map(p => [p.id, p]));
+        window.__publicationsCaserneParId = {...window.__publicationsCaserneParId, ...Object.fromEntries(details.map(p => [p.id, p]))};
+        return lot.map(e => e.type === "entretien_passe" ? carteEntretienPasseActualitesCaserne(e.valeur, e.dateReference) : cartePublicationCaserne(parId.get(e.valeur.id) || e.valeur, {retour:"actualites", passe:true})).join("");
+    });
 
     const accesEntretien = peutVoirEntretiens
         ? `<button type="button" class="caserne-raccourci caserne-raccourci-secondaire" onclick="afficherRubriqueCaserne('entretien_individuel')"><span>🗓️</span><strong>Mon entretien</strong></button>`
@@ -9734,9 +9843,10 @@ async function afficherActualitesCaserne(synchronisationDejaFaite = false) {
                 ${futursHTML || '<div class="caserne-vide"><strong>Rien de prévu pour le moment</strong><p>Tu n’as aucune action à faire.</p></div>'}
             </section>
 
-            ${passesHTML ? `<details class="caserne-anciens-evenements"><summary>Voir les événements passés</summary><section class="caserne-fil">${passesHTML}</section></details>` : ""}
+            ${passesHTML}
         </main>${navigationCaserne("caserne")}`;
     actualiserInterfaceBureau();
+    void initialiserListesHistoriquesProgressives();
     window.scrollTo({top:0, behavior:"auto"});
 }
 
@@ -9821,7 +9931,7 @@ async function afficherRubriqueCaserne(type) {
                 <section class="caserne-fil caserne-entretiens-fil">
                     ${classement.actuels.length ? classement.actuels.map(e => carteEntretienCaserne(e, estAdmin)).join("") : '<div class="caserne-vide"><strong>Aucun entretien à venir</strong><p>Aucun créneau à venir pour le moment.</p></div>'}
                 </section>
-                ${classement.passes.length ? `<details class="caserne-anciens-evenements"><summary>Voir les événements passés</summary><section class="caserne-fil caserne-entretiens-fil">${classement.passes.map(e=>carteEntretienPasseActualitesCaserne(e.entretien,e.dateReference)).join("")}</section></details>` : ""}
+                ${htmlEvenementsPassesProgressifs(classement.passes, lot => lot.map(e=>carteEntretienPasseActualitesCaserne(e.entretien,e.dateReference)).join(""), "caserne-fil caserne-entretiens-fil")}
             </main>${navigationCaserne("caserne")}`;
         actualiserInterfaceBureau();
         if (estAdmin && vueAdminEntretienCaserne === "reponses") remplirReponsesEntretiensAdminCaserne();
@@ -9830,9 +9940,9 @@ async function afficherRubriqueCaserne(type) {
     }
 
     let publications = await chargerPublicationsCaserne(type);
-    publications = await chargerDetailsPublicationsCaserne(publications);
-    window.__publicationsCaserneParId = Object.fromEntries(publications.map(p => [p.id,p]));
     const classement=separerPublicationsRubriqueCaserne(publications);
+    classement.actuels = await chargerDetailsPublicationsCaserne(classement.actuels);
+    window.__publicationsCaserneParId = Object.fromEntries(classement.actuels.map(p => [p.id,p]));
     const formulaireAdmin = estAdmin ? formulaireAdminPublicationCaserne(type) : "";
     const presentation = obtenirPresentationRubriqueCaserne(type);
     document.getElementById("app").innerHTML = `
@@ -9842,7 +9952,7 @@ async function afficherRubriqueCaserne(type) {
             <section class="caserne-fil">
                 ${classement.actuels.length ? classement.actuels.map(p => cartePublicationCaserne(p, {admin:estAdmin,retour:type})).join("") : '<div class="caserne-vide"><strong>Aucun événement à venir</strong><p>Aucune nouvelle information dans cette rubrique.</p></div>'}
             </section>
-            ${classement.passes.length ? `<details class="caserne-anciens-evenements"><summary>Voir les événements passés</summary><section class="caserne-fil">${classement.passes.map(p=>cartePublicationCaserne(p,{admin:estAdmin,retour:type,passe:true})).join("")}</section></details>` : ""}
+            ${htmlEvenementsPassesProgressifs(classement.passes, lot => cartesPublicationsPasseesProgressives(lot, {admin:estAdmin,retour:type}))}
         </main>${navigationCaserne("caserne")}`;
     actualiserInterfaceBureau();
     window.scrollTo({top:0, behavior:"auto"});
@@ -13069,7 +13179,7 @@ async function afficherArchivesHistorique() {
     } else {
 
         contenu =
-            archivesTriees.map(
+            creerListeHistoriqueProgressive(archivesTriees, 5, lot => lot.map(
                 function (archive) {
 
                     const interventions =
@@ -13241,7 +13351,7 @@ async function afficherArchivesHistorique() {
                     `;
 
                 }
-            ).join("");
+            ).join(""));
 
     }
 
@@ -13273,6 +13383,7 @@ async function afficherArchivesHistorique() {
 
     `;
 
+    void initialiserListesHistoriquesProgressives();
 }
 
 
@@ -22714,13 +22825,10 @@ async function afficherAdminMenageEquipe(){
     document.getElementById("app").innerHTML=`<main class="garde-section"><button class="retour-button" data-navigation-equipe onclick="retourAdminRubriqueEquipe('menage')">← Retour</button><h1>Administration ménage</h1><button type="button" class="equipe-action-button" onclick="afficherChoixPDFEquipe('menage')">Télécharger le PDF des ménages</button><div id="admin-menage-chargement" class="garde-planning-attente">Chargement…</div></main>${navigationPrincipale("","accueil")}`;
     actualiserInterfaceBureau();
     const supabase=obtenirClientSupabase();
-    const [hist,membres]=await Promise.all([
-      supabase.from("menages_garde").select("*").order("date_menage",{ascending:false}),
-      supabase.from("equipes_garde_membres").select("equipe_id,utilisateur_id")
-    ]);
+    const hist=await chargerMetadonneesHistorique(() => supabase.from("menages_garde").select("id,date_menage,zones_nettoyees,personnes_presentes,duree_minutes").order("date_menage",{ascending:false}).order("id",{ascending:false}));
     if(!document.getElementById("admin-menage-chargement"))return;
     if(hist.error){document.getElementById("admin-menage-chargement").textContent="Historique ménage indisponible.";return}
-    const rows=hist.data||[], membresEquipe=membres.data||[];
+    const rows=hist.data||[];
     if(!utilisateursEspaceGarde.length)utilisateursEspaceGarde=await chargerUtilisateursEspaceGarde();
     if(!document.getElementById("admin-menage-chargement"))return;
     const nom=id=>{const u=utilisateursEspaceGarde.find(x=>String(x.id)===String(id));return u?([u.prenom,u.nom].filter(Boolean).join(" ")||u.identifiant):"Utilisateur"};
@@ -22736,8 +22844,8 @@ async function afficherAdminMenageEquipe(){
       <h2 class="garde-sous-titre">Présences</h2>
       ${personnes.sort((a,b)=>(presence.get(b)||0)-(presence.get(a)||0)).map(id=>{const n=presence.get(id)||0,p=totalPresences?Math.round(n/totalPresences*100):0;return `<div class="garde-stat-ligne garde-stat-ligne-flex"><div><strong>${echapperHTML(nom(id))}</strong><small>${n} participation${n>1?"s":""} au ménage</small></div><span class="garde-presence-pct">${p}%</span></div>`}).join("")||'<div class="garde-stat-ligne">Aucune présence enregistrée.</div>'}
       <h2 class="garde-sous-titre">Historique</h2>
-      ${rows.map(r=>`<div class="garde-admin-card"><button onclick="afficherDetailMenageEquipe('${r.id}')"><strong>${new Date(r.date_menage).toLocaleString("fr-FR")}</strong><br><small>${(r.zones_nettoyees||[]).length} zone(s) · ${r.duree_minutes||0} min</small></button></div>`).join("")||"<div>Aucun ménage enregistré.</div>"}
-    </main>${navigationPrincipale("","accueil")}`;actualiserInterfaceBureau();window.scrollTo({top:0,behavior:"auto"});
+      ${rows.length ? creerListeHistoriqueProgressive(rows, 10, lot => lot.map(r=>`<div class="garde-admin-card"><button onclick="afficherDetailMenageEquipe('${r.id}')"><strong>${new Date(r.date_menage).toLocaleString("fr-FR")}</strong><br><small>${(r.zones_nettoyees||[]).length} zone(s) · ${r.duree_minutes||0} min</small></button></div>`).join("")) : "<div>Aucun ménage enregistré.</div>"}
+    </main>${navigationPrincipale("","accueil")}`;void initialiserListesHistoriquesProgressives();actualiserInterfaceBureau();window.scrollTo({top:0,behavior:"auto"});
 }
 async function afficherDetailMenageEquipe(id){
     if(!utilisateurAPermission("acces_admin_menage"))return alert("Accès non autorisé.");
@@ -22774,8 +22882,8 @@ async function afficherAdminInventairesEquipe(){
  actualiserInterfaceBureau();
  const sb=obtenirClientSupabase();
  if(!sb){document.getElementById('admin-inventaires-chargement').textContent='Connexion indisponible.';return;}
- let resultat=await sb.from('cis_inventaires_vehicules').select('id,numero_inventaire,vehicule_nom,controle_par,created_at,details').order('created_at',{ascending:false}).limit(200);
- if(resultat.error&&/numero_inventaire/i.test(resultat.error.message||''))resultat=await sb.from('cis_inventaires_vehicules').select('id,vehicule_nom,controle_par,created_at,details').order('created_at',{ascending:false}).limit(200);
+ let resultat=await chargerMetadonneesHistorique(() => sb.from('cis_inventaires_vehicules').select('id,numero_inventaire,vehicule_nom,controle_par,created_at').order('created_at',{ascending:false}).order('id',{ascending:false}));
+ if(resultat.error&&/numero_inventaire/i.test(resultat.error.message||''))resultat=await chargerMetadonneesHistorique(() => sb.from('cis_inventaires_vehicules').select('id,vehicule_nom,controle_par,created_at').order('created_at',{ascending:false}).order('id',{ascending:false}));
  if(!document.getElementById('admin-inventaires-chargement'))return;
  if(resultat.error){document.getElementById('admin-inventaires-chargement').textContent='Historique indisponible : '+resultat.error.message;return;}
  inventairesAdminCache=resultat.data||[];
@@ -22788,18 +22896,40 @@ async function afficherAdminInventairesEquipe(){
  <h2 class="garde-sous-titre">Contrôles réalisés</h2>
  ${(()=>{const counts=new Map();inventairesAdminCache.forEach(r=>{const id=String(r.controle_par||'');counts.set(id,(counts.get(id)||0)+1)});return [...counts.entries()].sort((a,b)=>b[1]-a[1]).map(([id,n])=>{const r=inventairesAdminCache.find(x=>String(x.controle_par||'')===id);return `<div class="garde-stat-ligne garde-stat-ligne-flex"><div><strong>${echapperHTML(inventairesAdminAuteur(r))}</strong><small>${n} inventaire${n>1?'s':''} réalisé${n>1?'s':''}</small></div></div>`}).join('')})()||'<div class="garde-stat-ligne">Aucun contrôle enregistré.</div>'}
  <h2 class="garde-sous-titre">Historique</h2><div class="garde-admin-card"><label for="inventaires-admin-filtre"><strong>Véhicule</strong></label><select id="inventaires-admin-filtre" class="heures-input" onchange="filtrerAdminInventairesEquipe()"><option value="">Tous les véhicules</option>${vehicules.map(v=>`<option value="${echapperHTML(v)}">${echapperHTML(v)}</option>`).join('')}</select></div>
- <div id="inventaires-admin-liste"></div><small>Affichage des 200 inventaires les plus récents.</small></main>${navigationPrincipale('','accueil')}`;
+ <div id="inventaires-admin-liste"></div></main>${navigationPrincipale('','accueil')}`;
  actualiserInterfaceBureau();filtrerAdminInventairesEquipe();window.scrollTo({top:0,behavior:'auto'});
 }
 function filtrerAdminInventairesEquipe(){
  const liste=document.getElementById('inventaires-admin-liste');if(!liste)return;
  const filtre=document.getElementById('inventaires-admin-filtre')?.value||'';
+ for(const option of document.querySelectorAll('#inventaires-admin-filtre option'))option.toggleAttribute('selected',option.value===filtre);
  const rows=inventairesAdminCache.filter(r=>!filtre||r.vehicule_nom===filtre);
- liste.innerHTML=rows.map(r=>{const materiels=inventairesAdminMateriels(r),bon=materiels.filter(m=>m.etat==='bon').length,surv=materiels.filter(m=>m.etat==='a_surveiller').length,hs=materiels.filter(m=>m.etat==='hs').length;return `<div class="garde-admin-card"><button type="button" onclick="afficherDetailInventaireAdminEquipe('${echapperHTML(String(r.id))}')"><strong>${echapperHTML(inventairesAdminNom(r))} · ${echapperHTML(r.vehicule_nom||'Véhicule')}</strong><br><small class="${classeDateMenage(r.created_at)}">${inventairesAdminDate(r.created_at)}</small> · <small>${echapperHTML(inventairesAdminAuteur(r))}</small><br><small>${inventairesAdminZones(r).length} zone(s) · ${bon} Bon · ${surv} À surveiller · ${hs} HS</small></button></div>`}).join('')||'<div class="garde-stat-ligne">Aucun inventaire pour ce véhicule.</div>';
+ liste.innerHTML=rows.length ? creerListeHistoriqueProgressive(rows, 10, cartesInventairesProgressives) : '<div class="garde-stat-ligne">Aucun inventaire pour ce véhicule.</div>';
+ void initialiserListesHistoriquesProgressives(liste);
 }
-function afficherDetailInventaireAdminEquipe(id){
+async function cartesInventairesProgressives(lot){
+ if(!utilisateurAPermission('acces_admin_menage'))throw new Error('Accès non autorisé.');
+ const sb=obtenirClientSupabase();if(!sb)throw new Error('Connexion indisponible.');
+ // Les gros détails des coffres et du matériel sont lus pour ce lot uniquement.
+ const {data,error}=await sb.from('cis_inventaires_vehicules').select('id,details').in('id',lot.map(r=>r.id));
+ if(error)throw error;
+ const parId=new Map((data||[]).map(r=>[String(r.id),r]));
+ const lignes=lot.filter(r=>parId.has(String(r.id))).map(r=>({...r,...parId.get(String(r.id))}));
+ const enrichies=new Map(lignes.map(r=>[String(r.id),r]));
+ inventairesAdminCache=inventairesAdminCache.map(r=>enrichies.get(String(r.id))||r);
+ return lignes.map(r=>{const materiels=inventairesAdminMateriels(r),bon=materiels.filter(m=>m.etat==='bon').length,surv=materiels.filter(m=>m.etat==='a_surveiller').length,hs=materiels.filter(m=>m.etat==='hs').length;return `<div class="garde-admin-card"><button type="button" onclick="afficherDetailInventaireAdminEquipe('${echapperHTML(String(r.id))}')"><strong>${echapperHTML(inventairesAdminNom(r))} · ${echapperHTML(r.vehicule_nom||'Véhicule')}</strong><br><small class="${classeDateMenage(r.created_at)}">${inventairesAdminDate(r.created_at)}</small> · <small>${echapperHTML(inventairesAdminAuteur(r))}</small><br><small>${inventairesAdminZones(r).length} zone(s) · ${bon} Bon · ${surv} À surveiller · ${hs} HS</small></button></div>`}).join('');
+}
+async function afficherDetailInventaireAdminEquipe(id){
  if(!utilisateurAPermission('acces_admin_menage')){alert('Accès non autorisé.');return;}
- const r=inventairesAdminCache.find(x=>String(x.id)===String(id));if(!r){alert('Inventaire introuvable.');return;}
+ let r=inventairesAdminCache.find(x=>String(x.id)===String(id));
+ // Un retour du profil peut restaurer une carte dont le détail n'est plus en cache.
+ if(!r||!Array.isArray(r.details)){
+  try{
+   const {data,error}=await obtenirClientSupabase().from('cis_inventaires_vehicules').select('*').eq('id',id).single();
+   if(error||!data)throw error||new Error('Inventaire introuvable.');
+   r=data;inventairesAdminCache=inventairesAdminCache.filter(x=>String(x.id)!==String(id)).concat([r]);
+  }catch(erreur){alert('Détail indisponible : '+(erreur?.message||'Réessaie dans un instant.'));return;}
+ }
  initialiserStyleEspaceGardeUtilisateur();
  const zones=inventairesAdminZones(r),materiels=inventairesAdminMateriels(r);
  const etat=m=>m.etat==='bon'?'Bon':m.etat==='a_surveiller'?'À surveiller':m.etat==='hs'?'HS':'Non renseigné';
