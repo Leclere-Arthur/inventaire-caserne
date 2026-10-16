@@ -725,7 +725,7 @@ const DOMAINE_EMAIL_INTERNE =
     "inventaire-caserne.local";
 
 const VERSION_APPLICATION =
-    "2.9.46";
+    "2.9.47";
 
 const CLE_PROFIL_UTILISATEUR_CACHE =
     "profil_utilisateur_connecte_v1";
@@ -1024,7 +1024,7 @@ let minuteurVerificationMiseAJour =
  * Elle permet de détecter une nouvelle version même si seul app.js change.
  */
 const VERSION_APPLICATION_JS =
-    "2026-10-13-caserne-pc-entretiens-v59";
+    "2026-10-16-interface-pc-v60";
 
 async function verifierNouvelleVersionAppJs() {
 
@@ -20337,6 +20337,7 @@ function initialiserInterfaceBureau() {
             body:not(.mode-connexion) input,
             body:not(.mode-connexion) select,
             body:not(.mode-connexion) textarea {
+                color-scheme: dark;
                 box-sizing: border-box;
                 border: 1px solid #34414c !important;
                 border-radius: 7px !important;
@@ -20785,6 +20786,7 @@ function initialiserInterfaceBureau() {
             }
 
             body:not(.mode-connexion) .reappro-quantite {
+                color-scheme: light;
                 text-align: center;
                 cursor: pointer;
                 appearance: auto !important;
@@ -21066,7 +21068,8 @@ function initialiserInterfaceBureau() {
             body:not(.mode-connexion) .portail-cis-espaces {
                 grid-template-columns: repeat(2, minmax(300px, 1fr)) !important;
                 gap: 14px !important;
-                max-width: 960px;
+                width: 100%;
+                max-width: none;
             }
 
             body:not(.mode-connexion) .portail-cis-carte {
@@ -21405,6 +21408,95 @@ function initialiserInterfaceBureau() {
                 background: rgba(5,9,12,.96) !important;
             }
 
+            /* Les trois espaces partagent le même cadre sur ordinateur. */
+            body:not(.mode-connexion) #app > .portail-cis-page {
+                display: flex;
+                flex-direction: column;
+                gap: 22px;
+                min-height: 100vh;
+                min-height: 100dvh;
+            }
+            body:not(.mode-connexion) .portail-cis-page .garde-accueil-zone {
+                width: 100%;
+                max-width: none;
+                margin: auto 0 0;
+            }
+            body:not(.mode-connexion) .portail-cis-page .raccourcis-accueil-rapides {
+                flex-shrink: 0;
+            }
+            #navigation-bureau .bureau-nav {
+                min-height: 0;
+                overflow-y: auto;
+                flex-shrink: 1;
+            }
+            #navigation-bureau .bureau-marque,
+            #navigation-bureau .bureau-utilisateur { flex-shrink: 0; }
+            #navigation-bureau .bureau-nav-bouton { flex-shrink: 0; }
+
+            /* L'équipe conserve le thème sombre PC, y compris les panneaux
+               ajoutés après le chargement (inventaires, heures et mail). */
+            body:not(.mode-connexion) #app > .garde-menu-page,
+            body:not(.mode-connexion) #app > .garde-section {
+                width: 100%;
+                max-width: 1180px;
+                min-height: 100vh;
+                margin: 0 auto;
+                padding: 34px 42px 58px !important;
+                background: transparent;
+                color: var(--pc-texte);
+            }
+            body:not(.mode-connexion) .garde-menu-page::before,
+            body:not(.mode-connexion) .garde-section::before { display: none; }
+
+            body:not(.mode-connexion) :is(.garde-menu-carte, .garde-zone:not(.garde-zone-poubelle), .garde-personne-v2, .garde-vehicule-v2, .garde-admin-card:not(.menage-rupture), .garde-stat-ligne, .garde-planning-card, .garde-planning-attente, .gardes-bloc, .veh-card, .veh-materiel-ligne, .mail-doc-section) {
+                background: var(--pc-panel) !important;
+                border: 1px solid var(--pc-bordure-claire);
+                color: var(--pc-texte);
+                box-shadow: none;
+            }
+            body:not(.mode-connexion) :is(.garde-menu-carte strong, .garde-admin-card button, .veh-materiel-ouvrir, .veh-materiel-ouvrir strong) {
+                color: var(--pc-texte);
+            }
+            body:not(.mode-connexion) :is(.garde-menu-carte span, .garde-menu-carte .fleche, .garde-stat-ligne small, .garde-admin-card small, .veh-muted, .veh-materiel-ouvrir small, .veh-materiel-chevron, .mail-doc-destinataire, .mail-doc-compteur) {
+                color: #a6b3c0;
+            }
+            body:not(.mode-connexion) .garde-menu-carte .ico {
+                background: #203e32;
+                color: #c6edda;
+            }
+            body:not(.mode-connexion) :is(.garde-personnes-plus, .garde-menage-admin, .equipe-action-button, .heures-resultat, .heures-resultats, .menage-stock-actions button) {
+                background: #202c36;
+                color: var(--pc-texte);
+                border-color: var(--pc-bordure-claire);
+            }
+            body:not(.mode-connexion) .heures-resultat:hover { background: #2d3e4c; }
+            body:not(.mode-connexion) .mail-doc-ligne small { color: #a6b3c0; }
+            body:not(.mode-connexion) .mail-doc-ligne:has(input:checked) {
+                background: #203e32;
+                color: #c6edda;
+            }
+            body:not(.mode-connexion) .mail-doc-section a { color: #72dda0; }
+            body:not(.mode-connexion) .mail-doc-statut.erreur { color: #ff9595; }
+            body:not(.mode-connexion) .mail-doc-statut.succes { color: #72dda0; }
+            body:not(.mode-connexion) .heures-chip { background: #203e32; color: #c6edda; }
+            body:not(.mode-connexion) .heures-chip button { color: inherit; }
+            body:not(.mode-connexion) .veh-etat label:not(:has(input:checked)) {
+                background: #202c36;
+                color: var(--pc-texte);
+                border-color: #617687;
+            }
+            /* Les états colorés restent lisibles, ainsi que le plan du ménage. */
+            body:not(.mode-connexion) .garde-zone-poubelle { color: #493b00; }
+            body:not(.mode-connexion) .garde-date-recente,
+            body:not(.mode-connexion) .garde-presence-pct { color: #72dda0 !important; }
+            body:not(.mode-connexion) .garde-date-ancienne,
+            body:not(.mode-connexion) .veh-quantite-erreur { color: #ff9595 !important; }
+            body:not(.mode-connexion) .menage-rupture small { color: #970000; }
+            body:not(.mode-connexion) :is(input[type=date], input[type=time], input[type=datetime-local])::-webkit-calendar-picker-indicator {
+                opacity: 1;
+                cursor: pointer;
+            }
+
             @media (max-width: 1220px) {
                 body:not(.mode-connexion) .menu-principal,
                 body:not(.mode-connexion) .menu-administration {
@@ -21473,6 +21565,16 @@ function obtenirRubriqueBureauActive() {
         )
             .trim()
             .toLowerCase();
+
+    if (document.querySelector("#app .portail-cis-page")) return "accueil-general";
+    if (document.querySelector("#app .garde-menu-page, #app .garde-section")) {
+        if (titre.includes("ménage")) return "equipe-menage";
+        if (titre.includes("inventaire") || document.querySelector("#app .veh-card, #app .veh-inventaire-contenu, #app .veh-inventaire-liste")) return "equipe-vehicules";
+        if (titre.includes("planning")) return "equipe-planning";
+        if (titre.includes("heure")) return "equipe-heures";
+        if (titre.includes("mail")) return "equipe-mail";
+        return "equipe-accueil";
+    }
 
     if (document.querySelector("#app .caserne-shell")) {
         if (titre.includes("actualités")) return "caserne-actualites";
@@ -21574,6 +21676,12 @@ function actualiserInterfaceBureau() {
 
     const modeCaserne = Boolean(document.querySelector("#app .caserne-shell"));
     const modePortail = Boolean(document.querySelector("#app .portail-cis-page"));
+    const modeEquipe = Boolean(document.querySelector("#app .garde-menu-page, #app .garde-section"));
+    const liensEspaces = `
+        ${bouton("caserne-actualites", "Espace Caserne", "afficherEspaceCaserne()", utilisateurAPermission("acces_espace_caserne"))}
+        ${bouton("pharmacie", "Espace Pharmacie", "afficherAccueil()", utilisateurPeutAccederPharmacie())}
+        ${bouton("equipe-accueil", "Espace équipe", "afficherEspaceGarde()", true, modeEquipe ? "actif" : "")}
+    `;
     navigation.classList.toggle("theme-caserne", modeCaserne);
 
     if (modePortail) {
@@ -21585,8 +21693,7 @@ function actualiserInterfaceBureau() {
             <nav class="bureau-nav" aria-label="Navigation générale">
                 ${bouton("accueil-general", "Accueil général", "afficherPortailPrincipal()", true)}
                 <div class="bureau-nav-separateur">Espaces</div>
-                ${bouton("caserne-actualites", "Espace Caserne", "afficherEspaceCaserne()", utilisateurAPermission("acces_espace_caserne") || utilisateurEstSPVAdmin())}
-                ${bouton("pharmacie", "Espace Pharmacie", "afficherAccueil()", true)}
+                ${liensEspaces}
             </nav>
             <div class="bureau-utilisateur">
                 <button type="button" class="bureau-profil" onclick="ouvrirProfilDepuisPageCourante()">
@@ -21594,6 +21701,26 @@ function actualiserInterfaceBureau() {
                     <small>${echapperHTML(role?.nom || "")}</small>
                 </button>
             </div>
+        `;
+        return;
+    }
+
+    if (modeEquipe) {
+        navigation.innerHTML = `
+            <div class="bureau-marque"><img class="bureau-logo" src="./logo-version-pc.png" alt="Logo"></div>
+            <nav class="bureau-nav" aria-label="Navigation Espace équipe">
+                ${bouton("accueil-general", "Accueil général", "afficherPortailPrincipal()")}
+                <div class="bureau-nav-separateur">Espaces</div>
+                ${liensEspaces}
+                <div class="bureau-nav-separateur">Espace équipe</div>
+                ${bouton("equipe-menage", "Ménage", "ouvrirRubriqueEquipe('menage')")}
+                ${bouton("equipe-vehicules", "Inventaire véhicule", "ouvrirRubriqueEquipe('vehicules')")}
+                ${bouton("equipe-planning", "Planning", "afficherPlanningEspaceGarde()")}
+                ${bouton("equipe-heures", "Enregistrer des heures", "ouvrirRubriqueEquipe('heures')")}
+                ${bouton("equipe-mail", "Envoi par mail", "afficherEnvoiDocumentsEquipe()", utilisateurAPermission("acces_envoi_mail"))}
+                ${bouton("equipe-administratif", "Administratif", "afficherAdministrationEquipe()", utilisateurAccesAdministratifCentral())}
+            </nav>
+            <div class="bureau-utilisateur"><button type="button" class="bureau-profil" onclick="ouvrirProfilDepuisPageCourante()"><strong>${echapperHTML(obtenirNomUtilisateurAffiche())}</strong><small>${echapperHTML(role?.nom || "")}</small></button></div>
         `;
         return;
     }
@@ -21630,7 +21757,8 @@ function actualiserInterfaceBureau() {
                 
                 
                 <div class="bureau-nav-separateur">Autres espaces</div>
-                ${bouton("pharmacie", "Espace Pharmacie", "afficherAccueil()")}
+                ${bouton("pharmacie", "Espace Pharmacie", "afficherAccueil()", utilisateurPeutAccederPharmacie())}
+                ${bouton("equipe-accueil", "Espace équipe", "afficherEspaceGarde()")}
             </nav>
             <div class="bureau-utilisateur">
                 <button type="button" class="bureau-profil ${actif === "profil" ? "actif" : ""}" onclick="ouvrirProfilDepuisPageCourante()">
@@ -21736,6 +21864,9 @@ function actualiserInterfaceBureau() {
                 "afficherMenuAdministrateurAppli()",
                 utilisateurEstSPVAdmin()
             )}
+
+            <div class="bureau-nav-separateur">Espaces</div>
+            ${liensEspaces}
 
         </nav>
 
