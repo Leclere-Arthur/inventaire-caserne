@@ -15,7 +15,7 @@ importScripts("./notifications-history.js");
  * à récupérer le nouvel app.js.
  */
 
-const CACHE_NAME = "inventaire-caserne-v99-interface-pc";
+const CACHE_NAME = "inventaire-caserne-v100-equipe-cartes";
 
 
 /*

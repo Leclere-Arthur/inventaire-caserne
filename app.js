@@ -725,7 +725,7 @@ const DOMAINE_EMAIL_INTERNE =
     "inventaire-caserne.local";
 
 const VERSION_APPLICATION =
-    "2.9.47";
+    "2.9.48";
 
 const CLE_PROFIL_UTILISATEUR_CACHE =
     "profil_utilisateur_connecte_v1";
@@ -1024,7 +1024,7 @@ let minuteurVerificationMiseAJour =
  * Elle permet de détecter une nouvelle version même si seul app.js change.
  */
 const VERSION_APPLICATION_JS =
-    "2026-10-16-interface-pc-v60";
+    "2026-10-16-equipe-cartes-v61";
 
 async function verifierNouvelleVersionAppJs() {
 
@@ -22226,6 +22226,12 @@ function initialiserStyleEspaceGardeUtilisateur(){
       
       .garde-menu-entete small{font-weight:900;letter-spacing:.1em;color:#68727a}.garde-menu-entete h1{margin:5px 0 20px;font-size:29px}
       .garde-menu-cartes{display:grid;gap:13px}
+      .espace-equipe-menu .garde-menu-cartes{gap:15px}
+      .espace-equipe-menu .garde-menu-carte{min-height:78px;padding:15px 20px;border-radius:14px;gap:18px}
+      .espace-equipe-menu .garde-menu-carte .ico{width:48px;height:48px;border-radius:12px;font-size:26px}
+      .espace-equipe-menu .garde-menu-carte strong{font-size:18px;color:#007aff}
+      @media(max-width:600px){.espace-equipe-menu .garde-menu-carte{min-height:72px;padding:12px 14px}.espace-equipe-menu .garde-menu-carte .ico{width:42px;height:42px;font-size:23px}.espace-equipe-menu .garde-menu-carte strong{font-size:16px}}
+      @media(min-width:1000px){body:not(.mode-connexion) .espace-equipe-menu .garde-menu-carte{min-height:76px;padding:15px 16px;gap:13px;border-radius:9px}body:not(.mode-connexion) .espace-equipe-menu .garde-menu-carte .ico{width:34px;height:34px;border-radius:8px;font-size:16px}body:not(.mode-connexion) .espace-equipe-menu .garde-menu-carte strong{font-size:13px;color:#75b9ff}}
       .garde-menu-carte{width:100%;box-sizing:border-box;border:0;border-radius:17px;background:#fff;box-shadow:0 4px 18px rgba(0,0,0,.09);padding:18px;text-align:left;display:flex;align-items:center;gap:15px;cursor:pointer}
       .garde-menu-carte .ico{width:49px;height:49px;border-radius:14px;background:#e8f4ee;display:grid;place-items:center;font-size:25px;flex:0 0 auto}
       .garde-menu-carte strong{display:block;font-size:18px;color:#20272b}.garde-menu-carte span{display:block;color:#707980;margin-top:3px;font-size:13px}.garde-menu-carte .fleche{margin-left:auto;font-size:25px;color:#a0a7ac}
@@ -22275,7 +22281,7 @@ function retourAccueilDepuisEspaceEquipe(){
 function afficherEspaceGarde(){
     initialiserStyleEspaceGardeUtilisateur();
     document.getElementById("app").innerHTML=`
-      <main class="garde-menu-page">
+      <main class="garde-menu-page espace-equipe-menu">
         <button class="retour-button" data-navigation-equipe onclick="retourAccueilDepuisEspaceEquipe()">← Retour</button>
         <header class="garde-menu-entete"><h1>Espace équipe</h1></header>
         <div class="garde-menu-cartes">
