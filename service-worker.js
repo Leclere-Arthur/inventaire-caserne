@@ -15,7 +15,7 @@ importScripts("./notifications-history.js");
  * à récupérer le nouvel app.js.
  */
 
-const CACHE_NAME = "inventaire-caserne-v104-planning-etoile";
+const CACHE_NAME = "inventaire-caserne-v105-planning-jour-actuel";
 
 
 /*
