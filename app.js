@@ -725,7 +725,7 @@ const DOMAINE_EMAIL_INTERNE =
     "inventaire-caserne.local";
 
 const VERSION_APPLICATION =
-    "2.9.53";
+    "2.9.54";
 
 const CLE_PROFIL_UTILISATEUR_CACHE =
     "profil_utilisateur_connecte_v1";
@@ -1031,7 +1031,7 @@ let minuteurVerificationMiseAJour =
  * Elle permet de détecter une nouvelle version même si seul app.js change.
  */
 const VERSION_APPLICATION_JS =
-    "2026-10-17-planning-jour-actuel-v66";
+    "2026-10-17-menage-inventaires-admin-v67";
 
 async function verifierNouvelleVersionAppJs() {
 
@@ -22903,7 +22903,7 @@ function htmlPlanMenageHistorique(zones){
 async function afficherAdminMenageEquipe(){
     if(!utilisateurAPermission("acces_admin_menage")){alert("Accès non autorisé.");return}
     initialiserStyleEspaceGardeUtilisateur();
-    document.getElementById("app").innerHTML=`<main class="garde-section"><button class="retour-button" data-navigation-equipe onclick="retourAdminRubriqueEquipe('menage')">← Retour</button><h1>Administration ménage</h1><button type="button" class="equipe-action-button" onclick="afficherChoixPDFEquipe('menage')">Télécharger le PDF des ménages</button><div id="admin-menage-chargement" class="garde-planning-attente">Chargement…</div></main>${navigationPrincipale("","accueil")}`;
+    document.getElementById("app").innerHTML=`<main class="garde-section"><button class="retour-button" data-navigation-equipe onclick="retourAdminRubriqueEquipe('menage')">← Retour</button><h1>Administration ménage</h1><div id="admin-menage-chargement" class="garde-planning-attente">Chargement…</div></main>${navigationPrincipale("","accueil")}`;
     actualiserInterfaceBureau();
     const supabase=obtenirClientSupabase();
     const hist=await chargerMetadonneesHistorique(() => supabase.from("menages_garde").select("id,date_menage,zones_nettoyees,personnes_presentes,duree_minutes").order("date_menage",{ascending:false}).order("id",{ascending:false}));
@@ -22919,7 +22919,7 @@ async function afficherAdminMenageEquipe(){
     const totalPresences=[...presence.values()].reduce((a,b)=>a+b,0);
     const personnes=[...presence.keys()];
     document.getElementById("app").innerHTML=`<main class="garde-section">
-      <button class="retour-button" data-navigation-equipe onclick="retourAdminRubriqueEquipe('menage')">← Retour</button><h1>Administration ménage</h1><button type="button" class="equipe-action-button" onclick="afficherChoixPDFEquipe('menage')">Télécharger le PDF des ménages</button>
+      <button class="retour-button" data-navigation-equipe onclick="retourAdminRubriqueEquipe('menage')">← Retour</button><h1>Administration ménage</h1>
       <h2 class="garde-sous-titre">Dernier nettoyage par zone</h2>
       ${zoneStats.map(s=>`<div class="garde-stat-ligne"><strong>${echapperHTML(s.z)}</strong><small class="${classeDateMenage(s.date)}">${s.date?formaterDateMenageLongue(s.date):"Jamais"}</small></div>`).join("")}
       <h2 class="garde-sous-titre">Présences</h2>
@@ -22931,7 +22931,7 @@ async function afficherAdminMenageEquipe(){
 async function afficherDetailMenageEquipe(id){
     if(!utilisateurAPermission("acces_admin_menage"))return alert("Accès non autorisé.");
     initialiserStyleEspaceGardeUtilisateur();
-    document.getElementById("app").innerHTML=`<main class="garde-section"><button class="retour-button" data-navigation-equipe onclick="afficherAdminMenageEquipe()">← Retour</button><h1>Détail du ménage</h1><button type="button" class="equipe-action-button" onclick="exporterEquipePDF('menage','${echapperHTML(String(id))}')">Télécharger le PDF</button><div id="detail-menage-chargement" class="garde-planning-attente">Chargement…</div></main>${navigationPrincipale("","accueil")}`;
+    document.getElementById("app").innerHTML=`<main class="garde-section"><button class="retour-button" data-navigation-equipe onclick="afficherAdminMenageEquipe()">← Retour</button><h1>Détail du ménage</h1><div id="detail-menage-chargement" class="garde-planning-attente">Chargement…</div></main>${navigationPrincipale("","accueil")}`;
     actualiserInterfaceBureau();
     const supabase=obtenirClientSupabase();const {data:r,error}=await supabase.from("menages_garde").select("*").eq("id",id).single();
     if(!document.getElementById("detail-menage-chargement"))return;
@@ -22939,7 +22939,7 @@ async function afficherDetailMenageEquipe(id){
     if(!utilisateursEspaceGarde.length)utilisateursEspaceGarde=await chargerUtilisateursEspaceGarde();
     if(!document.getElementById("detail-menage-chargement"))return;
     const nom=id=>{const u=utilisateursEspaceGarde.find(x=>String(x.id)===String(id));return u?([u.prenom,u.nom].filter(Boolean).join(" ")||u.identifiant):"Utilisateur"};
-    document.getElementById("app").innerHTML=`<main class="garde-section"><button class="retour-button" data-navigation-equipe onclick="afficherAdminMenageEquipe()">← Retour</button><h1>Détail du ménage</h1><button type="button" class="equipe-action-button" onclick="exporterEquipePDF('menage','${echapperHTML(String(id))}')">Télécharger le PDF</button>
+    document.getElementById("app").innerHTML=`<main class="garde-section"><button class="retour-button" data-navigation-equipe onclick="afficherAdminMenageEquipe()">← Retour</button><h1>Détail du ménage</h1>
     ${htmlPlanMenageHistorique(r.zones_nettoyees||[])}
     <div class="garde-admin-card"><strong>Enregistrement créé par</strong><p>${echapperHTML(nom(r.enregistre_par))}</p><strong>Date</strong><p>${new Date(r.date_menage).toLocaleString("fr-FR")}</p><strong>Temps passé</strong><p>${r.duree_minutes||0} min</p><strong>Zones nettoyées</strong><p>${(r.zones_nettoyees||[]).map(echapperHTML).join(" · ")}</p><strong>Personnes présentes</strong><p>${(r.personnes_presentes||[]).map(x=>echapperHTML(nom(x))).join(" · ")}</p>${(r.produits_vides||[]).length?`<strong>Produits vidés</strong><p>${r.produits_vides.map(p=>echapperHTML(p.nom||"Produit")+" × "+Number(p.quantite)).join(" · ")}</p>`:""}</div></main>${navigationPrincipale("","accueil")}`;
     actualiserInterfaceBureau();
@@ -22959,7 +22959,7 @@ function inventairesAdminAuteur(r){
 async function afficherAdminInventairesEquipe(){
  if(!utilisateurAPermission('acces_admin_menage')){alert('Accès non autorisé.');return;}
  initialiserStyleEspaceGardeUtilisateur();
- document.getElementById('app').innerHTML=`<main class="garde-section"><button class="retour-button" data-navigation-equipe onclick="retourAdminRubriqueEquipe('vehicules')">← Retour</button><h1>Administration inventaires</h1><button type="button" class="equipe-action-button" onclick="afficherChoixPDFEquipe('vehicules')">Télécharger le PDF des inventaires</button><div id="admin-inventaires-chargement" class="garde-planning-attente">Chargement…</div></main>${navigationPrincipale('','accueil')}`;
+ document.getElementById('app').innerHTML=`<main class="garde-section"><button class="retour-button" data-navigation-equipe onclick="retourAdminRubriqueEquipe('vehicules')">← Retour</button><h1>Administration inventaires</h1><div id="admin-inventaires-chargement" class="garde-planning-attente">Chargement…</div></main>${navigationPrincipale('','accueil')}`;
  actualiserInterfaceBureau();
  const sb=obtenirClientSupabase();
  if(!sb){document.getElementById('admin-inventaires-chargement').textContent='Connexion indisponible.';return;}
@@ -22971,7 +22971,7 @@ async function afficherAdminInventairesEquipe(){
  if(!utilisateursEspaceGarde.length){try{utilisateursEspaceGarde=await chargerUtilisateursEspaceGarde();}catch(e){console.warn('Noms des contrôleurs indisponibles',e);}}
  if(!document.getElementById('admin-inventaires-chargement'))return;
  const vehicules=[...new Set(inventairesAdminCache.map(r=>r.vehicule_nom).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'fr'));
- document.getElementById('app').innerHTML=`<main class="garde-section"><button class="retour-button" data-navigation-equipe onclick="retourAdminRubriqueEquipe('vehicules')">← Retour</button><h1>Administration inventaires</h1><button type="button" class="equipe-action-button" onclick="afficherChoixPDFEquipe('vehicules')">Télécharger le PDF des inventaires</button>
+ document.getElementById('app').innerHTML=`<main class="garde-section"><button class="retour-button" data-navigation-equipe onclick="retourAdminRubriqueEquipe('vehicules')">← Retour</button><h1>Administration inventaires</h1>
  <h2 class="garde-sous-titre">Dernier inventaire par véhicule</h2>
  ${vehicules.map(v=>{const r=inventairesAdminCache.find(x=>x.vehicule_nom===v);return `<div class="garde-stat-ligne"><strong>${echapperHTML(v)}</strong><small class="${classeDateMenage(r.created_at)}">${inventairesAdminDate(r.created_at)}</small></div>`}).join('')||'<div class="garde-stat-ligne">Aucun inventaire enregistré.</div>'}
  <h2 class="garde-sous-titre">Contrôles réalisés</h2>
@@ -23000,6 +23000,13 @@ async function cartesInventairesProgressives(lot){
  inventairesAdminCache=inventairesAdminCache.map(r=>enrichies.get(String(r.id))||r);
  return lignes.map(r=>{const materiels=inventairesAdminMateriels(r),bon=materiels.filter(m=>m.etat==='bon').length,surv=materiels.filter(m=>m.etat==='a_surveiller').length,hs=materiels.filter(m=>m.etat==='hs').length;return `<div class="garde-admin-card"><button type="button" onclick="afficherDetailInventaireAdminEquipe('${echapperHTML(String(r.id))}')"><strong>${echapperHTML(inventairesAdminNom(r))} · ${echapperHTML(r.vehicule_nom||'Véhicule')}</strong><br><small class="${classeDateMenage(r.created_at)}">${inventairesAdminDate(r.created_at)}</small> · <small>${echapperHTML(inventairesAdminAuteur(r))}</small><br><small>${inventairesAdminZones(r).length} zone(s) · ${bon} Bon · ${surv} À surveiller · ${hs} HS</small></button></div>`}).join('');
 }
+function initialiserStyleEtatsInventaireAdmin(){
+ if(document.getElementById('style-etats-inventaire-admin'))return;
+ const style=document.createElement('style');style.id='style-etats-inventaire-admin';
+ style.textContent=`#app .inventaire-etat{display:inline-block;margin-top:7px;padding:4px 9px;border:1px solid transparent;border-radius:7px;font-size:13px;font-weight:800;line-height:1.4}#app .inventaire-etat-bon{background:#dff5e7;color:#07532b;border-color:#8dc7a3}#app .inventaire-etat-a_surveiller{background:#fff0c2;color:#7a4b00;border-color:#d8b45b}#app .inventaire-etat-hs{background:#ffe2e2;color:#8b1c1c;border-color:#df9999}#app .inventaire-etat-inconnu{background:#e7ebef;color:#505c68;border-color:#b9c2cc}`;
+ document.head.appendChild(style);
+}
+
 async function afficherDetailInventaireAdminEquipe(id){
  if(!utilisateurAPermission('acces_admin_menage')){alert('Accès non autorisé.');return;}
  let r=inventairesAdminCache.find(x=>String(x.id)===String(id));
@@ -23011,12 +23018,12 @@ async function afficherDetailInventaireAdminEquipe(id){
    r=data;inventairesAdminCache=inventairesAdminCache.filter(x=>String(x.id)!==String(id)).concat([r]);
   }catch(erreur){alert('Détail indisponible : '+(erreur?.message||'Réessaie dans un instant.'));return;}
  }
- initialiserStyleEspaceGardeUtilisateur();
+ initialiserStyleEspaceGardeUtilisateur();initialiserStyleEtatsInventaireAdmin();
  const zones=inventairesAdminZones(r),materiels=inventairesAdminMateriels(r);
  const etat=m=>m.etat==='bon'?'Bon':m.etat==='a_surveiller'?'À surveiller':m.etat==='hs'?'HS':'Non renseigné';
- document.getElementById('app').innerHTML=`<main class="garde-section"><button class="retour-button" data-navigation-equipe onclick="afficherAdminInventairesEquipe()">← Retour</button><h1>Détail de l’inventaire</h1><button type="button" class="equipe-action-button" onclick="exporterEquipePDF('vehicules','${echapperHTML(String(id))}')">Télécharger le PDF</button>
+ document.getElementById('app').innerHTML=`<main class="garde-section"><button class="retour-button" data-navigation-equipe onclick="afficherAdminInventairesEquipe()">← Retour</button><h1>Détail de l’inventaire</h1>
  <div class="garde-admin-card"><strong>${echapperHTML(inventairesAdminNom(r))}</strong><p><strong>Véhicule :</strong> ${echapperHTML(r.vehicule_nom||'Non renseigné')}</p><p><strong>Date :</strong> <span class="${classeDateMenage(r.created_at)}">${inventairesAdminDate(r.created_at)}</span></p><p><strong>Enregistré par :</strong> ${echapperHTML(inventairesAdminAuteur(r))}</p><p><strong>Zones contrôlées :</strong> ${zones.length}</p><p><strong>Matériel :</strong> ${materiels.filter(m=>m.etat==='bon').length} Bon · ${materiels.filter(m=>m.etat==='a_surveiller').length} À surveiller · ${materiels.filter(m=>m.etat==='hs').length} HS</p></div>
- ${zones.map(z=>`<h2 class="garde-sous-titre">${echapperHTML(z.zone_nom||'Zone')}</h2>${(Array.isArray(z.materiels)?z.materiels:[]).map(m=>`<div class="garde-stat-ligne"><strong>${echapperHTML(m.nom||'Matériel')} × ${Number(m.quantite)||1}${m.quantite_constatee!=null&&Number(m.quantite_constatee)!==Number(m.quantite)?` <span style="color:#b42323;font-weight:900">— QUANTITÉ CONSTATÉE : ${Number(m.quantite_constatee)} (prévu : ${Number(m.quantite)})</span>`:''}</strong><small>${echapperHTML(etat(m))}</small>${m.observation?`<p>Observation : ${echapperHTML(m.observation)}</p>`:''}</div>`).join('')||'<div class="garde-stat-ligne">Aucun matériel.</div>'}`).join('')||'<div class="garde-stat-ligne">Aucune zone enregistrée.</div>'}
+ ${zones.map(z=>`<h2 class="garde-sous-titre">${echapperHTML(z.zone_nom||'Zone')}</h2>${(Array.isArray(z.materiels)?z.materiels:[]).map(m=>`<div class="garde-stat-ligne"><strong>${echapperHTML(m.nom||'Matériel')} × ${Number(m.quantite)||1}${m.quantite_constatee!=null&&Number(m.quantite_constatee)!==Number(m.quantite)?` <span style="color:#b42323;font-weight:900">— QUANTITÉ CONSTATÉE : ${Number(m.quantite_constatee)} (prévu : ${Number(m.quantite)})</span>`:''}</strong><small class="inventaire-etat inventaire-etat-${['bon','a_surveiller','hs'].includes(m.etat)?m.etat:'inconnu'}">${echapperHTML(etat(m))}</small>${m.observation?`<p>Observation : ${echapperHTML(m.observation)}</p>`:''}</div>`).join('')||'<div class="garde-stat-ligne">Aucun matériel.</div>'}`).join('')||'<div class="garde-stat-ligne">Aucune zone enregistrée.</div>'}
  </main>${navigationPrincipale('','accueil')}`;
  actualiserInterfaceBureau();window.scrollTo({top:0,behavior:'auto'});
 }
@@ -23240,12 +23247,38 @@ function styleInventaireMenage(){
 async function afficherInventaireMenage(){
  if(!utilisateurAPermission('acces_admin_menage'))return alert('Accès non autorisé.');
  initialiserStyleEspaceGardeUtilisateur();styleInventaireMenage();
- document.getElementById('app').innerHTML=`<main class="garde-section"><button class="retour-button" data-navigation-equipe onclick="retourAdminRubriqueEquipe('menage')">← Retour</button><h1>Ménage inventaire</h1><button class="equipe-action-button" onclick="afficherInventaireMenage()">Actualiser</button><div id="menage-stock-liste" aria-live="polite">Chargement…</div></main>${navigationPrincipale('','accueil')}`;actualiserInterfaceBureau();
+ document.getElementById('app').innerHTML=`<main class="garde-section"><button class="retour-button" data-navigation-equipe onclick="retourAdminRubriqueEquipe('menage')">← Retour</button><h1>Ménage inventaire</h1><button class="equipe-action-button" onclick="afficherInventaireMenage()">Actualiser</button> <button type="button" id="menage-produit-ouvrir" class="equipe-action-button" aria-expanded="false" aria-controls="menage-produit-creation" onclick="basculerCreationProduitMenage()">Créer un nouveau produit</button><form id="menage-produit-creation" class="garde-admin-card heures-form" hidden style="display:none" onsubmit="event.preventDefault();creerProduitMenageDepuisInventaire()"><h2 class="garde-sous-titre">Nouveau produit</h2><label for="menage-produit-nom">Nom du produit<input class="heures-input" id="menage-produit-nom" maxlength="120" required autocomplete="off"></label><label for="menage-produit-stock">Stock initial (unités)<input class="heures-input" id="menage-produit-stock" type="number" min="0" step="1" value="0" required inputmode="numeric"></label><div><button type="submit" id="menage-produit-creer" class="equipe-action-button">Créer le produit</button> <button type="button" class="equipe-action-button" onclick="basculerCreationProduitMenage()">Annuler</button></div><p id="menage-produit-statut" role="status" aria-live="polite"></p></form><p id="menage-stock-message" role="status" aria-live="polite"></p><div id="menage-stock-liste" aria-live="polite">Chargement…</div></main>${navigationPrincipale('','accueil')}`;actualiserInterfaceBureau();
  const box=document.getElementById('menage-stock-liste');
  try{
   const {data,error}=await obtenirClientSupabase().from('menage_produits').select('id,nom,stock').order('nom');if(error)throw error;if(!box.isConnected)return;
-  box.innerHTML=(data||[]).map(p=>`<div class="garde-admin-card ${p.stock===0?'menage-rupture':''}"><strong>${echapperHTML(p.nom)}</strong><p><b>${p.stock===0?'⚠ RUPTURE DE STOCK':'Stock actuel : '+p.stock+' unité(s)'}</b></p><div class="menage-stock-actions"><label>Quantité <input type="number" min="1" step="1" value="1" data-stock-quantite></label><button type="button" data-stock-id="${echapperHTML(p.id)}" onclick="ajusterStockMenage(this,1)">+ Ajouter</button><button type="button" data-stock-id="${echapperHTML(p.id)}" onclick="ajusterStockMenage(this,-1)">− Diminuer</button></div><p data-stock-statut role="status"></p></div>`).join('')||'<div class="garde-admin-card">Aucun produit. Ajoute les produits dans l’application admin.</div>';
+  box.innerHTML=(data||[]).map(p=>`<div class="garde-admin-card ${p.stock===0?'menage-rupture':''}"><strong>${echapperHTML(p.nom)}</strong><p><b>${p.stock===0?'⚠ RUPTURE DE STOCK':'Stock actuel : '+p.stock+' unité(s)'}</b></p><div class="menage-stock-actions"><label>Quantité <input type="number" min="1" step="1" value="1" data-stock-quantite></label><button type="button" data-stock-id="${echapperHTML(p.id)}" onclick="ajusterStockMenage(this,1)">+ Ajouter</button><button type="button" data-stock-id="${echapperHTML(p.id)}" onclick="ajusterStockMenage(this,-1)">− Diminuer</button></div><p data-stock-statut role="status"></p></div>`).join('')||'<div class="garde-admin-card">Aucun produit. Crée un produit avec le bouton ci-dessus.</div>';
  }catch(e){if(box.isConnected)box.textContent='Inventaire indisponible : '+e.message;}
+}
+
+let creationProduitMenageCle=null,creationProduitMenageSignature='',creationProduitMenageEnCours=false;
+function basculerCreationProduitMenage(){
+ if(!utilisateurAPermission('acces_admin_menage')||creationProduitMenageEnCours)return;
+ const form=document.getElementById('menage-produit-creation'),bouton=document.getElementById('menage-produit-ouvrir');if(!form||!bouton)return;
+ const ouvrir=form.hidden;form.hidden=!ouvrir;form.style.display=ouvrir?'grid':'none';bouton.setAttribute('aria-expanded',String(ouvrir));
+ if(ouvrir)document.getElementById('menage-produit-nom').focus();
+}
+async function creerProduitMenageDepuisInventaire(){
+ if(!utilisateurAPermission('acces_admin_menage'))return alert('Accès non autorisé.');
+ if(creationProduitMenageEnCours)return;
+ const form=document.getElementById('menage-produit-creation');if(!form)return;
+ const statut=document.getElementById('menage-produit-statut'),nom=document.getElementById('menage-produit-nom').value.trim(),raw=document.getElementById('menage-produit-stock').value,stock=Number(raw);
+ if(!nom||nom.length>120||raw.trim()===''||!Number.isSafeInteger(stock)||stock<0){statut.textContent='Indique un nom et un stock entier positif ou nul.';return;}
+ creationProduitMenageEnCours=true;
+ const champs=[...form.querySelectorAll('input,button')];champs.forEach(c=>c.disabled=true);statut.textContent='Création du produit…';
+ try{
+  const signature=JSON.stringify([nom,stock]);
+  if(signature!==creationProduitMenageSignature){creationProduitMenageSignature=signature;creationProduitMenageCle=crypto.randomUUID();}
+  const sb=obtenirClientSupabase();if(!sb)throw new Error('Connexion indisponible.');
+  const {error}=await sb.rpc('menage_creer_produit',{p_nom:nom,p_stock:stock,p_cle:creationProduitMenageCle});if(error)throw error;
+  creationProduitMenageCle=null;creationProduitMenageSignature='';
+  if(form.isConnected){await afficherInventaireMenage();const message=document.getElementById('menage-stock-message');if(message)message.textContent='Produit créé.';}
+ }catch(erreur){if(form.isConnected)statut.textContent='Création impossible : '+(erreur?.message||'Réessaie dans un instant.');}
+ finally{creationProduitMenageEnCours=false;champs.forEach(c=>c.disabled=false);}
 }
 async function ajusterStockMenage(btn,sens){
  if(!utilisateurAPermission('acces_admin_menage'))return;
