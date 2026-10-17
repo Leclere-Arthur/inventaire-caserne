@@ -725,7 +725,7 @@ const DOMAINE_EMAIL_INTERNE =
     "inventaire-caserne.local";
 
 const VERSION_APPLICATION =
-    "2.9.51";
+    "2.9.52";
 
 const CLE_PROFIL_UTILISATEUR_CACHE =
     "profil_utilisateur_connecte_v1";
@@ -1031,7 +1031,7 @@ let minuteurVerificationMiseAJour =
  * Elle permet de détecter une nouvelle version même si seul app.js change.
  */
 const VERSION_APPLICATION_JS =
-    "2026-10-17-planning-lignes-v64";
+    "2026-10-17-planning-etoile-v65";
 
 async function verifierNouvelleVersionAppJs() {
 
@@ -22669,6 +22669,7 @@ function initialiserStyleCalendrierPlanningGarde(){
  .planning-mensuel-cadre{background:#fff;border:1px solid #dde3e8;border-radius:16px;padding:14px;color:#20272b}
  .planning-mensuel-entete{display:flex;align-items:center;gap:9px;margin-bottom:14px;flex-wrap:wrap}.planning-mensuel-entete h2{flex:1;min-width:140px;margin:0;font-size:22px;text-transform:capitalize}.planning-mensuel-commandes{display:flex;gap:6px;align-items:center}.planning-mensuel-commandes button{min-height:42px;min-width:42px;padding:8px 12px;border:1px solid #d1dae2;border-radius:10px;background:#f4f6f8;color:#007aff;font:inherit;font-weight:750;cursor:pointer}.planning-mensuel-commandes .planning-mois-fleche{font-size:25px;line-height:1}
  .planning-mensuel-table{width:100%;border-collapse:collapse;table-layout:fixed;border:1px solid #9ca6af}.planning-mensuel-table th,.planning-mensuel-table td{height:28px;padding:4px 8px;border:1px solid #a8afb5;vertical-align:middle;box-sizing:border-box;font-size:13px;line-height:1.35;color:#20272b;background:#f5f6f7;overflow-wrap:anywhere}.planning-mensuel-table .planning-mensuel-numero,.planning-mensuel-table .planning-mensuel-jour{width:42px;text-align:center;font-weight:500;background:#eceeef}.planning-mensuel-table .planning-weekend .planning-mensuel-numero,.planning-mensuel-table .planning-weekend .planning-mensuel-jour{background:#dde1e4}.planning-mensuel-jour abbr{text-decoration:none}.planning-mensuel-table td[data-equipe]{background:var(--couleur-equipe);color:#111}.planning-mensuel-equipe{font-weight:750}.planning-mensuel-menage{font-weight:850;white-space:nowrap}.planning-mensuel-table tr[aria-current=date]{outline:2px solid #172b4d;outline-offset:-2px}.planning-mensuel-table tr[aria-current=date] .planning-mensuel-numero{font-weight:900;text-decoration:underline;text-underline-offset:3px}
+ .planning-mensuel-table .planning-mensuel-affectation{position:relative;padding-right:28px}.planning-mensuel-etoile{position:absolute;right:8px;top:50%;transform:translateY(-40%);font-family:"Bradley Hand","Segoe Print",cursive;font-size:19px;font-weight:700;line-height:1;color:inherit}
  .planning-mensuel-note,.planning-mensuel-vide{font-size:12px;color:#64717d;line-height:1.5;margin:12px 0 0}.planning-mensuel-equipes{display:grid;gap:12px}.planning-mensuel-equipe-carte{padding:16px;background:#fff;border:1px solid #dce3e9;border-left:6px solid var(--couleur-equipe);border-radius:12px;color:#20272b}.planning-mensuel-equipe-carte h3{margin:0 0 10px;font-size:17px}.planning-mensuel-personnel{margin:0;padding-left:18px;columns:2;column-gap:20px;font-size:14px;line-height:1.7}.planning-mensuel-personnel li{break-inside:avoid;overflow-wrap:anywhere}.planning-mensuel-equipe-carte p{font-size:14px;margin:0;color:#64717d}.planning-mensuel-export-statut{font-size:14px;line-height:1.5;color:#a22020}.planning-mensuel-erreur button{display:block;margin-top:12px}
  @media(max-width:380px){.planning-mensuel-cadre{padding:10px 7px}.planning-mensuel-table th,.planning-mensuel-table td{padding:4px 6px}.planning-mensuel-table .planning-mensuel-numero,.planning-mensuel-table .planning-mensuel-jour{width:35px}.planning-mensuel-personnel{columns:1}}
  @media(min-width:700px){.planning-mensuel-table th,.planning-mensuel-table td{height:30px;font-size:14px}.planning-mensuel-equipes{grid-template-columns:repeat(2,minmax(0,1fr))}}
@@ -22705,7 +22706,9 @@ function changerMoisPlanningGarde(decalage){
 
 function rendreCalendrierPlanningGarde(){
  const zone=document.getElementById('garde-planning-calendrier'),etat=calendrierPlanningGardeEtat;if(!zone||!etat?.donnees)return;
- const {planning,teams,memberNames}=etat.donnees,mois=etat.mois;
+ const {planning,teams,memberNames,members=[]}=etat.donnees,mois=etat.mois;
+ const monId=String(profilUtilisateurConnecte?.id||'');
+ const mesEquipes=new Set(members.filter(m=>monId&&String(m.utilisateur_id)===monId).map(m=>String(m.equipe_id)));
  const parId=new Map(teams.map(t=>[String(t.id),t]));
  const couleurs=new Map(teams.map((t,i)=>[String(t.id),COULEURS_PLANNING_GARDE[i%COULEURS_PLANNING_GARDE.length]]));
  const nbJours=new Date(mois.getFullYear(),mois.getMonth()+1,0,12).getDate(),aujourdhui=dateISOlocale(new Date());
@@ -22716,8 +22719,9 @@ function rendreCalendrierPlanningGarde(){
   const equipe=garde?parId.get(String(garde.equipe_id)):null,nom=garde?(equipe?.nom||'Équipe'):'';
   if(garde)programme=true;
   const menage=!!garde&&date.getDay()===5,iso=dateISOlocale(date);
-  const libelle=date.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long',year:'numeric'})+(garde?' · '+nom:' · Aucune garde renseignée')+(menage?' · Ménage':'');
-  cellules+=`<tr data-date="${iso}" class="${date.getDay()===0||date.getDay()===6?'planning-weekend':''}" ${iso===aujourdhui?'aria-current="date"':''} aria-label="${echapperHTML(libelle)}"><th scope="row" class="planning-mensuel-numero">${jour}</th><td class="planning-mensuel-jour"><abbr title="${date.toLocaleDateString('fr-FR',{weekday:'long'})}">${lettres[date.getDay()]}</abbr></td><td class="planning-mensuel-affectation" ${garde?`data-equipe="${echapperHTML(String(garde.equipe_id))}" style="--couleur-equipe:${couleurs.get(String(garde.equipe_id))||'#dddddd'}"`:''}><span class="planning-mensuel-equipe">${garde?echapperHTML(nom):'—'}</span>${menage?'<span class="planning-mensuel-menage"> · MÉNAGE</span>':''}</td></tr>`;
+  const maGarde=!!garde&&mesEquipes.has(String(garde.equipe_id));
+  const libelle=date.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long',year:'numeric'})+(garde?' · '+nom:' · Aucune garde renseignée')+(menage?' · Ménage':'')+(maGarde?' · Ta semaine de garde':'');
+  cellules+=`<tr data-date="${iso}" class="${date.getDay()===0||date.getDay()===6?'planning-weekend':''}" ${iso===aujourdhui?'aria-current="date"':''} aria-label="${echapperHTML(libelle)}"><th scope="row" class="planning-mensuel-numero">${jour}</th><td class="planning-mensuel-jour"><abbr title="${date.toLocaleDateString('fr-FR',{weekday:'long'})}">${lettres[date.getDay()]}</abbr></td><td class="planning-mensuel-affectation" ${garde?`data-equipe="${echapperHTML(String(garde.equipe_id))}" style="--couleur-equipe:${couleurs.get(String(garde.equipe_id))||'#dddddd'}"`:''}><span class="planning-mensuel-equipe">${garde?echapperHTML(nom):'—'}</span>${menage?'<span class="planning-mensuel-menage"> · MÉNAGE</span>':''}${maGarde?'<span class="planning-mensuel-etoile" aria-hidden="true" title="Ta semaine de garde">*</span>':''}</td></tr>`;
  }
  zone.dataset.mois=dateISOlocale(mois).slice(0,7);
  zone.innerHTML=`<section class="planning-mensuel-cadre" aria-labelledby="planning-mensuel-mois"><header class="planning-mensuel-entete"><h2 id="planning-mensuel-mois" aria-live="polite">${echapperHTML(mois.toLocaleDateString('fr-FR',{month:'long',year:'numeric'}))}</h2><div class="planning-mensuel-commandes"><button type="button" class="planning-mois-fleche" aria-label="Mois précédent" onclick="changerMoisPlanningGarde(-1)">‹</button><button type="button" onclick="changerMoisPlanningGarde(0)">Aujourd’hui</button><button type="button" class="planning-mois-fleche" aria-label="Mois suivant" onclick="changerMoisPlanningGarde(1)">›</button></div></header><table class="planning-mensuel-table" aria-labelledby="planning-mensuel-mois"><tbody>${cellules}</tbody></table>${programme?'':'<p class="planning-mensuel-vide">Aucune garde programmée pour ce mois.</p>'}<p class="planning-mensuel-note">Relève le vendredi à 19 h. Le ménage du vendredi est indiqué sur la couleur de l’équipe sortante.</p></section><h2 class="garde-sous-titre">Équipes de garde</h2><div class="planning-mensuel-equipes">${teams.map(t=>{const noms=memberNames.get(String(t.id))||[];return `<section class="planning-mensuel-equipe-carte" style="--couleur-equipe:${couleurs.get(String(t.id))}"><h3>${echapperHTML(t.nom||'Équipe')}</h3>${noms.length?`<ul class="planning-mensuel-personnel">${noms.map(n=>`<li>${echapperHTML(n)}</li>`).join('')}</ul>`:'<p>Aucun personnel renseigné.</p>'}</section>`}).join('')||'<p>Aucune équipe enregistrée.</p>'}</div><button type="button" id="planning-mensuel-export" class="garde-planning-save" onclick="enregistrerPlanningMensuelEnPhoto()" ${etat.exportEnCours||!planning.length?'disabled':''}>${etat.exportEnCours?'Préparation de la photo…':'Enregistrer le planning en photo'}</button><p id="planning-mensuel-export-statut" class="planning-mensuel-export-statut" role="status"></p>`;
