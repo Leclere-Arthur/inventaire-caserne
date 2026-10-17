@@ -725,7 +725,7 @@ const DOMAINE_EMAIL_INTERNE =
     "inventaire-caserne.local";
 
 const VERSION_APPLICATION =
-    "2.9.49";
+    "2.9.50";
 
 const CLE_PROFIL_UTILISATEUR_CACHE =
     "profil_utilisateur_connecte_v1";
@@ -835,6 +835,11 @@ function retourPagePrecedente() {
     app.innerHTML = precedent.html;
     etatNavigationCourante = precedent;
     void initialiserListesHistoriquesProgressives(app);
+    if (app.querySelector('#garde-planning-calendrier')) {
+        restaurationNavigationEnCours = false;
+        void afficherPlanningEspaceGarde(app.querySelector('#garde-planning-calendrier').dataset.mois);
+        return;
+    }
     if (app.querySelector('#garde-menage-duree')) {
         restaurationNavigationEnCours = false;
         void afficherMenageEspaceGarde();
@@ -1026,7 +1031,7 @@ let minuteurVerificationMiseAJour =
  * Elle permet de détecter une nouvelle version même si seul app.js change.
  */
 const VERSION_APPLICATION_JS =
-    "2026-10-16-historiques-progressifs-v62";
+    "2026-10-17-planning-mensuel-v63";
 
 async function verifierNouvelleVersionAppJs() {
 
@@ -22653,25 +22658,93 @@ window.vehInventaireAfficherZones=vehInventaireAfficherZones;
 window.vehInventaireTerminer=vehInventaireTerminer;
 window.vehInventaireQuitter=vehInventaireQuitter;
 
-/* Le planning est une IMAGE PNG unique, pas un tableau HTML.
-   Elle est générée une fois à partir des données puis affichée comme une photo. */
-async function afficherPlanningEspaceGarde(){
-    initialiserStyleEspaceGardeUtilisateur();
-    document.getElementById("app").innerHTML=`
-      <main class="garde-section"><button class="retour-button" data-navigation-equipe onclick="afficherEspaceGarde()">← Espace équipe</button><h1>Planning</h1>
-      <div id="garde-planning-photo" class="garde-planning-attente">Création du planning…</div></main>${navigationPrincipale("","accueil")}`;
-    actualiserInterfaceBureau();
-    try{
-      const url=await creerPhotoPlanningGarde();
-      const c=document.getElementById("garde-planning-photo");
-      if(c)c.outerHTML=`<div><div class="garde-planning-scroll"><img class="garde-planning-img planning-photo-cliquable" src="${url}" alt="Planning des gardes" onclick="ouvrirPlanningEquipeGrand('${url}')"></div><button type="button" class="garde-planning-save" onclick="enregistrerPhotoPlanningEquipe('${url}')">Enregistrer le planning dans les photos</button></div>`;
-    }catch(e){
-      const c=document.getElementById("garde-planning-photo");
-      if(c)c.textContent="Le planning n’est pas disponible pour le moment.";
-    }
+/* Calendrier consultable ; le modèle PNG reste réservé à l'enregistrement. */
+const COULEURS_PLANNING_GARDE=["#ff5a5a","#92d050","#19a9e5","#ffc000","#9b6bd3","#5ac8c8","#ff8ac6","#70ad47"];
+let calendrierPlanningGardeEtat=null;
+
+function initialiserStyleCalendrierPlanningGarde(){
+ if(document.getElementById('style-calendrier-planning-garde'))return;
+ const style=document.createElement('style');style.id='style-calendrier-planning-garde';
+ style.textContent=`
+ .planning-mensuel-cadre{background:#fff;border:1px solid #dde3e8;border-radius:16px;padding:14px;color:#20272b}
+ .planning-mensuel-entete{display:flex;align-items:center;gap:9px;margin-bottom:14px;flex-wrap:wrap}.planning-mensuel-entete h2{flex:1;min-width:140px;margin:0;font-size:22px;text-transform:capitalize}.planning-mensuel-commandes{display:flex;gap:6px;align-items:center}.planning-mensuel-commandes button{min-height:42px;min-width:42px;padding:8px 12px;border:1px solid #d1dae2;border-radius:10px;background:#f4f6f8;color:#007aff;font:inherit;font-weight:750;cursor:pointer}.planning-mensuel-commandes .planning-mois-fleche{font-size:25px;line-height:1}
+ .planning-mensuel-table{width:100%;border-collapse:separate;border-spacing:3px;table-layout:fixed}.planning-mensuel-table th{padding:7px 0;font-size:12px;color:#626f7a;font-weight:750}.planning-mensuel-table td{height:77px;vertical-align:top;padding:6px 4px;border-radius:8px;background:#f0f3f6;color:#1c242b;overflow-wrap:anywhere;box-sizing:border-box}.planning-mensuel-table td[data-equipe]{background:var(--couleur-equipe);color:#111}.planning-mensuel-table td.planning-hors-mois{opacity:.42}.planning-mensuel-numero{display:block;font-size:15px;font-weight:850}.planning-mensuel-equipe{display:block;font-size:10px;font-weight:650;line-height:1.25;margin-top:6px}.planning-mensuel-menage{display:block;width:fit-content;max-width:100%;margin-top:5px;padding:2px 3px;border-radius:4px;background:#fff;color:#171d24;font-size:9px;font-weight:850;line-height:1.3}.planning-mensuel-table td[aria-current=date]{outline:3px solid #172b4d;outline-offset:-3px}.planning-mensuel-table td[aria-current=date] .planning-mensuel-numero{text-decoration:underline;text-underline-offset:3px}
+ .planning-mensuel-note,.planning-mensuel-vide{font-size:12px;color:#64717d;line-height:1.5;margin:12px 0 0}.planning-mensuel-equipes{display:grid;gap:12px}.planning-mensuel-equipe-carte{padding:16px;background:#fff;border:1px solid #dce3e9;border-left:6px solid var(--couleur-equipe);border-radius:12px;color:#20272b}.planning-mensuel-equipe-carte h3{margin:0 0 10px;font-size:17px}.planning-mensuel-personnel{margin:0;padding-left:18px;columns:2;column-gap:20px;font-size:14px;line-height:1.7}.planning-mensuel-personnel li{break-inside:avoid;overflow-wrap:anywhere}.planning-mensuel-equipe-carte p{font-size:14px;margin:0;color:#64717d}.planning-mensuel-export-statut{font-size:14px;line-height:1.5;color:#a22020}.planning-mensuel-erreur button{display:block;margin-top:12px}
+ @media(max-width:380px){.planning-mensuel-cadre{padding:10px 7px}.planning-mensuel-table{border-spacing:2px}.planning-mensuel-table td{padding:5px 3px}.planning-mensuel-personnel{columns:1}}
+ @media(min-width:700px){.planning-mensuel-table td{height:105px;padding:10px}.planning-mensuel-equipe{font-size:13px}.planning-mensuel-menage{font-size:11px}.planning-mensuel-equipes{grid-template-columns:repeat(2,minmax(0,1fr))}}
+ @media(min-width:1000px){body:not(.mode-connexion) .planning-mensuel-cadre,body:not(.mode-connexion) .planning-mensuel-equipe-carte{background:#141e27;color:#f5f7f9;border-color:#34424f}body:not(.mode-connexion) .planning-mensuel-equipe-carte{border-left-color:var(--couleur-equipe)}body:not(.mode-connexion) .planning-mensuel-commandes button{background:#202c36;border-color:#617687;color:#75b9ff}body:not(.mode-connexion) .planning-mensuel-table th,body:not(.mode-connexion) .planning-mensuel-note,body:not(.mode-connexion) .planning-mensuel-vide,body:not(.mode-connexion) .planning-mensuel-equipe-carte p{color:#a6b3c0}body:not(.mode-connexion) .planning-mensuel-table td:not([data-equipe]){background:#202c36;color:#f5f7f9}body:not(.mode-connexion) .planning-mensuel-table td[aria-current=date]{outline-color:#fff}body:not(.mode-connexion) .planning-mensuel-export-statut{color:#ff9595}}
+ `;document.head.appendChild(style);
 }
 
-async function creerPhotoPlanningGarde(){
+function gardePourJourCalendrierPlanning(date,planning){
+ const vendredi=new Date(date);vendredi.setDate(vendredi.getDate()-(vendredi.getDay()-6+7)%7-1);
+ return planning.find(p=>p.date_debut===dateISOlocale(vendredi))||null;
+}
+
+async function afficherPlanningEspaceGarde(mois=null){
+ initialiserStyleEspaceGardeUtilisateur();initialiserStyleCalendrierPlanningGarde();
+ const date=typeof mois==='string'&&/^\d{4}-\d{2}$/.test(mois)?new Date(Number(mois.slice(0,4)),Number(mois.slice(5))-1,1,12):new Date();
+ const etat={mois:new Date(date.getFullYear(),date.getMonth(),1,12),donnees:null,photo:null,exportEnCours:false};calendrierPlanningGardeEtat=etat;
+ document.getElementById('app').innerHTML=`<main class="garde-section"><button class="retour-button" data-navigation-equipe onclick="afficherEspaceGarde()">← Espace équipe</button><h1>Planning</h1><div id="garde-planning-calendrier" data-mois="${dateISOlocale(etat.mois).slice(0,7)}"><div class="garde-planning-attente" role="status">Chargement du planning…</div></div></main>${navigationPrincipale('','accueil')}`;
+ const zone=document.getElementById('garde-planning-calendrier');actualiserInterfaceBureau();
+ try{
+  etat.donnees=await chargerDonneesPlanningGarde();
+  if(!zone.isConnected||calendrierPlanningGardeEtat!==etat)return;
+  rendreCalendrierPlanningGarde();
+ }catch(erreur){
+  if(zone.isConnected)zone.innerHTML=`<div class="garde-planning-attente planning-mensuel-erreur" role="status">Le planning n’est pas disponible pour le moment.<button type="button" class="equipe-action-button" onclick="afficherPlanningEspaceGarde('${dateISOlocale(etat.mois).slice(0,7)}')">Réessayer</button></div>`;
+  console.warn('Calendrier des gardes :',erreur);
+ }
+}
+
+function changerMoisPlanningGarde(decalage){
+ const etat=calendrierPlanningGardeEtat;if(!etat?.donnees||![-1,0,1].includes(decalage))return;
+ const d=decalage===0?new Date():new Date(etat.mois.getFullYear(),etat.mois.getMonth()+decalage,1,12);
+ etat.mois=new Date(d.getFullYear(),d.getMonth(),1,12);rendreCalendrierPlanningGarde();
+}
+
+function rendreCalendrierPlanningGarde(){
+ const zone=document.getElementById('garde-planning-calendrier'),etat=calendrierPlanningGardeEtat;if(!zone||!etat?.donnees)return;
+ const {planning,teams,memberNames}=etat.donnees,mois=etat.mois;
+ const parId=new Map(teams.map(t=>[String(t.id),t]));
+ const couleurs=new Map(teams.map((t,i)=>[String(t.id),COULEURS_PLANNING_GARDE[i%COULEURS_PLANNING_GARDE.length]]));
+ const debut=new Date(mois.getFullYear(),mois.getMonth(),1,12),decalage=(debut.getDay()+6)%7;
+ const nbJours=new Date(mois.getFullYear(),mois.getMonth()+1,0,12).getDate(),nbCases=Math.ceil((decalage+nbJours)/7)*7,aujourdhui=dateISOlocale(new Date());
+ let cellules='',programme=false;
+ for(let i=0;i<nbCases;i++){
+  const date=new Date(mois.getFullYear(),mois.getMonth(),i-decalage+1,12),garde=gardePourJourCalendrierPlanning(date,planning);
+  const courant=date.getMonth()===mois.getMonth(),equipe=garde?parId.get(String(garde.equipe_id)):null,nom=garde?(equipe?.nom||'Équipe'):'';
+  if(courant&&garde)programme=true;
+  const menage=!!garde&&date.getDay()===5,iso=dateISOlocale(date);
+  const libelle=date.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long',year:'numeric'})+(garde?' · '+nom:' · Aucune garde renseignée')+(menage?' · Ménage':'');
+  if(i%7===0)cellules+='<tr>';
+  cellules+=`<td class="${courant?'':'planning-hors-mois'}" data-date="${iso}" ${garde?`data-equipe="${echapperHTML(String(garde.equipe_id))}" style="--couleur-equipe:${couleurs.get(String(garde.equipe_id))||'#dddddd'}"`:''} ${iso===aujourdhui?'aria-current="date"':''} aria-label="${echapperHTML(libelle)}"><span class="planning-mensuel-numero">${date.getDate()}</span>${garde?`<span class="planning-mensuel-equipe">${echapperHTML(nom)}</span>`:''}${menage?'<span class="planning-mensuel-menage">Ménage</span>':''}</td>`;
+  if(i%7===6)cellules+='</tr>';
+ }
+ zone.dataset.mois=dateISOlocale(mois).slice(0,7);
+ zone.innerHTML=`<section class="planning-mensuel-cadre" aria-labelledby="planning-mensuel-mois"><header class="planning-mensuel-entete"><h2 id="planning-mensuel-mois" aria-live="polite">${echapperHTML(mois.toLocaleDateString('fr-FR',{month:'long',year:'numeric'}))}</h2><div class="planning-mensuel-commandes"><button type="button" class="planning-mois-fleche" aria-label="Mois précédent" onclick="changerMoisPlanningGarde(-1)">‹</button><button type="button" onclick="changerMoisPlanningGarde(0)">Aujourd’hui</button><button type="button" class="planning-mois-fleche" aria-label="Mois suivant" onclick="changerMoisPlanningGarde(1)">›</button></div></header><table class="planning-mensuel-table" aria-labelledby="planning-mensuel-mois"><thead><tr>${[['Lun','Lundi'],['Mar','Mardi'],['Mer','Mercredi'],['Jeu','Jeudi'],['Ven','Vendredi'],['Sam','Samedi'],['Dim','Dimanche']].map(([court,long])=>`<th scope="col" abbr="${long}">${court}</th>`).join('')}</tr></thead><tbody>${cellules}</tbody></table>${programme?'':'<p class="planning-mensuel-vide">Aucune garde programmée pour ce mois.</p>'}<p class="planning-mensuel-note">Relève le vendredi à 19 h. Le ménage du vendredi est indiqué sur la couleur de l’équipe sortante.</p></section><h2 class="garde-sous-titre">Équipes de garde</h2><div class="planning-mensuel-equipes">${teams.map(t=>{const noms=memberNames.get(String(t.id))||[];return `<section class="planning-mensuel-equipe-carte" style="--couleur-equipe:${couleurs.get(String(t.id))}"><h3>${echapperHTML(t.nom||'Équipe')}</h3>${noms.length?`<ul class="planning-mensuel-personnel">${noms.map(n=>`<li>${echapperHTML(n)}</li>`).join('')}</ul>`:'<p>Aucun personnel renseigné.</p>'}</section>`}).join('')||'<p>Aucune équipe enregistrée.</p>'}</div><button type="button" id="planning-mensuel-export" class="garde-planning-save" onclick="enregistrerPlanningMensuelEnPhoto()" ${etat.exportEnCours||!planning.length?'disabled':''}>${etat.exportEnCours?'Préparation de la photo…':'Enregistrer le planning en photo'}</button><p id="planning-mensuel-export-statut" class="planning-mensuel-export-statut" role="status"></p>`;
+ memoriserTransitionNavigation();
+}
+
+async function enregistrerPlanningMensuelEnPhoto(){
+ const etat=calendrierPlanningGardeEtat;if(!etat?.donnees||etat.exportEnCours||!etat.donnees.planning.length)return;
+ etat.exportEnCours=true;
+ const bouton=document.getElementById('planning-mensuel-export');if(bouton){bouton.disabled=true;bouton.textContent='Préparation de la photo…';}
+ const statut=document.getElementById('planning-mensuel-export-statut');if(statut)statut.textContent='';
+ try{
+  etat.photo=etat.photo||await creerPhotoPlanningGarde(etat.donnees);
+  if(calendrierPlanningGardeEtat!==etat||!document.getElementById('garde-planning-calendrier'))return;
+  await enregistrerPhotoPlanningEquipe(etat.photo);
+ }catch(erreur){
+  const statut=document.getElementById('planning-mensuel-export-statut');if(statut)statut.textContent='Impossible de préparer la photo. Réessaie dans un instant.';
+  console.warn('Photo du planning :',erreur);
+ }finally{
+  etat.exportEnCours=false;
+  if(calendrierPlanningGardeEtat===etat){const b=document.getElementById('planning-mensuel-export');if(b){b.disabled=false;b.textContent='Enregistrer le planning en photo';}}
+ }
+}
+
+async function chargerDonneesPlanningGarde(){
     const supabase=obtenirClientSupabase();
     if(!supabase||!navigator.onLine)throw new Error("hors ligne");
     const [pr,tr,mr]=await Promise.all([
@@ -22681,7 +22754,6 @@ async function creerPhotoPlanningGarde(){
     ]);
     if(pr.error)throw pr.error;if(tr.error)throw tr.error;if(mr.error)throw mr.error;
     const planning=pr.data||[],teams=(tr.data||[]).filter(t=>t.actif!==false),members=mr.data||[];
-    if(!planning.length)throw new Error("vide");
     if(!utilisateursEspaceGarde.length)utilisateursEspaceGarde=await chargerUtilisateursEspaceGarde();
 
     const byTeam=new Map(teams.map(t=>[String(t.id),t]));
@@ -22690,6 +22762,13 @@ async function creerPhotoPlanningGarde(){
       const u=utilisateursEspaceGarde.find(x=>String(x.id)===String(m.utilisateur_id));
       return u?([u.prenom,u.nom].filter(Boolean).join(" ")||u.identifiant):"";
     }).filter(Boolean)));
+
+    return {planning,teams,members,byTeam,memberNames};
+}
+
+async function creerPhotoPlanningGarde(donnees=null){
+    const {planning,teams,byTeam,memberNames}=donnees||await chargerDonneesPlanningGarde();
+    if(!planning.length)throw new Error("vide");
 
     const now=new Date(), months=[];
     for(let k=-1;k<=4;k++)months.push(new Date(now.getFullYear(),now.getMonth()+k,1,12));
