@@ -725,7 +725,7 @@ const DOMAINE_EMAIL_INTERNE =
     "inventaire-caserne.local";
 
 const VERSION_APPLICATION =
-    "2.9.54";
+    "2.9.55";
 
 const CLE_PROFIL_UTILISATEUR_CACHE =
     "profil_utilisateur_connecte_v1";
@@ -1031,7 +1031,7 @@ let minuteurVerificationMiseAJour =
  * Elle permet de détecter une nouvelle version même si seul app.js change.
  */
 const VERSION_APPLICATION_JS =
-    "2026-10-17-menage-inventaires-admin-v67";
+    "2026-10-17-menage-boutons-v68";
 
 async function verifierNouvelleVersionAppJs() {
 
@@ -23242,12 +23242,12 @@ async function chargerProduitsVidesMenage(){
 }
 function styleInventaireMenage(){
  if(document.getElementById('menage-stock-style'))return;
- const s=document.createElement('style');s.id='menage-stock-style';s.textContent='.menage-produit-quantite{flex-wrap:wrap}.menage-produit-quantite input[type=number]{width:80px;height:auto;box-sizing:border-box}.menage-rupture{background:#ffe5e5!important;border:3px solid #c40000!important;color:#970000!important}.menage-rupture strong{color:#b00000!important}.menage-stock-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:12px}.menage-stock-actions input{width:85px;padding:10px;border:1px solid #ccd5df;border-radius:8px;font:inherit}.menage-stock-actions button{padding:10px 14px;font:inherit;border-radius:8px;cursor:pointer}';document.head.appendChild(s);
+ const s=document.createElement('style');s.id='menage-stock-style';s.textContent='.menage-produit-quantite{flex-wrap:wrap}.menage-produit-quantite input[type=number]{width:80px;height:auto;box-sizing:border-box}.menage-rupture{background:#ffe5e5!important;border:3px solid #c40000!important;color:#970000!important}.menage-rupture strong{color:#b00000!important}.menage-stock-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:12px}.menage-stock-actions input{width:85px;padding:10px;border:1px solid #ccd5df;border-radius:8px;font:inherit}.menage-stock-actions button{padding:10px 14px;font:inherit;border-radius:8px;cursor:pointer}.menage-inventaire-actions{display:grid;grid-template-columns:minmax(110px,1fr) minmax(0,2fr);gap:10px;margin:12px 0 16px}.menage-inventaire-actions .equipe-action-button{width:100%;min-height:48px;margin:0;display:flex;align-items:center;justify-content:center;text-align:center;box-sizing:border-box;white-space:normal;line-height:1.35;padding:12px 15px;border-radius:12px}.menage-produit-actions{display:flex;flex-wrap:wrap;gap:10px}.menage-produit-actions .equipe-action-button{width:auto;min-height:46px;padding:12px 15px;background:#fff;border:1px solid #cdd5dc;border-radius:10px;text-align:center}.menage-inventaire-actions #menage-produit-ouvrir,.menage-produit-actions #menage-produit-creer{background:#176b45;color:#fff;border:1px solid #176b45;font-weight:800}@media(max-width:480px){.menage-inventaire-actions{grid-template-columns:minmax(0,1fr)}.menage-produit-actions .equipe-action-button{flex:1}}';document.head.appendChild(s);
 }
 async function afficherInventaireMenage(){
  if(!utilisateurAPermission('acces_admin_menage'))return alert('Accès non autorisé.');
- initialiserStyleEspaceGardeUtilisateur();styleInventaireMenage();
- document.getElementById('app').innerHTML=`<main class="garde-section"><button class="retour-button" data-navigation-equipe onclick="retourAdminRubriqueEquipe('menage')">← Retour</button><h1>Ménage inventaire</h1><button class="equipe-action-button" onclick="afficherInventaireMenage()">Actualiser</button> <button type="button" id="menage-produit-ouvrir" class="equipe-action-button" aria-expanded="false" aria-controls="menage-produit-creation" onclick="basculerCreationProduitMenage()">Créer un nouveau produit</button><form id="menage-produit-creation" class="garde-admin-card heures-form" hidden style="display:none" onsubmit="event.preventDefault();creerProduitMenageDepuisInventaire()"><h2 class="garde-sous-titre">Nouveau produit</h2><label for="menage-produit-nom">Nom du produit<input class="heures-input" id="menage-produit-nom" maxlength="120" required autocomplete="off"></label><label for="menage-produit-stock">Stock initial (unités)<input class="heures-input" id="menage-produit-stock" type="number" min="0" step="1" value="0" required inputmode="numeric"></label><div><button type="submit" id="menage-produit-creer" class="equipe-action-button">Créer le produit</button> <button type="button" class="equipe-action-button" onclick="basculerCreationProduitMenage()">Annuler</button></div><p id="menage-produit-statut" role="status" aria-live="polite"></p></form><p id="menage-stock-message" role="status" aria-live="polite"></p><div id="menage-stock-liste" aria-live="polite">Chargement…</div></main>${navigationPrincipale('','accueil')}`;actualiserInterfaceBureau();
+ initialiserStyleEspaceGardeUtilisateur();initialiserStyleActionsEquipe();styleInventaireMenage();
+ document.getElementById('app').innerHTML=`<main class="garde-section"><button class="retour-button" data-navigation-equipe onclick="retourAdminRubriqueEquipe('menage')">← Retour</button><h1>Ménage inventaire</h1><div class="menage-inventaire-actions"><button type="button" class="equipe-action-button" onclick="afficherInventaireMenage()">Actualiser</button> <button type="button" id="menage-produit-ouvrir" class="equipe-action-button" aria-expanded="false" aria-controls="menage-produit-creation" onclick="basculerCreationProduitMenage()">Créer un nouveau produit</button></div><form id="menage-produit-creation" class="garde-admin-card heures-form" hidden style="display:none" onsubmit="event.preventDefault();creerProduitMenageDepuisInventaire()"><h2 class="garde-sous-titre">Nouveau produit</h2><label for="menage-produit-nom">Nom du produit<input class="heures-input" id="menage-produit-nom" maxlength="120" required autocomplete="off"></label><label for="menage-produit-stock">Stock initial (unités)<input class="heures-input" id="menage-produit-stock" type="number" min="0" step="1" value="0" required inputmode="numeric"></label><div class="menage-produit-actions"><button type="submit" id="menage-produit-creer" class="equipe-action-button">Créer le produit</button> <button type="button" class="equipe-action-button" onclick="basculerCreationProduitMenage()">Annuler</button></div><p id="menage-produit-statut" role="status" aria-live="polite"></p></form><p id="menage-stock-message" role="status" aria-live="polite"></p><div id="menage-stock-liste" aria-live="polite">Chargement…</div></main>${navigationPrincipale('','accueil')}`;actualiserInterfaceBureau();
  const box=document.getElementById('menage-stock-liste');
  try{
   const {data,error}=await obtenirClientSupabase().from('menage_produits').select('id,nom,stock').order('nom');if(error)throw error;if(!box.isConnected)return;
