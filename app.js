@@ -725,7 +725,7 @@ const DOMAINE_EMAIL_INTERNE =
     "inventaire-caserne.local";
 
 const VERSION_APPLICATION =
-    "2.9.57";
+    "2.9.59";
 
 const CLE_PROFIL_UTILISATEUR_CACHE =
     "profil_utilisateur_connecte_v1";
@@ -1032,7 +1032,7 @@ let minuteurVerificationMiseAJour =
  * Elle permet de détecter une nouvelle version même si seul app.js change.
  */
 const VERSION_APPLICATION_JS =
-    "2026-10-19-agenda-hors-connexion-v70";
+    "2026-10-19-menage-hors-connexion-v72";
 
 async function verifierNouvelleVersionAppJs() {
 
@@ -2412,27 +2412,7 @@ async function initialiserAuthentificationApplication() {
 
     try {
 
-        const {
-            data,
-            error
-        } =
-            await supabase.auth
-                .getSession();
-
-
-        if (error) {
-            throw error;
-        }
-
-
-        const session =
-            data?.session;
-
-
-        if (!session?.user) {
-            return false;
-        }
-
+        const session = await obtenirSessionPrincipaleValide(supabase);
 
         await chargerProfilUtilisateurDepuisSupabase(
             session.user
@@ -2447,6 +2427,7 @@ async function initialiserAuthentificationApplication() {
             "Session utilisateur non disponible :",
             erreur
         );
+        signalerConnexionPrincipaleIndisponible(erreur);
 
 
         if (profilCache) {
@@ -4252,6 +4233,116 @@ async function appelerFonctionPrincipale(client,nom,options={}){
     }
     return resultat;
 }
+// All authenticated REST / RPC / storage / Edge requests use a current session.
+// Auth endpoints are excluded to avoid recursive refresh or lock deadlocks.
+let connexionPrincipaleIndisponible = false;
+let derniereErreurLectureArchives = false;
+let derniereLecturePharmacieReussie = false;
+let restaurationConnexionPrincipaleEnCours = null;
+let derniereTentativeRestaurationPrincipale = 0;
+const lecturesPrincipaleEnErreur = new Set();
+function signalerConnexionPrincipaleIndisponible(erreur) {
+    connexionPrincipaleIndisponible = true;
+    const afficher = () => {
+        if (!document.body || !utilisateurConnecte?.id) return;
+        let zone = document.getElementById("cis-etat-connexion-serveur");
+        if (!zone) {
+            zone = document.createElement("div");
+            zone.id = "cis-etat-connexion-serveur";
+            zone.setAttribute("role", "status");
+            zone.style.cssText = "position:fixed;z-index:299999;left:12px;right:12px;top:calc(env(safe-area-inset-top,0px) + 8px);max-width:680px;margin:auto;padding:12px;background:#fff4d6;color:#382c12;border:2px solid #b17b00;border-radius:12px;box-shadow:0 3px 12px #0003;font:14px/1.4 Arial,sans-serif";
+            zone.innerHTML = '<span>Connexion au serveur à rétablir. Les données locales sont conservées ; les listes affichées peuvent être incomplètes.</span><div style="display:flex;gap:12px;margin-top:8px"><button type="button" style="color:#174f9e;background:white;border:1px solid #777;padding:8px" onclick="void restaurerConnexionPrincipale(true)">Réessayer</button><button type="button" style="color:#174f9e;background:white;border:1px solid #777;padding:8px" onclick="afficherConnexion()">Se connecter</button></div>';
+            document.body.appendChild(zone);
+        }
+    };
+    afficher();
+    // In startup fallback, the cached profile is assigned after the catch starts.
+    setTimeout(afficher, 0);
+}
+async function requeteSupabaseAuthentifiee(input, options = {}) {
+    const adresse = new URL(typeof input === "string" ? input : input.url, window.SUPABASE_URL);
+    const projet = new URL(window.SUPABASE_URL);
+    const protegee = adresse.origin === projet.origin && /^\/(rest|functions|storage)\/v1(?:\/|$)/.test(adresse.pathname);
+    if (!protegee) return window.fetch(input, options);
+    const client = obtenirClientSupabase();
+    const methode = String(options.method || input.method || "GET").toUpperCase();
+    const lecture = methode === "GET" || methode === "HEAD";
+    const cleLecture = adresse.pathname;
+    try {
+        const session = await obtenirSessionPrincipaleValide(client);
+        const envoyer = session => {
+            const headers = new Headers(options.headers || input.headers || {});
+            headers.set("Authorization", "Bearer " + session.access_token);
+            return window.fetch(input, {...options, headers});
+        };
+        let reponse = await envoyer(session);
+        // A 401 is an authentication rejection, not a successful mutation.
+        // Never replay RLS / permission failures (403), server failures or network timeouts.
+        if (reponse.status === 401) {
+            let nouvelle = await obtenirSessionPrincipaleValide(client);
+            if (nouvelle.access_token === session.access_token) nouvelle = await renouvelerSessionPrincipale(client);
+            reponse = await envoyer(nouvelle);
+        }
+        if (reponse.status === 401 || reponse.status === 403) {
+            if (lecture) lecturesPrincipaleEnErreur.add(cleLecture);
+            signalerConnexionPrincipaleIndisponible(new Error("Accès au serveur refusé"));
+        } else if (lecture) {
+            if (reponse.ok) lecturesPrincipaleEnErreur.delete(cleLecture);
+            else lecturesPrincipaleEnErreur.add(cleLecture);
+        }
+        return reponse;
+    } catch (erreur) {
+        if (lecture) lecturesPrincipaleEnErreur.add(cleLecture);
+        signalerConnexionPrincipaleIndisponible(erreur);
+        throw erreur;
+    }
+}
+async function restaurerConnexionPrincipale(force = false) {
+    if (restaurationConnexionPrincipaleEnCours) return restaurationConnexionPrincipaleEnCours;
+    if (!navigator.onLine || document.hidden || !utilisateurConnecte?.id || validationRetourInterventionEnCours || synchronisationSupabaseEnCours) return;
+    if (!force && (!connexionPrincipaleIndisponible && !lecturesPrincipaleEnErreur.size || Date.now() - derniereTentativeRestaurationPrincipale < 30000)) return;
+    derniereTentativeRestaurationPrincipale = Date.now();
+    const demande = (async () => {
+        try {
+            const client = await assurerBibliothequeSupabaseDisponible();
+            if (!client) throw new Error("Serveur indisponible");
+            const session = await obtenirSessionPrincipaleValide(client);
+            if (String(session.user?.id || "") !== String(utilisateurConnecte.id)) throw new Error("La session ne correspond plus au profil local. Identifie-toi à nouveau.");
+            await chargerProfilUtilisateurDepuisSupabase(session.user);
+            // Use the existing upload-first path to preserve pending offline returns.
+            derniereSynchronisationNavigation = 0;
+            await synchroniserAvantNavigation();
+            if (!derniereLecturePharmacieReussie) throw new Error("Les données du serveur ne sont pas encore accessibles");
+            // Only refresh read-only views; do not replace a form or a signature being drawn.
+            const app = document.getElementById("app");
+            if (!document.getElementById("cis-signature-modal")) {
+                if (document.getElementById("historique-interventions")) rafraichirAffichageApresSynchronisation();
+                else if (app?.querySelector("[data-archives-pharmacie]")) await afficherArchivesHistorique();
+                else if (app?.querySelector(".caserne-shell-actualites")) await afficherActualitesCaserne(true);
+            }
+            if (!lecturesPrincipaleEnErreur.size && !derniereErreurLectureArchives) {
+                connexionPrincipaleIndisponible = false;
+                document.getElementById("cis-etat-connexion-serveur")?.remove();
+            }
+        } catch (erreur) {
+            signalerConnexionPrincipaleIndisponible(erreur);
+            console.warn("Restauration de la connexion différée ; copie locale conservée.", erreur);
+        }
+    })();
+    restaurationConnexionPrincipaleEnCours = demande;
+    try { return await demande; } finally { restaurationConnexionPrincipaleEnCours = null; }
+}
+window.addEventListener("online", () => { void restaurerConnexionPrincipale(true); });
+window.addEventListener("focus", () => { void restaurerConnexionPrincipale(); });
+window.addEventListener("pageshow", () => { void restaurerConnexionPrincipale(); });
+window.addEventListener("storage", evenement => {
+    if (String(evenement.key || "").startsWith("sb-") && String(evenement.key).endsWith("-auth-token")) {
+        void restaurerConnexionPrincipale(true);
+    }
+});
+document.addEventListener("visibilitychange", () => { if (!document.hidden) void restaurerConnexionPrincipale(); });
+setInterval(() => { void restaurerConnexionPrincipale(); }, 15000);
+
 async function detailErreurNotification(error){
     const code=Number(error?.context?.status)||0;
     let detail="";
@@ -6589,7 +6680,7 @@ function obtenirClientSupabase() {
         clientSupabase = window.supabase.createClient(
             window.SUPABASE_URL,
             window.SUPABASE_ANON_KEY,
-            {auth:{persistSession:true,autoRefreshToken:true}}
+            {auth:{persistSession:true,autoRefreshToken:true},global:{fetch:requeteSupabaseAuthentifiee}}
         );
 
         return clientSupabase;
@@ -6694,12 +6785,15 @@ function enregistrerSnapshotSynchronisation() {
 
 async function recupererDonneesSupabase() {
 
+    derniereLecturePharmacieReussie = false;
+
     const supabase = obtenirClientSupabase();
 
     if (!supabase) {
         throw new Error("Client Supabase indisponible.");
     }
 
+    await obtenirSessionPrincipaleValide(supabase);
     const resultats = await Promise.all([
         supabase.from("categories").select("id,nom"),
         supabase
@@ -6728,7 +6822,8 @@ async function recupererDonneesSupabase() {
      * Ainsi, si la table n'a pas encore été créée dans Supabase,
      * le reste de l'application continue de fonctionner normalement.
      */
-    let archivesDistantes = [];
+    let archivesDistantes = null;
+    derniereErreurLectureArchives = false;
 
     try {
 
@@ -6744,7 +6839,8 @@ async function recupererDonneesSupabase() {
                 });
 
         if (resultatArchives.error) {
-
+            derniereErreurLectureArchives = true;
+            signalerConnexionPrincipaleIndisponible(resultatArchives.error);
             console.warn(
                 "Archives Supabase indisponibles :",
                 resultatArchives.error
@@ -6758,7 +6854,8 @@ async function recupererDonneesSupabase() {
         }
 
     } catch (erreurArchives) {
-
+        derniereErreurLectureArchives = true;
+        signalerConnexionPrincipaleIndisponible(erreurArchives);
         console.warn(
             "Lecture archives Supabase impossible :",
             erreurArchives
@@ -6767,6 +6864,7 @@ async function recupererDonneesSupabase() {
     }
 
 
+    derniereLecturePharmacieReussie = true;
     return {
         categories: resultats[0].data || [],
         materiels: resultats[1].data || [],
@@ -6918,7 +7016,7 @@ function convertirDonneesSupabaseEnDonneesApplication(donnees) {
             .filter(Boolean),
         materiels: materielsApplication,
         historique: historiqueApplication,
-        archivesHistorique: archivesApplication
+        archivesHistorique: Array.isArray(donnees.archivesHistorique) ? archivesApplication : archivesHistorique
     };
 
 }
@@ -7792,6 +7890,9 @@ let repriseHorsConnexionEnCours = false;
 let prochaineRepriseHorsConnexion = 0;
 let echecsRepriseHorsConnexion = 0;
 function preparerRepriseHorsConnexion() {
+    void preparerMenageHorsConnexion();
+    void synchroniserMenagesEnAttente();
+    if (connexionPrincipaleIndisponible) void restaurerConnexionPrincipale(true);
     if (navigator.onLine && utilisateurConnecte?.id) {
         void chargerSignaturePharmacie().catch(() => {});
         void synchroniserHorsConnexionAutomatiquement();
@@ -8978,7 +9079,11 @@ async function chargerPublicationsCaserne(type) {
         if (type) q = q.eq("type_publication", type);
         return q;
     });
-    if (error) { console.warn("Publications Caserne :", error); return []; }
+    if (error) {
+        signalerConnexionPrincipaleIndisponible(error);
+        console.warn("Publications Caserne :", error);
+        return Object.values(window.__publicationsCaserneParId || {}).filter(p => !type || p.type_publication === type);
+    }
     return Array.isArray(data) ? data : [];
 }
 
@@ -9974,7 +10079,7 @@ async function afficherActualitesCaserne(synchronisationDejaFaite = false) {
 
             <div class="caserne-titre-section"><strong>À venir</strong><span>${aVenir.length + sansDate.length ? `${aVenir.length + sansDate.length} élément${aVenir.length + sansDate.length > 1 ? "s" : ""}` : ""}</span></div>
             <section class="caserne-fil caserne-fil-actuel">
-                ${futursHTML || '<div class="caserne-vide"><strong>Rien de prévu pour le moment</strong><p>Tu n’as aucune action à faire.</p></div>'}
+                ${futursHTML || (lecturesPrincipaleEnErreur.has('/rest/v1/caserne_publications') ? '<div class="caserne-vide"><strong>Actualités temporairement indisponibles</strong><p>La connexion sera rétablie automatiquement.</p></div>' : '<div class="caserne-vide"><strong>Rien de prévu pour le moment</strong><p>Tu n’as aucune action à faire.</p></div>')}
             </section>
 
             ${passesHTML}
@@ -13317,7 +13422,7 @@ async function afficherArchivesHistorique() {
             <div
                 class="materiel archive-vide"
             >
-                Aucune archive pour le moment.
+                ${derniereErreurLectureArchives || !derniereLecturePharmacieReussie ? "Archives indisponibles pour le moment. Reconnexion automatique en cours ; aucune archive n’a été supprimée." : "Aucune archive pour le moment."}
             </div>
 
         `;
@@ -13516,7 +13621,7 @@ async function afficherArchivesHistorique() {
             </button>
 
 
-            <h2>
+            <h2 data-archives-pharmacie>
                 Archives de l'historique
             </h2>
 
@@ -15982,7 +16087,7 @@ function afficherHistoriqueInterventions() {
 
             <div class="materiel">
 
-                Aucun retour d'intervention enregistré.
+                ${!derniereLecturePharmacieReussie ? "Historique indisponible pour le moment. Les données seront chargées à la reconnexion." : "Aucun retour d’intervention enregistré."}
 
             </div>
 
@@ -22463,17 +22568,117 @@ function basculerZoneDepuisPlanGarde(nomZone){
     cible.checked=!cible.checked;
     sauvegarderSelectionMenageGarde();
 }
-async function chargerUtilisateursEspaceGarde(){
-    const supabase=obtenirClientSupabase();
-    if(!supabase||!navigator.onLine)return [];
-    try{
-        // Fonction dédiée : permet à tout utilisateur connecté de voir uniquement
-        // la liste minimale des personnels actifs nécessaire au ménage.
-        const {data,error}=await supabase.rpc("lister_utilisateurs_menage");
-        if(error)throw error;
-        return (data||[]).filter(u=>u.actif!==false);
-    }catch(_){return []}
+function cleCacheMenage(nom, userId = utilisateurConnecte?.id) {
+    if (!userId) throw new Error("Identifie-toi pour utiliser le ménage");
+    return "cis_menage_hors_ligne_v1:" + userId + ":" + nom;
 }
+function lireCacheMenage(nom, defaut = null) {
+    const texte = localStorage.getItem(cleCacheMenage(nom));
+    return texte === null ? defaut : JSON.parse(texte);
+}
+async function chargerUtilisateursEspaceGarde(){
+    const cle = cleCacheMenage("personnels");
+    const cache = JSON.parse(localStorage.getItem(cle) || "[]");
+    const supabase = obtenirClientSupabase();
+    if (!supabase || !navigator.onLine) return cache;
+    try {
+        const {data,error} = await supabase.rpc("lister_utilisateurs_menage");
+        if (error) throw error;
+        const liste = (data || []).filter(u=>u.actif!==false).map(u=>({id:u.id,prenom:u.prenom,nom:u.nom,identifiant:u.identifiant,actif:true}));
+        localStorage.setItem(cle, JSON.stringify(liste));
+        return liste;
+    } catch (_) { return cache; }
+}
+async function chargerCatalogueMenageHorsConnexion() {
+    const cle = cleCacheMenage("produits");
+    const cache = JSON.parse(localStorage.getItem(cle) || "null");
+    if (!navigator.onLine || !obtenirClientSupabase()) return cache;
+    try {
+        const {data,error} = await obtenirClientSupabase().from("menage_produits").select("id,nom,stock").order("nom");
+        if (error) throw error;
+        localStorage.setItem(cle, JSON.stringify(data || []));
+        return data || [];
+    } catch (e) { if (cache !== null) return cache; throw e; }
+}
+async function chargerGardePourMenage() {
+    const vendredi = dateISOlocale(vendrediReferenceGarde(new Date()));
+    const cle = cleCacheMenage("garde");
+    let garde = JSON.parse(localStorage.getItem(cle) || "null");
+    if (navigator.onLine) {
+        try {
+            const distante = await chargerGardeSemaineCourante();
+            if (distante) { garde = distante; localStorage.setItem(cle, JSON.stringify(garde)); }
+        } catch (_) {}
+    }
+    return garde?.date_debut === vendredi ? garde : {date_debut:vendredi,equipe:null};
+}
+let preparationMenageHorsConnexionEnCours = null;
+async function preparerMenageHorsConnexion() {
+    if (!navigator.onLine || !utilisateurConnecte?.id) return;
+    if (preparationMenageHorsConnexionEnCours) return preparationMenageHorsConnexionEnCours;
+    const demande = Promise.allSettled([
+        chargerUtilisateursEspaceGarde(), chargerCatalogueMenageHorsConnexion(), chargerGardePourMenage(),
+        // Fetching this canonical URL also warms the service worker cache.
+        fetch("./plan-caserne.png", {cache:"reload"}).then(r=>{if(!r.ok)throw new Error("Plan indisponible");})
+    ]);
+    preparationMenageHorsConnexionEnCours = demande;
+    try { await demande; } finally { preparationMenageHorsConnexionEnCours = null; }
+}
+function lireMenagesEnAttente() { return lireCacheMenage("envois", []); }
+function texteMenagesEnAttente() {
+    const lignes = lireMenagesEnAttente();
+    if (!lignes.length) return navigator.onLine ? "" : "Hors connexion : la saisie sera conservée sur cet appareil, puis envoyée automatiquement.";
+    return lignes.length + " ménage(s) conservé(s) sur cet appareil, en attente d’envoi automatique." +
+        (lignes.find(l=>l.erreur)?.erreur ? " Dernière tentative : " + lignes.find(l=>l.erreur).erreur : "");
+}
+function actualiserStatutMenagesEnAttente() {
+    const zone = document.getElementById("menages-hors-ligne-statut");
+    if (zone) zone.textContent = texteMenagesEnAttente();
+}
+let envoiMenagesEnCours = null;
+let prochaineTentativeMenages = 0;
+async function synchroniserMenagesEnAttente(force = false) {
+    if (!navigator.onLine || !utilisateurConnecte?.id || (!force && Date.now() < prochaineTentativeMenages)) return false;
+    if (envoiMenagesEnCours) return envoiMenagesEnCours;
+    const proprietaire = String(utilisateurConnecte.id), cle = cleCacheMenage("envois", proprietaire);
+    const demande = (async () => {
+        const envois = JSON.parse(localStorage.getItem(cle) || "[]");
+        if (!envois.length) return true;
+        try {
+            const sb = await assurerBibliothequeSupabaseDisponible();
+            if (!sb) throw new Error("Serveur indisponible");
+            const session = await obtenirSessionPrincipaleValide(sb);
+            if (String(session.user?.id || "") !== proprietaire) throw new Error("La session ne correspond pas à l’auteur du ménage");
+            for (const envoi of envois) {
+                if (String(utilisateurConnecte?.id || "") !== proprietaire) throw new Error("Utilisateur modifié pendant l’envoi");
+                const {data,error} = await sb.rpc("menage_enregistrer_quantites", {
+                    p_ligne:envoi.ligne,p_produits:envoi.produits,p_cle:envoi.cle
+                });
+                if (error) throw error;
+                if (!data?.id) throw new Error("La base n’a pas confirmé l’enregistrement");
+                // The same server idempotency key survives network failures and restarts.
+                const restants = JSON.parse(localStorage.getItem(cle) || "[]").filter(l=>l.cle!==envoi.cle);
+                localStorage.setItem(cle, JSON.stringify(restants));
+            }
+            prochaineTentativeMenages = 0;
+            void preparerMenageHorsConnexion();
+            return true;
+        } catch (e) {
+            prochaineTentativeMenages = Date.now() + 30000;
+            const restants = JSON.parse(localStorage.getItem(cle) || "[]");
+            if (restants.length) { restants[0].erreur = e.message || "Connexion indisponible"; localStorage.setItem(cle, JSON.stringify(restants)); }
+            console.warn("Ménage conservé localement ; envoi différé.", e);
+            return false;
+        } finally { actualiserStatutMenagesEnAttente(); }
+    })();
+    envoiMenagesEnCours = demande;
+    try { return await demande; } finally { envoiMenagesEnCours = null; }
+}
+window.addEventListener("online", () => { void preparerMenageHorsConnexion(); void synchroniserMenagesEnAttente(true); });
+window.addEventListener("pageshow", () => { void synchroniserMenagesEnAttente(true); });
+window.addEventListener("focus", () => { void synchroniserMenagesEnAttente(); });
+document.addEventListener("visibilitychange", () => { if (!document.hidden) void synchroniserMenagesEnAttente(); });
+setInterval(() => { if (!document.hidden) void synchroniserMenagesEnAttente(); }, 5000);
 
 function initialiserStyleEspaceGardeUtilisateur(){
     if(document.getElementById("style-espace-garde-utilisateur-v2"))return;
@@ -22540,7 +22745,7 @@ function afficherEspaceGarde(){
     document.getElementById("app").innerHTML=`
       <main class="garde-menu-page espace-equipe-menu">
         <button class="retour-button" data-navigation-equipe onclick="retourAccueilDepuisEspaceEquipe()">← Retour</button>
-        <header class="garde-menu-entete"><h1>Espace équipe</h1></header>
+        <header class="garde-menu-entete"><h1>Espace équipe</h1></header><p id="menages-hors-ligne-statut" role="status">${echapperHTML(texteMenagesEnAttente())}</p>
         <div class="garde-menu-cartes">
           <button class="garde-menu-carte" onclick="ouvrirRubriqueEquipe('menage')"><span class="ico">🧹</span><span><strong>Ménage</strong></span><b class="fleche">›</b></button>
           <button class="garde-menu-carte" onclick="ouvrirRubriqueEquipe('vehicules')"><span class="ico">🚒</span><span><strong>Inventaire véhicule</strong></span><b class="fleche">›</b></button>
@@ -22565,11 +22770,12 @@ async function afficherMenageEspaceGarde(){
     document.getElementById("app").innerHTML=`<main class="garde-section"><button class="retour-button" data-navigation-equipe onclick="retourSaisieEquipe('menage')">← Retour</button><h1>Ménage</h1><div id="menage-garde-chargement" class="garde-planning-attente">Chargement…</div></main>${navigationPrincipale("","accueil")}`;
     actualiserInterfaceBureau();
     const chargement=document.getElementById("menage-garde-chargement");
-    if(!utilisateursEspaceGarde.length)utilisateursEspaceGarde=await chargerUtilisateursEspaceGarde();
+    utilisateursEspaceGarde=await chargerUtilisateursEspaceGarde();
     if(!chargement.isConnected)return;
     // Classe les personnels selon leur nombre réel de participations aux ménages.
     // Ceux qui participent le plus apparaissent en premier.
     try{
+      if(!navigator.onLine)throw new Error("Classement local conservé");
       const supabase=obtenirClientSupabase();
       const {data:histPresence}=await supabase.from("menages_garde").select("personnes_presentes");
       const compte=new Map();
@@ -22581,8 +22787,9 @@ async function afficherMenageEspaceGarde(){
       <main class="garde-section">
        <button class="retour-button" data-navigation-equipe onclick="retourSaisieEquipe('menage')">← Retour</button>
        <h1>Ménage</h1>
+       <p id="menages-hors-ligne-statut" role="status">${echapperHTML(texteMenagesEnAttente())}</p>
        <div class="plan-menage-wrap"><div class="plan-menage">
-         <img src="./plan-caserne.png?v=13" alt="Plan de la caserne">
+         <img src="./plan-caserne.png" alt="Plan de la caserne">
          <button type="button" class="plan-menage-zone pm-reunion" data-plan-zone="Salle de cour" aria-label="Salle de cour" onclick="basculerZoneDepuisPlanGarde(this.dataset.planZone)"></button>
          <button type="button" class="plan-menage-zone pm-foyer" data-plan-zone="Foyer" aria-label="Foyer" onclick="basculerZoneDepuisPlanGarde(this.dataset.planZone)"></button>
          <button type="button" class="plan-menage-zone pm-pmr" data-plan-zone="Toilettes PMR" aria-label="Toilettes PMR" onclick="basculerZoneDepuisPlanGarde(this.dataset.planZone)"></button>
@@ -22982,7 +23189,9 @@ function ouvrirPlanningEquipeGrand(url){
     document.body.appendChild(div);
 }
 
+let validationMenageEnCours = false;
 async function enregistrerMenageEquipe(){
+    if(validationMenageEnCours)return;
     const statut=document.getElementById("garde-menage-statut");
     const bouton=document.querySelector(".garde-menage-enregistrer");
     const afficherStatut=(message,ok)=>{if(statut){statut.textContent=message;statut.className="garde-menage-statut "+(ok?"ok":"err");}};
@@ -22992,12 +23201,11 @@ async function enregistrerMenageEquipe(){
     if(!zones.length){afficherStatut("Sélectionne au moins une zone nettoyée.",false);return}
     if(!personnes.length){afficherStatut("Sélectionne au moins une personne présente.",false);return}
     if(!duree){afficherStatut("Sélectionne le temps passé.",false);return}
+    validationMenageEnCours=true;
     try{
         if(bouton){bouton.disabled=true;bouton.textContent="Enregistrement…"}
         afficherStatut("Enregistrement en cours…",true);
-        const supabase=obtenirClientSupabase();
-        if(!supabase)throw new Error("Connexion à la base indisponible.");
-        const garde=await chargerGardeSemaineCourante();
+        const garde=await chargerGardePourMenage();
         const ligne={date_menage:new Date().toISOString(),date_garde:garde?.date_debut||dateISOlocale(vendrediReferenceGarde(new Date())),equipe_id:garde?.equipe?.id||null,zones_nettoyees:zones,personnes_presentes:personnes,duree_minutes:duree,enregistre_par:profilUtilisateurConnecte?.id||null};
         if(!menageProduitsCharges)throw new Error("Les produits ne sont pas chargés. Actualise la rubrique avant d’enregistrer.");
         const produits=[...document.querySelectorAll("[data-menage-vide]:checked")].map(x=>{
@@ -23008,20 +23216,24 @@ async function enregistrerMenageEquipe(){
         }).sort((a,b)=>a.id.localeCompare(b.id));
         const {date_menage:dateIgnoree,...saisieStable}=ligne;
         const signature=JSON.stringify([saisieStable,produits]);
-        if(signature!==menageSaisieSignature){menageSaisieSignature=signature;menageSaisieCle=crypto.randomUUID();}
-        const {data,error}=await supabase.rpc("menage_enregistrer_quantites",{p_ligne:ligne,p_produits:produits,p_cle:menageSaisieCle});
-        if(error)throw error;
-        if(!data?.id)throw new Error("La base n’a pas confirmé l’enregistrement.");
+        if(signature!==menageSaisieSignature){menageSaisieSignature=signature;menageSaisieCle=genererUUID();}
+        const cleJournal = cleCacheMenage("envois");
+        const journal = lireMenagesEnAttente();
+        if (!journal.some(l=>l.cle===menageSaisieCle)) journal.push({cle:menageSaisieCle,ligne,produits});
+        // Always persist before attempting the network, including a connection lost mid-send.
+        localStorage.setItem(cleJournal, JSON.stringify(journal));
+        const synchronise = await synchroniserMenagesEnAttente(true);
         menageSaisieCle=null;
         localStorage.removeItem(cleSelectionMenageGarde());
         document.querySelectorAll("[data-garde-zone],[data-garde-personne]").forEach(x=>x.checked=false);
         const dureeEl=document.getElementById("garde-menage-duree");if(dureeEl)dureeEl.value="";
         actualiserPlanMenageGarde();
-        await animationValidationEnregistrementCIS("Ménage enregistré", () => afficherEspaceGarde());
+        await animationValidationEnregistrementCIS(synchronise ? "Ménage enregistré" : "Ménage enregistré sur cet appareil — envoi automatique en attente", () => afficherEspaceGarde());
     }catch(e){
         console.error("Enregistrement ménage :",e);
         afficherStatut("Échec de l’enregistrement : "+(e?.message||"erreur inconnue"),false);
     }finally{
+        validationMenageEnCours=false;
         if(bouton){bouton.disabled=false;bouton.textContent="Enregistrer la saisie"}
     }
 }
@@ -23038,7 +23250,7 @@ function classeDateMenage(v){
 function htmlPlanMenageHistorique(zones){
     const z=new Set(zones||[]);
     const defs=[["pm-reunion","Salle de cour"],["pm-foyer","Foyer"],["pm-pmr","Toilettes PMR"],["pm-femme","Vestiaire femme"],["pm-homme","Vestiaire homme"],["pm-amical","Amical"],["pm-radio","Salle radio"],["pm-bureau","Bureau"],["pm-remise","Remise à engin"],["pm-vsav","Local VSAV"]];
-    return `<div class="plan-menage-wrap"><div class="plan-menage plan-menage-detail"><img src="./plan-caserne.png?v=16" alt="Plan des zones nettoyées">${defs.map(([c,n])=>`<span class="plan-menage-zone ${c} ${z.has(n)?"actif":""}"></span>`).join("")}</div></div>`;
+    return `<div class="plan-menage-wrap"><div class="plan-menage plan-menage-detail"><img src="./plan-caserne.png" alt="Plan des zones nettoyées">${defs.map(([c,n])=>`<span class="plan-menage-zone ${c} ${z.has(n)?"actif":""}"></span>`).join("")}</div></div>`;
 }
 
 async function afficherAdminMenageEquipe(){
@@ -23456,7 +23668,10 @@ async function chargerProduitsVidesMenage(){
  styleInventaireMenage();
  const box=document.getElementById('menage-produits-vides');if(!box)return;
  try{
-  const {data,error}=await obtenirClientSupabase().from('menage_produits').select('id,nom,stock').order('nom');if(error)throw error;
+  const catalogue=await chargerCatalogueMenageHorsConnexion();
+  if(catalogue===null)throw new Error("Ouvre une première fois l’application avec Internet pour mémoriser les produits du ménage.");
+  const enAttente=lireMenagesEnAttente();
+  const data=catalogue.map(p=>({...p,stock:Math.max(0,Number(p.stock)-enAttente.reduce((n,e)=>n+(e.produits||[]).filter(x=>x.id===p.id).reduce((q,x)=>q+x.quantite,0),0))}));
   if(!box.isConnected)return;
   box.innerHTML=(data||[]).map(p=>`<div class="garde-zone menage-produit-quantite" data-menage-produit><label style="display:flex;align-items:center;gap:11px;flex:1"><input type="checkbox" data-menage-vide value="${echapperHTML(p.id)}" ${p.stock<=0?'disabled':''} onchange="basculerQuantiteProduitMenage(this)"><span>${echapperHTML(p.nom)}${p.stock<=0?' — rupture de stock':''}</span></label><label>Quantité <input class="heures-input" style="width:80px" data-menage-quantite type="number" min="1" max="${p.stock}" step="1" value="1" disabled></label></div>`).join('')||'<p>Aucun produit configuré.</p>';
   menageProduitsCharges=true;

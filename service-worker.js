@@ -15,7 +15,7 @@ importScripts("./notifications-history.js");
  * à récupérer le nouvel app.js.
  */
 
-const CACHE_NAME = "inventaire-caserne-v109-agenda-hors-connexion";
+const CACHE_NAME = "inventaire-caserne-v111-menage-hors-connexion";
 
 
 /*
@@ -49,7 +49,9 @@ const FICHIERS_APPLICATION = [
 
     "./fond-connexion-pc.png",
 
-    "./logo-version-pc.png"
+    "./logo-version-pc.png",
+
+    "./plan-caserne.png"
 
 ];
 
@@ -347,7 +349,8 @@ self.addEventListener(
 
                         const reponseCache =
                             await caches.match(
-                                event.request
+                                event.request,
+                                {ignoreSearch:url.pathname.endsWith("/plan-caserne.png")}
                             );
 
                         if (
