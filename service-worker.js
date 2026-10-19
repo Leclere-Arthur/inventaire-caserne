@@ -15,7 +15,7 @@ importScripts("./notifications-history.js");
  * à récupérer le nouvel app.js.
  */
 
-const CACHE_NAME = "inventaire-caserne-v107-menage-boutons";
+const CACHE_NAME = "inventaire-caserne-v109-agenda-hors-connexion";
 
 
 /*

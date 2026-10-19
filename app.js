@@ -725,7 +725,7 @@ const DOMAINE_EMAIL_INTERNE =
     "inventaire-caserne.local";
 
 const VERSION_APPLICATION =
-    "2.9.55";
+    "2.9.57";
 
 const CLE_PROFIL_UTILISATEUR_CACHE =
     "profil_utilisateur_connecte_v1";
@@ -975,6 +975,7 @@ document.addEventListener("DOMContentLoaded", async function () {
     initialiserBoutonNotifications();
 
     await initialiserSynchronisationSupabase();
+    preparerRepriseHorsConnexion();
 
     afficherPortailPrincipal();
     window.__cisNotificationsApplicationPrete=true;
@@ -1031,7 +1032,7 @@ let minuteurVerificationMiseAJour =
  * Elle permet de détecter une nouvelle version même si seul app.js change.
  */
 const VERSION_APPLICATION_JS =
-    "2026-10-17-menage-boutons-v68";
+    "2026-10-19-agenda-hors-connexion-v70";
 
 async function verifierNouvelleVersionAppJs() {
 
@@ -3272,6 +3273,7 @@ async function seConnecterApplication() {
 
 
         await initialiserSynchronisationSupabase();
+        preparerRepriseHorsConnexion();
 
 
         afficherPortailPrincipal();
@@ -4212,6 +4214,64 @@ async function changerMonMotDePasse() {
    ENVOI DES NOTIFICATIONS
    ========================================================= */
 
+// Les appels Edge doivent utiliser le jeton de la session la plus récente.
+const renouvellementsSessionPrincipale = new WeakMap();
+async function renouvelerSessionPrincipale(client){
+    if(renouvellementsSessionPrincipale.has(client))return renouvellementsSessionPrincipale.get(client);
+    const demande=(async()=>{
+        const {data,error}=await client.auth.refreshSession();
+        if(error)throw new Error([400,401,403].includes(Number(error.status))
+            ? "La connexion n’est plus valide. Une nouvelle identification est nécessaire."
+            : "Impossible de renouveler la connexion pour le moment. Vérifie Internet puis réessaie.");
+        if(!data?.session?.access_token)throw new Error("La connexion n’est plus disponible. Identifie-toi à nouveau.");
+        return data.session;
+    })();
+    renouvellementsSessionPrincipale.set(client,demande);
+    try{return await demande;}finally{renouvellementsSessionPrincipale.delete(client);}
+}
+async function obtenirSessionPrincipaleValide(client){
+    if(renouvellementsSessionPrincipale.has(client))return renouvellementsSessionPrincipale.get(client);
+    if(navigator.onLine===false)throw new Error("Connexion Internet indisponible. Réessaie lorsque la connexion est rétablie.");
+    const {data,error}=await client.auth.getSession();
+    if(error)throw error;
+    const session=data?.session;
+    if(!session?.access_token)throw new Error("Identifie-toi pour effectuer cette action.");
+    if(Number(session.expires_at||0)<=Math.floor(Date.now()/1000)+90)return renouvelerSessionPrincipale(client);
+    return session;
+}
+async function appelerFonctionPrincipale(client,nom,options={}){
+    const session=await obtenirSessionPrincipaleValide(client);
+    const invoquer=session=>client.functions.invoke(nom,{
+        ...options,headers:{...options.headers,Authorization:"Bearer "+session.access_token}
+    });
+    let resultat=await invoquer(session);
+    if(Number(resultat.error?.context?.status)===401){
+        let nouvelle=await obtenirSessionPrincipaleValide(client);
+        if(nouvelle.access_token===session.access_token)nouvelle=await renouvelerSessionPrincipale(client);
+        resultat=await invoquer(nouvelle);
+    }
+    return resultat;
+}
+async function detailErreurNotification(error){
+    const code=Number(error?.context?.status)||0;
+    let detail="";
+    try{
+        const contenu=await error.context.clone().json();
+        detail=String(contenu?.error||contenu?.message||"").trim();
+    }catch(_){}
+    return new Error((detail||error?.message||"L’envoi de la notification a échoué.")+(code?" (HTTP "+code+")":""));
+}
+function entretenirSessionPrincipale(){
+    if(document.hidden||navigator.onLine===false||!profilUtilisateurConnecte)return;
+    const client=obtenirClientSupabase();
+    if(client)void obtenirSessionPrincipaleValide(client).catch(()=>{});
+}
+setInterval(entretenirSessionPrincipale,60000);
+document.addEventListener("visibilitychange",entretenirSessionPrincipale);
+window.addEventListener("focus",entretenirSessionPrincipale);
+window.addEventListener("pageshow",entretenirSessionPrincipale);
+window.addEventListener("online",entretenirSessionPrincipale);
+
 async function envoyerNotificationPush(
     titre,
     message,
@@ -4240,7 +4300,7 @@ async function envoyerNotificationPush(
 
 
     const { data, error } =
-        await supabase.functions.invoke(
+        await appelerFonctionPrincipale(supabase,
             "envoyer-notification",
             {
                 body: {
@@ -4263,7 +4323,7 @@ async function envoyerNotificationPush(
 
 
     if (error) {
-        throw error;
+        throw await detailErreurNotification(error);
     }
 
 
@@ -5723,9 +5783,8 @@ function sauvegarderToutesLesDonnees() {
         )
     );
 
-    // La sauvegarde locale reste immédiate et fonctionne hors connexion.
-    // La synchronisation Supabase est volontairement déclenchée uniquement
-    // lors des actions prévues dans l'application.
+    // La sauvegarde locale reste immédiate. Les données en attente sont aussi
+    // renvoyées automatiquement lorsque le réseau redevient disponible.
 
 }
 
@@ -6051,10 +6110,12 @@ function marquerModificationsEnAttente() {
         STORAGE_SYNC.modificationsEnAttente,
         "1"
     );
+    localStorage.setItem("cis_sync_proprietaire", String(utilisateurConnecte?.id || ""));
 
 }
 
 function effacerModificationsEnAttente() {
+    localStorage.removeItem("cis_sync_proprietaire");
 
     localStorage.removeItem(
         STORAGE_SYNC.modificationsEnAttente
@@ -6321,7 +6382,7 @@ async function synchroniserApresModification() {
     if (!navigator.onLine) {
 
         console.log(
-            "📴 Modification enregistrée localement. Elle sera synchronisée lors de la prochaine action en ligne."
+            "📴 Modification enregistrée localement. Elle sera synchronisée automatiquement au retour de la connexion."
         );
 
         return false;
@@ -6527,7 +6588,8 @@ function obtenirClientSupabase() {
 
         clientSupabase = window.supabase.createClient(
             window.SUPABASE_URL,
-            window.SUPABASE_ANON_KEY
+            window.SUPABASE_ANON_KEY,
+            {auth:{persistSession:true,autoRefreshToken:true}}
         );
 
         return clientSupabase;
@@ -6862,6 +6924,8 @@ function convertirDonneesSupabaseEnDonneesApplication(donnees) {
 }
 
 async function appliquerDonneesSupabaseLocalement(donnees) {
+
+    if (existeModificationsEnAttente()) return;
 
     const application =
         convertirDonneesSupabaseEnDonneesApplication(
@@ -7407,6 +7471,10 @@ async function envoyerDonneesLocalesVersSupabase() {
 
     }
 
+    // A failed control stays in its own journal; do not resend old stocks solely
+    // because a signature or the control service is temporarily unavailable.
+    try { await synchroniserControlesPharmacieEnAttente(); }
+    catch (e) { console.warn("Contrôles conservés en attente d’envoi automatique.", e); }
     enregistrerSnapshotSynchronisation();
 
 }
@@ -7719,13 +7787,74 @@ async function initialiserSynchronisationSupabase() {
 
 }
 
-window.addEventListener("online", function () {
-
-    // Aucune synchronisation automatique ici.
-    // La prochaine ouverture d'un écran ou validation lancera la synchronisation.
-    console.log("🌐 Connexion Internet disponible.");
-
+// Reprise silencieuse : aucune navigation et aucune remise à zéro des formulaires.
+let repriseHorsConnexionEnCours = false;
+let prochaineRepriseHorsConnexion = 0;
+let echecsRepriseHorsConnexion = 0;
+function preparerRepriseHorsConnexion() {
+    if (navigator.onLine && utilisateurConnecte?.id) {
+        void chargerSignaturePharmacie().catch(() => {});
+        void synchroniserHorsConnexionAutomatiquement();
+    }
+}
+async function synchroniserHorsConnexionAutomatiquement() {
+    if (!navigator.onLine || !utilisateurConnecte?.id || repriseHorsConnexionEnCours ||
+        synchronisationSupabaseEnCours || validationRetourInterventionEnCours ||
+        Date.now() < prochaineRepriseHorsConnexion) return;
+    const proprietaire = String(utilisateurConnecte.id);
+    const proprietaireModifications = localStorage.getItem("cis_sync_proprietaire");
+    if (existeModificationsEnAttente() && proprietaireModifications && proprietaireModifications !== proprietaire) return;
+    // Les anciennes versions n'avaient pas de propriétaire pour ce marqueur.
+    if (historique.some(i => i.synchronisationEnAttente && i.createdBy && String(i.createdBy) !== proprietaire)) return;
+    if (!existeModificationsEnAttente() && !lireControlesPharmacieEnAttente().some(c => c.user_id === proprietaire)) return;
+    repriseHorsConnexionEnCours = true;
+    synchronisationSupabaseEnCours = true;
+    demarrerIndicateurSynchronisation();
+    try {
+        const sb = await assurerBibliothequeSupabaseDisponible();
+        if (!sb) throw new Error("Connexion au serveur indisponible");
+        const session = await obtenirSessionPrincipaleValide(sb);
+        if (String(session.user?.id || "") !== proprietaire || String(utilisateurConnecte?.id || "") !== proprietaire) {
+            throw new Error("La session ne correspond pas aux données en attente");
+        }
+        if (existeModificationsEnAttente()) {
+            await envoyerDonneesLocalesVersSupabase();
+            effacerModificationsEnAttente();
+            historique.forEach(i => { i.synchronisationEnAttente = false; });
+            sauvegarderToutesLesDonnees();
+            synchronisationSupabaseActive = true;
+        }
+        await synchroniserControlesPharmacieEnAttente();
+        echecsRepriseHorsConnexion = 0;
+        prochaineRepriseHorsConnexion = 0;
+        // L'historique peut être mis à jour sans remplacer la page en cours.
+        if (document.getElementById("historique-interventions")) {
+            afficherHistoriqueTotal();
+            afficherHistoriqueInterventions();
+        }
+    } catch (erreur) {
+        echecsRepriseHorsConnexion++;
+        prochaineRepriseHorsConnexion = Date.now() + Math.min(60000, 5000 * 2 ** Math.min(echecsRepriseHorsConnexion - 1, 4));
+        console.warn("Synchronisation automatique différée ; les données restent sur cet appareil.", erreur);
+    } finally {
+        synchronisationSupabaseEnCours = false;
+        repriseHorsConnexionEnCours = false;
+        actualiserStatutControlesPharmacie();
+        arreterIndicateurSynchronisation();
+    }
+}
+function reprendreHorsConnexionMaintenant() {
+    prochaineRepriseHorsConnexion = 0;
+    void synchroniserHorsConnexionAutomatiquement();
+}
+window.addEventListener("online", reprendreHorsConnexionMaintenant);
+window.addEventListener("focus", reprendreHorsConnexionMaintenant);
+window.addEventListener("pageshow", reprendreHorsConnexionMaintenant);
+document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) reprendreHorsConnexionMaintenant();
 });
+// Retry even when Wi-Fi remains connected during a temporary server/network failure.
+setInterval(() => { void synchroniserHorsConnexionAutomatiquement(); }, 5000);
 
 
 /* =========================================================
@@ -9588,8 +9717,7 @@ function initialiserStyleAgendaGeneralCaserne(){
  .agenda-general-semaine,.agenda-general-grille{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px;text-align:center}
  .agenda-general-semaine{font-size:11px;font-weight:800;color:#9192a0;margin-bottom:8px}
  .agenda-general-date{border:0;min-height:49px;border-radius:12px;background:transparent;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;font-weight:800;color:#333;cursor:pointer}
- .agenda-general-date.hors-mois{color:#b9b9c1}.agenda-general-date.selection{background:#7048dd;color:#fff}.agenda-general-date.aujourdhui:not(.selection){outline:2px solid #7048dd;outline-offset:-2px}
- .agenda-general-points{display:flex;gap:3px;min-height:5px}.agenda-general-point{width:5px;height:5px;border-radius:50%;background:#a48be9}.agenda-general-date.selection .agenda-general-point{background:#fff}
+ .agenda-general-date.hors-mois{color:#b9b9c1}.agenda-general-date.avec-evenement{background:#d9ccfa;color:#392365}.agenda-general-date.selection{background:#7048dd;color:#fff}.agenda-general-date.aujourdhui:not(.selection){outline:2px solid #7048dd;outline-offset:-2px}
  .agenda-general-jour-titre{font-size:16px;font-weight:900;text-transform:capitalize;margin:21px 3px 15px}
  .agenda-general-timeline{display:grid;grid-template-columns:58px minmax(0,1fr);gap:10px;align-items:stretch;margin:10px 0}
  .agenda-general-heure{font-size:12px;font-weight:850;color:#9294a5;text-align:right;padding-top:14px}
@@ -9612,6 +9740,7 @@ function initialiserStyleAgendaGeneralCaserne(){
   body:not(.mode-connexion) #app .caserne-shell .agenda-general-panel .agenda-general-heure{color:#a6b3c0!important}
   body:not(.mode-connexion) #app .caserne-shell .agenda-general-panel .agenda-general-date{color:#f5f7f9!important}
   body:not(.mode-connexion) #app .caserne-shell .agenda-general-panel .agenda-general-date.hors-mois{color:#a6b3c0!important}
+  body:not(.mode-connexion) #app .caserne-shell .agenda-general-panel .agenda-general-date.avec-evenement{background:#d9ccfa!important;color:#392365!important}
   body:not(.mode-connexion) #app .caserne-shell .agenda-general-panel .agenda-general-date.selection{color:#fff!important;background:#7048dd!important}
   body:not(.mode-connexion) #app .caserne-shell .agenda-general-panel .agenda-general-ligne,
   body:not(.mode-connexion) #app .caserne-shell .agenda-general-panel .agenda-general-ligne strong,
@@ -9638,7 +9767,7 @@ function agendaGeneralRenduCaserne(){
  const aujourdHui=dateISOlocale(new Date());
  const compte=new Map();agendaGeneralItemsCaserne.forEach(x=>{const k=dateISOlocale(x.d);compte.set(k,(compte.get(k)||0)+1)});
  const debut=new Date(an,mo,1,12);const decalage=(debut.getDay()+6)%7;
- const jours=Array.from({length:42},(_,i)=>{const d=new Date(an,mo,1-decalage+i,12),cle=dateISOlocale(d),nombre=compte.get(cle)||0;return `<button type="button" class="agenda-general-date ${d.getMonth()!==mo?'hors-mois':''} ${cle===selection?'selection':''} ${cle===aujourdHui?'aujourdhui':''}" onclick="selectionnerJourAgendaGeneralCaserne('${cle}')" aria-label="${echapperHTML(d.toLocaleDateString('fr-FR',{day:'numeric',month:'long'}))}"><span>${d.getDate()}</span><span class="agenda-general-points">${nombre?'<i class="agenda-general-point"></i>'.repeat(Math.min(nombre,3)):''}</span></button>`}).join("");
+ const jours=Array.from({length:42},(_,i)=>{const d=new Date(an,mo,1-decalage+i,12),cle=dateISOlocale(d),nombre=compte.get(cle)||0;return `<button type="button" class="agenda-general-date ${nombre?'avec-evenement':''} ${d.getMonth()!==mo?'hors-mois':''} ${cle===selection?'selection':''} ${cle===aujourdHui?'aujourdhui':''}" onclick="selectionnerJourAgendaGeneralCaserne('${cle}')" aria-pressed="${cle===selection}" aria-label="${echapperHTML(d.toLocaleDateString('fr-FR',{day:'numeric',month:'long'}))}${nombre?', '+nombre+' événement(s)':''}"><span>${d.getDate()}</span></button>`}).join("");
  const date=new Date(selection+"T12:00:00");
  const duJour=agendaGeneralItemsCaserne.filter(x=>dateISOlocale(x.d)===selection);
  const titreJour=date.toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long"});
@@ -11592,6 +11721,7 @@ async function afficherRetourIntervention() {
     await synchroniserAvantNavigation();
 
     consommationsEnCours = {};
+    if (navigator.onLine) void chargerSignaturePharmacie().catch(() => {});
 
 
     document.getElementById(
@@ -11644,7 +11774,7 @@ async function afficherRetourIntervention() {
                 <strong>Contrôles au retour d’intervention</strong>
                 <label style="display:flex;align-items:center;gap:12px;margin:12px 0"><input type="checkbox" id="controle-meducore-retour" style="width:22px;height:22px"> Contrôle du Meducore</label>
                 <label style="display:flex;align-items:center;gap:12px;margin:12px 0"><input type="checkbox" id="entretien-vsav-retour" style="width:22px;height:22px"> Entretien du VSAV</label>
-                
+                <p id="statut-controles-pharmacie" role="status">${echapperHTML(texteStatutControlesPharmacie())}</p>
             </section>
 
             <div class="recherche">
@@ -12549,16 +12679,24 @@ async function validerRetourIntervention() {
     const meducoreCoche = Boolean(document.getElementById("controle-meducore-retour")?.checked);
     const vsavCoche = Boolean(document.getElementById("entretien-vsav-retour")?.checked);
     let signatureRetour = null;
-    if (meducoreCoche || vsavCoche) {
-        if (!navigator.onLine) {
-            alert("Les fiches de contrôle nécessitent une connexion Internet. Réessaie connecté ou décoche les contrôles.");
-            return;
+    if (vsavCoche) {
+        const proprietaireSignature = String(utilisateurConnecte?.id || "");
+        if (navigator.onLine) {
+            try {
+                signatureRetour = await chargerSignaturePharmacie();
+                if (!signatureRetour) {
+                    alert("Enregistre d’abord ta signature dans Mon profil pour valider l’entretien VSAV.");
+                    return;
+                }
+            } catch (e) {
+                // Une coupure pendant la validation ne doit pas empêcher la sauvegarde locale.
+                signatureRetour = lireSignaturePharmacieCache(proprietaireSignature);
+            }
+        } else {
+            signatureRetour = lireSignaturePharmacieCache(proprietaireSignature);
         }
-        if (vsavCoche) {
-            try { signatureRetour = await chargerSignaturePharmacie(); }
-            catch (e) { alert("Impossible de charger ta signature : " + e.message); return; }
-            if (!signatureRetour) { alert("Enregistre d’abord ta signature dans Mon profil pour valider l’entretien VSAV."); return; }
-        }
+        // Sans copie locale, la signature sera recherchée au retour du réseau,
+        // exclusivement pour l'agent qui a validé ce retour.
     }
 
     const ids =
@@ -12650,6 +12788,21 @@ async function validerRetourIntervention() {
         true;
 
 
+    while (synchronisationSupabaseEnCours) {
+        await new Promise(resolve => setTimeout(resolve, 80));
+    }
+    const idRetourPourControles = genererUUID();
+    // Write the durable control journal before changing stocks or clearing the form.
+    try {
+        mettreControlesPharmacieEnAttente({
+            interventionId: idRetourPourControles, date, numero,
+            meducore: meducoreCoche, vsav: vsavCoche, signature: signatureRetour
+        });
+    } catch (e) {
+        validationRetourInterventionEnCours = false;
+        alert("Impossible de sauvegarder les contrôles sur cet appareil. Libère de l’espace puis réessaie. " + e.message);
+        return;
+    }
     const consommations = [];
 
 
@@ -12719,7 +12872,6 @@ async function validerRetourIntervention() {
     );
 
 
-    const idRetourPourControles = genererUUID();
     historique.push({
 
         id:
@@ -12747,12 +12899,13 @@ async function validerRetourIntervention() {
             consommations,
 
         synchronisationEnAttente:
-            !navigator.onLine
+            true
 
     });
 
 
     sauvegarderToutesLesDonnees();
+    marquerModificationsEnAttente();
 
 
     consommationsEnCours = {};
@@ -12779,19 +12932,6 @@ async function validerRetourIntervention() {
 
         }
 
-        if (meducoreCoche || vsavCoche) {
-            try {
-                await enregistrerControlesPharmacie({
-                    interventionId: idRetourPourControles, date, numero,
-                    meducore: meducoreCoche, vsav: vsavCoche,
-                    signature: signatureRetour
-                });
-            } catch (e) {
-                console.error("Traçabilité pharmacie", e);
-                alert("⚠️ Le retour est enregistré, mais les fiches Meducore/VSAV ne sont pas sauvegardées : " + e.message + ". Contacte l’administrateur avant de recommencer.");
-                return;
-            }
-        }
         await animationValidationEnregistrementCIS("Retour d’intervention enregistré", () => afficherHistorique());
 
     } finally {
@@ -12837,6 +12977,7 @@ async function afficherHistorique() {
 
             <h2>Historique
             </h2>
+            <p id="statut-controles-pharmacie" role="status">${echapperHTML(texteStatutControlesPharmacie())}</p>
 
 
             <h3>Total consommé par matériel
@@ -16778,7 +16919,7 @@ async function appelerGestionUtilisateurs(
         data,
         error
     } =
-        await supabase.functions.invoke(
+        await appelerFonctionPrincipale(supabase,
             "gestion-utilisateurs",
             {
                 body: {
@@ -23088,12 +23229,105 @@ window.basculerZoneDepuisPlanGarde=basculerZoneDepuisPlanGarde;
 
 
 /* ===== TRAÇABILITÉ PHARMACIE : Meducore / VSAV ===== */
+function cleSignaturePharmacieCache(userId) {
+    return "cis_signature_pharmacie_v1:" + userId;
+}
+function lireSignaturePharmacieCache(userId) {
+    if (!userId) return null;
+    return localStorage.getItem(cleSignaturePharmacieCache(userId)) || null;
+}
 async function chargerSignaturePharmacie() {
+    const proprietaire = String(utilisateurConnecte?.id || "");
+    if (!proprietaire) throw new Error("Session indisponible");
+    if (!navigator.onLine) return lireSignaturePharmacieCache(proprietaire);
     const sb = obtenirClientSupabase();
-    if (!sb || !utilisateurConnecte?.id) throw new Error("Session indisponible");
-    const {data,error}=await sb.from("cis_signatures_spv").select("signature_png").eq("user_id",utilisateurConnecte.id).maybeSingle();
+    if (!sb) throw new Error("Session indisponible");
+    const {data,error}=await sb.from("cis_signatures_spv").select("signature_png").eq("user_id",proprietaire).maybeSingle();
     if(error) throw error;
-    return data?.signature_png || null;
+    const signature = data?.signature_png || null;
+    if (signature) localStorage.setItem(cleSignaturePharmacieCache(proprietaire), signature);
+    else localStorage.removeItem(cleSignaturePharmacieCache(proprietaire));
+    return signature;
+}
+
+const CLE_CONTROLES_PHARMACIE_EN_ATTENTE = "cis_controles_pharmacie_en_attente_v1";
+function lireControlesPharmacieEnAttente() {
+    // Never silently overwrite a corrupt journal.
+    const liste = JSON.parse(localStorage.getItem(CLE_CONTROLES_PHARMACIE_EN_ATTENTE) || "[]");
+    if (!Array.isArray(liste)) throw new Error("La sauvegarde locale des contrôles est illisible");
+    return liste;
+}
+function mettreControlesPharmacieEnAttente(c) {
+    if (!c.meducore && !c.vsav) return;
+    const proprietaire = String(utilisateurConnecte?.id || "");
+    if (!proprietaire) throw new Error("Non connecté");
+    const lignes = lireControlesPharmacieEnAttente();
+    const nom = [profilUtilisateurConnecte?.prenom, profilUtilisateurConnecte?.nom].filter(Boolean).join(" ").trim();
+    for (const type of ["meducore", "vsav"]) {
+        if (!c[type] || lignes.some(l => l.user_id === proprietaire && l.intervention_ref === c.interventionId && l.type_controle === type)) continue;
+        lignes.push({id:genererUUID(),type_controle:type,intervention_ref:c.interventionId,
+            date_intervention:c.date,numero_intervention:c.numero,user_id:proprietaire,
+            agent_nom:nom,signature_png:type === "vsav" ? c.signature : null,
+            created_at:new Date().toISOString()});
+    }
+    localStorage.setItem(CLE_CONTROLES_PHARMACIE_EN_ATTENTE, JSON.stringify(lignes));
+}
+function texteStatutControlesPharmacie() {
+    const lignes = lireControlesPharmacieEnAttente().filter(c => c.user_id === String(utilisateurConnecte?.id || ""));
+    if (!lignes.length) return "";
+    const signatureManquante = lignes.some(c => c.type_controle === "vsav" && !c.signature_png);
+    return lignes.length + " contrôle(s) conservé(s) sur cet appareil, en attente d’envoi automatique." +
+        (signatureManquante ? " La signature VSAV sera recherchée à la reconnexion. Si elle n’est pas encore enregistrée, ajoute-la dans Mon profil." : "");
+}
+function actualiserStatutControlesPharmacie() {
+    const zone = document.getElementById("statut-controles-pharmacie");
+    if (zone) zone.textContent = texteStatutControlesPharmacie();
+}
+let envoiControlesPharmacieEnCours = null;
+async function synchroniserControlesPharmacieEnAttente() {
+    if (envoiControlesPharmacieEnCours) return envoiControlesPharmacieEnCours;
+    const demande = envoyerControlesPharmacieEnAttente();
+    envoiControlesPharmacieEnCours = demande;
+    try { return await demande; } finally { envoiControlesPharmacieEnCours = null; }
+}
+async function envoyerControlesPharmacieEnAttente() {
+    if (!navigator.onLine || !utilisateurConnecte?.id) return;
+    const proprietaire = String(utilisateurConnecte.id);
+    const lignes = lireControlesPharmacieEnAttente().filter(c => c.user_id === proprietaire);
+    if (!lignes.length) return;
+    const sb = obtenirClientSupabase();
+    if (!sb) throw new Error("Serveur indisponible");
+    const session = await obtenirSessionPrincipaleValide(sb);
+    if (String(session.user?.id || "") !== proprietaire) throw new Error("Session différente de l’agent des contrôles");
+    let erreurSignature = null;
+    const retoursConfirmes = new Set();
+    for (const ligne of lignes) {
+        if (String(utilisateurConnecte?.id || "") !== proprietaire) throw new Error("Utilisateur modifié pendant l’envoi");
+        if (!retoursConfirmes.has(ligne.intervention_ref)) {
+            const retour = await sb.from("interventions").select("id").eq("id",ligne.intervention_ref).maybeSingle();
+            if (retour.error) throw retour.error;
+            if (!retour.data) throw new Error("Le retour associé doit être synchronisé avant ses contrôles");
+            retoursConfirmes.add(ligne.intervention_ref);
+        }
+        if (ligne.type_controle === "vsav" && !ligne.signature_png) {
+            ligne.signature_png = await chargerSignaturePharmacie();
+            if (!ligne.signature_png) {
+                erreurSignature = new Error("Enregistre ta signature dans Mon profil pour envoyer l’entretien VSAV en attente");
+                continue;
+            }
+            const journal = lireControlesPharmacieEnAttente().map(c => c.id === ligne.id ? ligne : c);
+            localStorage.setItem(CLE_CONTROLES_PHARMACIE_EN_ATTENTE, JSON.stringify(journal));
+        }
+        // A fixed UUID survives retries, including a lost server acknowledgement.
+        const {error} = await sb.from("cis_controles_pharmacie")
+            .upsert(ligne, {onConflict:"id", ignoreDuplicates:true});
+        if (error) throw error;
+        // Re-read so a control queued in the meantime cannot be erased.
+        localStorage.setItem(CLE_CONTROLES_PHARMACIE_EN_ATTENTE,
+            JSON.stringify(lireControlesPharmacieEnAttente().filter(c => c.id !== ligne.id)));
+    }
+    actualiserStatutControlesPharmacie();
+    if (erreurSignature) throw erreurSignature;
 }
 async function ouvrirSignaturePharmacie() {
     const ancien=document.getElementById("cis-signature-modal");if(ancien)ancien.remove();
@@ -23114,21 +23348,9 @@ async function ouvrirSignaturePharmacie() {
     overlay.querySelector("#cis-signature-enregistrer").onclick=async()=>{
         if(!trace){overlay.querySelector("#cis-signature-info").textContent="Signe avant d’enregistrer.";return;}
         const btn=overlay.querySelector("#cis-signature-enregistrer");btn.disabled=true;
-        try{const sb=obtenirClientSupabase();const {error}=await sb.from("cis_signatures_spv").upsert({user_id:utilisateurConnecte.id,signature_png:canvas.toDataURL("image/png"),updated_at:new Date().toISOString()},{onConflict:"user_id"});if(error)throw error;overlay.remove();alert("Signature enregistrée.");}
+        try{const sb=obtenirClientSupabase();const {error}=await sb.from("cis_signatures_spv").upsert({user_id:utilisateurConnecte.id,signature_png:canvas.toDataURL("image/png"),updated_at:new Date().toISOString()},{onConflict:"user_id"});if(error)throw error;localStorage.setItem(cleSignaturePharmacieCache(String(utilisateurConnecte.id)),canvas.toDataURL("image/png"));overlay.remove();reprendreHorsConnexionMaintenant();alert("Signature enregistrée.");}
         catch(e){overlay.querySelector("#cis-signature-info").textContent="Échec : "+e.message;btn.disabled=false;}
     };
-}
-async function enregistrerControlesPharmacie(c) {
-    const sb=obtenirClientSupabase();if(!sb || !utilisateurConnecte?.id)throw new Error("Non connecté");
-    const nom=[profilUtilisateurConnecte?.prenom,profilUtilisateurConnecte?.nom].filter(Boolean).join(" ").trim();
-    const lignes=[];
-    for(const type of ["meducore","vsav"]){
-        if(!c[type])continue;
-        lignes.push({type_controle:type,intervention_ref:c.interventionId,date_intervention:c.date,numero_intervention:c.numero,user_id:utilisateurConnecte.id,agent_nom:nom,signature_png:type==="vsav"?c.signature:null});
-    }
-    if(!lignes.length)return;
-    const {error}=await sb.from("cis_controles_pharmacie").insert(lignes);
-    if(error)throw error;
 }
 
 
@@ -23739,7 +23961,7 @@ async function envoyerDocumentsEquipeParMail(){
    e.pending={request_id:crypto.randomUUID(),documents};
   }
   statut.textContent='Envoi du mail…';
-  const {data,error}=await obtenirClientSupabase().functions.invoke('envoi-documents',{body:e.pending});
+  const {data,error}=await appelerFonctionPrincipale(obtenirClientSupabase(),'envoi-documents',{body:e.pending});
   if(error){let message=error.message;try{const details=await error.context.json();message=details.error||message;}catch(_){}throw new Error(message==='Failed to send a request to the Edge Function'?'Le service d’envoi est indisponible. Vérifie que la fonction envoi-documents est installée.':message);}
   if(!data?.ok)throw new Error(data?.error||'L’envoi n’a pas été confirmé.');
   if(statut.isConnected){statut.className='mail-doc-statut succes';statut.textContent=`Mail envoyé à ${data.email}. Vérifie également les courriers indésirables.`;document.querySelectorAll('[data-mail-document] input:checked').forEach(x=>x.checked=false);}e.pending=null;
