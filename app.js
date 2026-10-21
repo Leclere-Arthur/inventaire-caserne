@@ -725,7 +725,7 @@ const DOMAINE_EMAIL_INTERNE =
     "inventaire-caserne.local";
 
 const VERSION_APPLICATION =
-    "2.9.59";
+    "2.9.60";
 
 const CLE_PROFIL_UTILISATEUR_CACHE =
     "profil_utilisateur_connecte_v1";
@@ -1032,7 +1032,7 @@ let minuteurVerificationMiseAJour =
  * Elle permet de détecter une nouvelle version même si seul app.js change.
  */
 const VERSION_APPLICATION_JS =
-    "2026-10-19-menage-hors-connexion-v72";
+    "2026-10-20-reprise-reseau-v73";
 
 async function verifierNouvelleVersionAppJs() {
 
@@ -4236,71 +4236,67 @@ async function appelerFonctionPrincipale(client,nom,options={}){
 // All authenticated REST / RPC / storage / Edge requests use a current session.
 // Auth endpoints are excluded to avoid recursive refresh or lock deadlocks.
 let connexionPrincipaleIndisponible = false;
+let derniereErreurConnexionPrincipale = "";
 let derniereErreurLectureArchives = false;
 let derniereLecturePharmacieReussie = false;
 let restaurationConnexionPrincipaleEnCours = null;
 let derniereTentativeRestaurationPrincipale = 0;
 const lecturesPrincipaleEnErreur = new Set();
 function signalerConnexionPrincipaleIndisponible(erreur) {
+    if (!navigator.onLine) return;
     connexionPrincipaleIndisponible = true;
+    derniereErreurConnexionPrincipale = String(erreur?.message || "Le serveur n’a pas répondu").slice(0,180);
     const afficher = () => {
-        if (!document.body || !utilisateurConnecte?.id) return;
+        if (!connexionPrincipaleIndisponible || !navigator.onLine || !document.body || !utilisateurConnecte?.id) return;
         let zone = document.getElementById("cis-etat-connexion-serveur");
         if (!zone) {
             zone = document.createElement("div");
             zone.id = "cis-etat-connexion-serveur";
             zone.setAttribute("role", "status");
             zone.style.cssText = "position:fixed;z-index:299999;left:12px;right:12px;top:calc(env(safe-area-inset-top,0px) + 8px);max-width:680px;margin:auto;padding:12px;background:#fff4d6;color:#382c12;border:2px solid #b17b00;border-radius:12px;box-shadow:0 3px 12px #0003;font:14px/1.4 Arial,sans-serif";
-            zone.innerHTML = '<span>Connexion au serveur à rétablir. Les données locales sont conservées ; les listes affichées peuvent être incomplètes.</span><div style="display:flex;gap:12px;margin-top:8px"><button type="button" style="color:#174f9e;background:white;border:1px solid #777;padding:8px" onclick="void restaurerConnexionPrincipale(true)">Réessayer</button><button type="button" style="color:#174f9e;background:white;border:1px solid #777;padding:8px" onclick="afficherConnexion()">Se connecter</button></div>';
+            zone.innerHTML = '<span>Synchronisation indisponible pour le moment. Les données locales sont conservées ; les listes affichées peuvent être incomplètes.</span><div style="display:flex;gap:12px;margin-top:8px"><button type="button" style="color:#174f9e;background:white;border:1px solid #777;padding:8px" onclick="void restaurerConnexionPrincipale(true)">Réessayer</button><button type="button" style="color:#174f9e;background:white;border:1px solid #777;padding:8px" onclick="afficherConnexion()">Se connecter</button></div>';
+            const detail = document.createElement("small");
+            detail.id = "cis-connexion-detail";
+            detail.style.cssText = "display:block;margin-top:8px;overflow-wrap:anywhere";
+            zone.appendChild(detail);
             document.body.appendChild(zone);
         }
+        const detail = document.getElementById("cis-connexion-detail");
+        if (detail) detail.textContent = "Détail : " + derniereErreurConnexionPrincipale;
     };
     afficher();
     // In startup fallback, the cached profile is assigned after the catch starts.
     setTimeout(afficher, 0);
 }
+// The Supabase SDK owns token attachment and its authentication locks.
+// This transport only observes errors; it must not call auth from inside fetch.
 async function requeteSupabaseAuthentifiee(input, options = {}) {
-    const adresse = new URL(typeof input === "string" ? input : input.url, window.SUPABASE_URL);
+    const adresse = new URL(typeof input === "string" ? input : input.url || String(input), window.SUPABASE_URL);
     const projet = new URL(window.SUPABASE_URL);
     const protegee = adresse.origin === projet.origin && /^\/(rest|functions|storage)\/v1(?:\/|$)/.test(adresse.pathname);
     if (!protegee) return window.fetch(input, options);
-    const client = obtenirClientSupabase();
     const methode = String(options.method || input.method || "GET").toUpperCase();
     const lecture = methode === "GET" || methode === "HEAD";
-    const cleLecture = adresse.pathname;
     try {
-        const session = await obtenirSessionPrincipaleValide(client);
-        const envoyer = session => {
-            const headers = new Headers(options.headers || input.headers || {});
-            headers.set("Authorization", "Bearer " + session.access_token);
-            return window.fetch(input, {...options, headers});
-        };
-        let reponse = await envoyer(session);
-        // A 401 is an authentication rejection, not a successful mutation.
-        // Never replay RLS / permission failures (403), server failures or network timeouts.
-        if (reponse.status === 401) {
-            let nouvelle = await obtenirSessionPrincipaleValide(client);
-            if (nouvelle.access_token === session.access_token) nouvelle = await renouvelerSessionPrincipale(client);
-            reponse = await envoyer(nouvelle);
+        const reponse = await window.fetch(input, options);
+        if (lecture) {
+            if (reponse.ok) lecturesPrincipaleEnErreur.delete(adresse.pathname);
+            else lecturesPrincipaleEnErreur.add(adresse.pathname);
         }
-        if (reponse.status === 401 || reponse.status === 403) {
-            if (lecture) lecturesPrincipaleEnErreur.add(cleLecture);
-            signalerConnexionPrincipaleIndisponible(new Error("Accès au serveur refusé"));
-        } else if (lecture) {
-            if (reponse.ok) lecturesPrincipaleEnErreur.delete(cleLecture);
-            else lecturesPrincipaleEnErreur.add(cleLecture);
-        }
+        // 403 denotes a permission refusal, not an Internet outage. The caller
+        // handles its own error. No network-layer replay of any mutation.
+        if (reponse.status === 401 && navigator.onLine) signalerConnexionPrincipaleIndisponible(new Error("Session non reconnue par le serveur (401)"));
         return reponse;
     } catch (erreur) {
-        if (lecture) lecturesPrincipaleEnErreur.add(cleLecture);
-        signalerConnexionPrincipaleIndisponible(erreur);
+        if (lecture) lecturesPrincipaleEnErreur.add(adresse.pathname);
+        if (navigator.onLine) signalerConnexionPrincipaleIndisponible(erreur);
         throw erreur;
     }
 }
 async function restaurerConnexionPrincipale(force = false) {
     if (restaurationConnexionPrincipaleEnCours) return restaurationConnexionPrincipaleEnCours;
     if (!navigator.onLine || document.hidden || !utilisateurConnecte?.id || validationRetourInterventionEnCours || synchronisationSupabaseEnCours) return;
-    if (!force && (!connexionPrincipaleIndisponible && !lecturesPrincipaleEnErreur.size || Date.now() - derniereTentativeRestaurationPrincipale < 30000)) return;
+    if (!force && (!connexionPrincipaleIndisponible || Date.now() - derniereTentativeRestaurationPrincipale < 30000)) return;
     derniereTentativeRestaurationPrincipale = Date.now();
     const demande = (async () => {
         try {
@@ -4320,10 +4316,12 @@ async function restaurerConnexionPrincipale(force = false) {
                 else if (app?.querySelector("[data-archives-pharmacie]")) await afficherArchivesHistorique();
                 else if (app?.querySelector(".caserne-shell-actualites")) await afficherActualitesCaserne(true);
             }
-            if (!lecturesPrincipaleEnErreur.size && !derniereErreurLectureArchives) {
-                connexionPrincipaleIndisponible = false;
-                document.getElementById("cis-etat-connexion-serveur")?.remove();
-            }
+            // Successful authenticated reads prove that the connection is restored.
+            // A stale failure from another page must not keep this banner alive.
+            connexionPrincipaleIndisponible = false;
+            document.getElementById("cis-etat-connexion-serveur")?.remove();
+            void synchroniserMenagesEnAttente(true);
+            void synchroniserHorsConnexionAutomatiquement();
         } catch (erreur) {
             signalerConnexionPrincipaleIndisponible(erreur);
             console.warn("Restauration de la connexion différée ; copie locale conservée.", erreur);
@@ -4332,6 +4330,7 @@ async function restaurerConnexionPrincipale(force = false) {
     restaurationConnexionPrincipaleEnCours = demande;
     try { return await demande; } finally { restaurationConnexionPrincipaleEnCours = null; }
 }
+window.addEventListener("offline", () => { document.getElementById("cis-etat-connexion-serveur")?.remove(); });
 window.addEventListener("online", () => { void restaurerConnexionPrincipale(true); });
 window.addEventListener("focus", () => { void restaurerConnexionPrincipale(); });
 window.addEventListener("pageshow", () => { void restaurerConnexionPrincipale(); });
@@ -6812,6 +6811,7 @@ async function recupererDonneesSupabase() {
 
     resultats.forEach(function (resultat) {
         if (resultat.error) {
+            signalerConnexionPrincipaleIndisponible(resultat.error);
             throw resultat.error;
         }
     });
@@ -6865,6 +6865,8 @@ async function recupererDonneesSupabase() {
 
 
     derniereLecturePharmacieReussie = true;
+    connexionPrincipaleIndisponible = false;
+    document.getElementById("cis-etat-connexion-serveur")?.remove();
     return {
         categories: resultats[0].data || [],
         materiels: resultats[1].data || [],
@@ -7240,6 +7242,11 @@ async function envoyerDonneesLocalesVersSupabase() {
     if (!supabase) {
         return;
     }
+
+    const sessionEnvoi = await obtenirSessionPrincipaleValide(supabase);
+    if (String(sessionEnvoi.user?.id || "") !== String(utilisateurConnecte?.id || "")) throw new Error("La session ne correspond pas aux données à envoyer");
+    const auteurEnAttente = localStorage.getItem("cis_sync_proprietaire");
+    if (existeModificationsEnAttente() && auteurEnAttente && auteurEnAttente !== String(sessionEnvoi.user.id)) throw new Error("Des données d’un autre utilisateur sont en attente sur cet appareil");
 
     migrerIdentifiantsVersUUID();
 
@@ -8153,7 +8160,7 @@ async function synchroniserCaserneAvantNavigation() {
     try {
         const supabase = obtenirClientSupabase();
         if (supabase) {
-            await supabase.auth.getSession();
+            await obtenirSessionPrincipaleValide(supabase);
         }
     } catch (erreur) {
         console.warn("Vérification session Caserne :", erreur);
@@ -23560,7 +23567,7 @@ async function ouvrirSignaturePharmacie() {
     overlay.querySelector("#cis-signature-enregistrer").onclick=async()=>{
         if(!trace){overlay.querySelector("#cis-signature-info").textContent="Signe avant d’enregistrer.";return;}
         const btn=overlay.querySelector("#cis-signature-enregistrer");btn.disabled=true;
-        try{const sb=obtenirClientSupabase();const {error}=await sb.from("cis_signatures_spv").upsert({user_id:utilisateurConnecte.id,signature_png:canvas.toDataURL("image/png"),updated_at:new Date().toISOString()},{onConflict:"user_id"});if(error)throw error;localStorage.setItem(cleSignaturePharmacieCache(String(utilisateurConnecte.id)),canvas.toDataURL("image/png"));overlay.remove();reprendreHorsConnexionMaintenant();alert("Signature enregistrée.");}
+        try{const sb=obtenirClientSupabase();const session=await obtenirSessionPrincipaleValide(sb);if(String(session.user?.id)!==String(utilisateurConnecte?.id))throw new Error("La session ne correspond pas au profil");const {error}=await sb.from("cis_signatures_spv").upsert({user_id:session.user.id,signature_png:canvas.toDataURL("image/png"),updated_at:new Date().toISOString()},{onConflict:"user_id"});if(error)throw error;localStorage.setItem(cleSignaturePharmacieCache(String(utilisateurConnecte.id)),canvas.toDataURL("image/png"));overlay.remove();reprendreHorsConnexionMaintenant();alert("Signature enregistrée.");}
         catch(e){overlay.querySelector("#cis-signature-info").textContent="Échec : "+e.message;btn.disabled=false;}
     };
 }
