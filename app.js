@@ -725,7 +725,7 @@ const DOMAINE_EMAIL_INTERNE =
     "inventaire-caserne.local";
 
 const VERSION_APPLICATION =
-    "2.9.67";
+    "2.9.68";
 
 const CLE_PROFIL_UTILISATEUR_CACHE =
     "profil_utilisateur_connecte_v1";
@@ -2260,6 +2260,8 @@ async function chargerProfilUtilisateurDepuisSupabase(
     utilisateur
 ) {
 
+    const generation = generationSessionPrincipale;
+    if (sessionPrincipaleInvalidee && !connexionApplicationEnCours) throw new Error("Session fermée.");
     const supabase =
         obtenirClientSupabase();
 
@@ -2341,11 +2343,12 @@ async function chargerProfilUtilisateurDepuisSupabase(
         !data ||
         data.actif !== true
     ) {
-        throw new Error(
-            "Ce compte est désactivé."
-        );
+        fermerSessionPrincipaleInvalide();
+        throw new Error("Ce compte est désactivé.");
     }
 
+    if (generation !== generationSessionPrincipale) throw new Error("Session fermée pendant le chargement.");
+    sessionPrincipaleInvalidee = false;
     utilisateurConnecte =
         utilisateur;
 
@@ -2368,7 +2371,7 @@ async function initialiserAuthentificationApplication() {
 
     if (!navigator.onLine) {
 
-        if (profilCache) {
+        if (!sessionPrincipaleInvalidee && profilCache) {
 
             profilUtilisateurConnecte =
                 profilCache;
@@ -2392,7 +2395,7 @@ async function initialiserAuthentificationApplication() {
 
     if (!supabase) {
 
-        if (profilCache) {
+        if (!sessionPrincipaleInvalidee && profilCache) {
 
             profilUtilisateurConnecte =
                 profilCache;
@@ -2429,9 +2432,10 @@ async function initialiserAuthentificationApplication() {
             erreur
         );
         signalerConnexionPrincipaleIndisponible(erreur);
+        if (sessionPrincipaleInvalidee || erreur?.reconnexionNecessaire === true) return false;
 
 
-        if (profilCache) {
+        if (!sessionPrincipaleInvalidee && profilCache) {
 
             profilUtilisateurConnecte =
                 profilCache;
@@ -3177,7 +3181,7 @@ async function seConnecterApplication() {
 
 
     try {
-
+        if (fermetureSessionPrincipaleEnCours) await fermetureSessionPrincipaleEnCours;
         const supabase =
             await assurerBibliothequeSupabaseDisponible();
 
@@ -4197,6 +4201,29 @@ async function changerMonMotDePasse() {
    ========================================================= */
 
 // Les appels Edge doivent utiliser le jeton de la session la plus récente.
+let sessionPrincipaleInvalidee = false;
+let fermetureSessionPrincipaleEnCours = null;
+let generationSessionPrincipale = 0;
+function sessionDefinitivementRefusee(erreur) {
+    return ["refresh_token_not_found","refresh_token_already_used","session_not_found","user_banned","user_not_found"].includes(String(erreur?.code || ""));
+}
+function fermerSessionPrincipaleInvalide() {
+    if (sessionPrincipaleInvalidee) return;
+    sessionPrincipaleInvalidee = true;
+    generationSessionPrincipale++;
+    utilisateurConnecte = null;
+    profilUtilisateurConnecte = null;
+    // Les journaux d'envoi restent rattachés à leur propriétaire. Ils ne sont
+    // ni supprimés ni attribués à la prochaine personne qui se connecte.
+    localStorage.removeItem(CLE_PROFIL_UTILISATEUR_CACHE);
+    document.getElementById("cis-etat-connexion-serveur")?.remove();
+    document.getElementById("cis-conflit-comptage-stock")?.remove();
+    afficherConnexion();
+    const client = obtenirClientSupabase();
+    if (client) fermetureSessionPrincipaleEnCours = client.auth.signOut({scope:"local"})
+        .catch(e => console.warn("Fermeture locale de session différée.",e))
+        .finally(() => { fermetureSessionPrincipaleEnCours = null; });
+}
 const renouvellementsSessionPrincipale = new WeakMap();
 let renouvellementApresRefusRequis = false;
 async function renouvelerSessionPrincipale(client){
@@ -4204,13 +4231,17 @@ async function renouvelerSessionPrincipale(client){
     const demande=(async()=>{
         const {data,error}=await client.auth.refreshSession();
         if(error) {
-            const definitive = ["refresh_token_not_found","refresh_token_already_used","session_not_found","user_banned"].includes(String(error.code || ""));
+            const definitive = sessionDefinitivementRefusee(error);
             const e = new Error(definitive ? "La session a été révoquée. Une nouvelle identification est nécessaire."
                 : "Connexion au serveur momentanément indisponible. Nouvelle tentative automatique.");
             e.reconnexionNecessaire = definitive;
+            if (definitive) fermerSessionPrincipaleInvalide();
             throw e;
         }
-        if(!data?.session?.access_token)throw new Error("La connexion n’est plus disponible. Identifie-toi à nouveau.");
+        if(!data?.session?.access_token) {
+            fermerSessionPrincipaleInvalide();
+            throw new Error("La session n'est plus disponible. Identifie-toi à nouveau.");
+        }
         renouvellementApresRefusRequis = false;
         return data.session;
     })();
@@ -4221,11 +4252,15 @@ async function obtenirSessionPrincipaleValide(client){
     if(renouvellementsSessionPrincipale.has(client))return renouvellementsSessionPrincipale.get(client);
     if(navigator.onLine===false)throw new Error("Connexion Internet indisponible. Réessaie lorsque la connexion est rétablie.");
     const {data,error}=await client.auth.getSession();
-    if(error)throw error;
+    if(error) {
+        if (sessionDefinitivementRefusee(error)) fermerSessionPrincipaleInvalide();
+        throw error;
+    }
     const session=data?.session;
     if(!session?.access_token) {
         const e = new Error("La session n'est plus disponible. Identifie-toi pour effectuer cette action.");
         e.reconnexionNecessaire = true;
+        if (utilisateurConnecte?.id) fermerSessionPrincipaleInvalide();
         throw e;
     }
     if(renouvellementApresRefusRequis || Number(session.expires_at||0)<=Math.floor(Date.now()/1000)+90)return renouvelerSessionPrincipale(client);
@@ -4254,32 +4289,15 @@ let restaurationConnexionPrincipaleEnCours = null;
 let derniereTentativeRestaurationPrincipale = 0;
 const lecturesPrincipaleEnErreur = new Set();
 function signalerConnexionPrincipaleIndisponible(erreur) {
-    if (!navigator.onLine) return;
+    if (erreur?.reconnexionNecessaire === true || sessionDefinitivementRefusee(erreur)) {
+        fermerSessionPrincipaleInvalide();
+        return;
+    }
     connexionPrincipaleIndisponible = true;
-    derniereErreurConnexionPrincipale = String(erreur?.message || "Le serveur n’a pas répondu").slice(0,180);
-    const afficher = () => {
-        if (!connexionPrincipaleIndisponible || !navigator.onLine || !document.body || !utilisateurConnecte?.id) return;
-        let zone = document.getElementById("cis-etat-connexion-serveur");
-        if (!zone) {
-            zone = document.createElement("div");
-            zone.id = "cis-etat-connexion-serveur";
-            zone.setAttribute("role", "status");
-            zone.style.cssText = "position:fixed;z-index:299999;left:12px;right:12px;top:calc(env(safe-area-inset-top,0px) + 8px);max-width:680px;margin:auto;padding:12px;background:#fff4d6;color:#382c12;border:2px solid #b17b00;border-radius:12px;box-shadow:0 3px 12px #0003;font:14px/1.4 Arial,sans-serif";
-            zone.innerHTML = '<span>Synchronisation différée. Nouvelle tentative automatique. Les données locales sont conservées ; les listes affichées peuvent être incomplètes.</span><div style="display:flex;gap:12px;margin-top:8px"><button type="button" style="color:#174f9e;background:white;border:1px solid #777;padding:8px" onclick="void restaurerConnexionPrincipale(true)">Réessayer</button><button id="cis-reconnexion-requise" type="button" hidden style="color:#174f9e;background:white;border:1px solid #777;padding:8px" onclick="afficherConnexion()">Se connecter</button></div>';
-            const detail = document.createElement("small");
-            detail.id = "cis-connexion-detail";
-            detail.style.cssText = "display:block;margin-top:8px;overflow-wrap:anywhere";
-            zone.appendChild(detail);
-            document.body.appendChild(zone);
-        }
-        const reconnexion = document.getElementById("cis-reconnexion-requise");
-        if (reconnexion) reconnexion.hidden = erreur?.reconnexionNecessaire !== true;
-        const detail = document.getElementById("cis-connexion-detail");
-        if (detail) detail.textContent = "Détail : " + derniereErreurConnexionPrincipale;
-    };
-    afficher();
-    // In startup fallback, the cached profile is assigned after the catch starts.
-    setTimeout(afficher, 0);
+    derniereErreurConnexionPrincipale = String(erreur?.message || "Le serveur n'a pas répondu").slice(0,180);
+    // Une panne réseau ne bloque pas l'application et ne demande pas de connexion.
+    // Les reprises existantes utilisent cet état pour retenter silencieusement.
+    document.getElementById("cis-etat-connexion-serveur")?.remove();
 }
 // The Supabase SDK owns token attachment and its authentication locks.
 // This transport only observes errors; it must not call auth from inside fetch.
@@ -4298,6 +4316,8 @@ async function requeteSupabaseAuthentifiee(input, options = {}) {
     const projet = new URL(window.SUPABASE_URL);
     const protegee = adresse.origin === projet.origin && /^\/(rest|functions|storage)\/v1(?:\/|$)/.test(adresse.pathname);
     if (!protegee) return requeteProjetAvecDelai(input, options);
+    if (sessionPrincipaleInvalidee && !["GET","HEAD"].includes(String(options.method || input.method || "GET").toUpperCase()))
+        throw new Error("Session fermée. Reconnecte-toi avant de modifier des données.");
     const methode = String(options.method || input.method || "GET").toUpperCase();
     const lecture = methode === "GET" || methode === "HEAD";
     try {
@@ -8131,6 +8151,7 @@ function verifierRaccourcisProfil(el){const c=[...document.querySelectorAll("[da
 function htmlRaccourcisAccueil(){const ids=lireRaccourcisAccueil(),opts=optionsRaccourcisAccueil();const a=ids.map(id=>opts.find(x=>x.id===id)).filter(Boolean);if(!a.length)return "";return `<section class="raccourcis-accueil-rapides">${a.map(x=>`<button type="button" onclick="${x.action}">${x.logo?`<img class="raccourci-logo-appli" src="${echapperHTML(x.logo)}" alt="Logo ${echapperHTML(x.libelle)}">`:`<span>${x.icone}</span>`}<strong>${echapperHTML(x.libelle)}</strong></button>`).join("")}</section>`}
 
 function afficherPortailPrincipal() {
+    if (sessionPrincipaleInvalidee) { afficherConnexion(); return; }
     initialiserStyleConnexion();
     initialiserStyleEspaceCaserne();
     document.body.classList.remove("mode-connexion");
@@ -10632,6 +10653,7 @@ function connecterBoutonsAccueil() {
 
 
 function afficherAccueil() {
+    if (sessionPrincipaleInvalidee) { afficherConnexion(); return; }
 
     initialiserStyleConnexion();
     initialiserStyleEspaceCaserne();

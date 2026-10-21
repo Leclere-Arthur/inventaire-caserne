@@ -15,7 +15,7 @@ importScripts("./notifications-history.js");
  * à récupérer le nouvel app.js.
  */
 
-const CACHE_NAME = "inventaire-caserne-v119-stock-reseau";
+const CACHE_NAME = "inventaire-caserne-v120-session-invalide";
 
 
 /*
