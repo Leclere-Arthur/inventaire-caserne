@@ -725,7 +725,7 @@ const DOMAINE_EMAIL_INTERNE =
     "inventaire-caserne.local";
 
 const VERSION_APPLICATION =
-    "2.9.68";
+    "2.9.69";
 
 const CLE_PROFIL_UTILISATEUR_CACHE =
     "profil_utilisateur_connecte_v1";
@@ -4248,23 +4248,41 @@ async function renouvelerSessionPrincipale(client){
     renouvellementsSessionPrincipale.set(client,demande);
     try{return await demande;}finally{renouvellementsSessionPrincipale.delete(client);}
 }
+const validationsSessionPrincipale = new WeakMap();
+let jetonPrincipaleRefuse = null;
 async function obtenirSessionPrincipaleValide(client){
-    if(renouvellementsSessionPrincipale.has(client))return renouvellementsSessionPrincipale.get(client);
-    if(navigator.onLine===false)throw new Error("Connexion Internet indisponible. Réessaie lorsque la connexion est rétablie.");
-    const {data,error}=await client.auth.getSession();
-    if(error) {
-        if (sessionDefinitivementRefusee(error)) fermerSessionPrincipaleInvalide();
-        throw error;
-    }
-    const session=data?.session;
-    if(!session?.access_token) {
-        const e = new Error("La session n'est plus disponible. Identifie-toi pour effectuer cette action.");
-        e.reconnexionNecessaire = true;
-        if (utilisateurConnecte?.id) fermerSessionPrincipaleInvalide();
-        throw e;
-    }
-    if(renouvellementApresRefusRequis || Number(session.expires_at||0)<=Math.floor(Date.now()/1000)+90)return renouvelerSessionPrincipale(client);
-    return session;
+    if (validationsSessionPrincipale.has(client)) return validationsSessionPrincipale.get(client);
+    const verification = (async () => {
+        if (renouvellementsSessionPrincipale.has(client)) return renouvellementsSessionPrincipale.get(client);
+        if (navigator.onLine === false) throw new Error("Connexion Internet indisponible. Réessaie lorsque la connexion est rétablie.");
+        const {data,error} = await client.auth.getSession();
+        if (error) {
+            if (sessionDefinitivementRefusee(error)) fermerSessionPrincipaleInvalide();
+            throw error;
+        }
+        const session = data?.session;
+        if (!session?.access_token) {
+            const e = new Error("La session n'est plus disponible. Identifie-toi pour effectuer cette action.");
+            e.reconnexionNecessaire = true;
+            if (utilisateurConnecte?.id) fermerSessionPrincipaleInvalide();
+            throw e;
+        }
+        // Une réponse 401 tardive portant sur l'ancien jeton ne doit pas forcer
+        // une nouvelle rotation du jeton qui vient déjà d'être renouvelé.
+        const refusActuel = jetonPrincipaleRefuse && session.access_token === jetonPrincipaleRefuse;
+        if (renouvellementApresRefusRequis && (!jetonPrincipaleRefuse || refusActuel) ||
+            Number(session.expires_at || 0) <= Math.floor(Date.now()/1000)+90) {
+            const nouvelle = await renouvelerSessionPrincipale(client);
+            jetonPrincipaleRefuse = null;
+            return nouvelle;
+        }
+        renouvellementApresRefusRequis = false;
+        jetonPrincipaleRefuse = null;
+        return session;
+    })();
+    validationsSessionPrincipale.set(client, verification);
+    try { return await verification; }
+    finally { if (validationsSessionPrincipale.get(client) === verification) validationsSessionPrincipale.delete(client); }
 }
 async function appelerFonctionPrincipale(client,nom,options={}){
     const session=await obtenirSessionPrincipaleValide(client);
@@ -4329,6 +4347,8 @@ async function requeteSupabaseAuthentifiee(input, options = {}) {
         // 403 denotes a permission refusal, not an Internet outage. The caller
         // handles its own error. No network-layer replay of any mutation.
         if (reponse.status === 401 && navigator.onLine) {
+            const entetes = new Headers(options.headers || (typeof input === "object" ? input.headers : undefined));
+            jetonPrincipaleRefuse = String(entetes.get("Authorization") || "").replace(/^Bearer\s+/i, "") || null;
             renouvellementApresRefusRequis = true;
             signalerConnexionPrincipaleIndisponible(new Error("Vérification automatique de la session en cours."));
         }
@@ -4366,7 +4386,7 @@ async function restaurerConnexionPrincipale(force = false) {
             // A stale failure from another page must not keep this banner alive.
             connexionPrincipaleIndisponible = false;
             document.getElementById("cis-etat-connexion-serveur")?.remove();
-            void synchroniserMenagesEnAttente(true);
+            void synchroniserMenagesEnAttente();
             void synchroniserHorsConnexionAutomatiquement();
         } catch (erreur) {
             signalerConnexionPrincipaleIndisponible(erreur);
@@ -22699,6 +22719,7 @@ function lireCacheMenage(nom, defaut = null) {
     return texte === null ? defaut : JSON.parse(texte);
 }
 async function chargerUtilisateursEspaceGarde(){
+    const uid = String(utilisateurConnecte?.id || "");
     const cle = cleCacheMenage("personnels");
     const cache = JSON.parse(localStorage.getItem(cle) || "[]");
     const supabase = obtenirClientSupabase();
@@ -22706,45 +22727,70 @@ async function chargerUtilisateursEspaceGarde(){
     try {
         const {data,error} = await supabase.rpc("lister_utilisateurs_menage");
         if (error) throw error;
+        if (String(utilisateurConnecte?.id || "") !== uid) return cache;
         const liste = (data || []).filter(u=>u.actif!==false).map(u=>({id:u.id,prenom:u.prenom,nom:u.nom,identifiant:u.identifiant,actif:true}));
         localStorage.setItem(cle, JSON.stringify(liste));
         return liste;
     } catch (_) { return cache; }
 }
 async function chargerCatalogueMenageHorsConnexion() {
+    const uid = String(utilisateurConnecte?.id || "");
     const cle = cleCacheMenage("produits");
     const cache = JSON.parse(localStorage.getItem(cle) || "null");
     if (!navigator.onLine || !obtenirClientSupabase()) return cache;
     try {
         const {data,error} = await obtenirClientSupabase().from("menage_produits").select("id,nom,stock").order("nom");
         if (error) throw error;
+        if (String(utilisateurConnecte?.id || "") !== uid) return cache;
         localStorage.setItem(cle, JSON.stringify(data || []));
         return data || [];
     } catch (e) { if (cache !== null) return cache; throw e; }
 }
-async function chargerGardePourMenage() {
+async function chargerGardePourMenage(utiliserReseau = true) {
+    const uid = String(utilisateurConnecte?.id || "");
     const vendredi = dateISOlocale(vendrediReferenceGarde(new Date()));
     const cle = cleCacheMenage("garde");
     let garde = JSON.parse(localStorage.getItem(cle) || "null");
-    if (navigator.onLine) {
+    if (utiliserReseau && navigator.onLine) {
         try {
             const distante = await chargerGardeSemaineCourante();
-            if (distante) { garde = distante; localStorage.setItem(cle, JSON.stringify(garde)); }
+            if (distante && String(utilisateurConnecte?.id || "") === uid) { garde = distante; localStorage.setItem(cle, JSON.stringify(garde)); }
         } catch (_) {}
     }
     return garde?.date_debut === vendredi ? garde : {date_debut:vendredi,equipe:null};
 }
+async function prechargerPlanMenageHorsConnexion() {
+    const controleur = new AbortController();
+    const delai = setTimeout(() => controleur.abort(),15000);
+    try {
+        const r = await fetch("./plan-caserne.png",{cache:"reload",signal:controleur.signal});
+        if (!r.ok) throw new Error("Plan indisponible");
+        if (typeof r.arrayBuffer === "function") await r.arrayBuffer();
+    } finally { clearTimeout(delai); }
+}
 let preparationMenageHorsConnexionEnCours = null;
+const preparationsMenageParUtilisateur = new Map();
 async function preparerMenageHorsConnexion() {
     if (!navigator.onLine || !utilisateurConnecte?.id) return;
     if (preparationMenageHorsConnexionEnCours) return preparationMenageHorsConnexionEnCours;
-    const demande = Promise.allSettled([
-        chargerUtilisateursEspaceGarde(), chargerCatalogueMenageHorsConnexion(), chargerGardePourMenage(),
-        // Fetching this canonical URL also warms the service worker cache.
-        fetch("./plan-caserne.png", {cache:"reload"}).then(r=>{if(!r.ok)throw new Error("Plan indisponible");})
-    ]);
+    const uid = String(utilisateurConnecte.id);
+    if (Date.now() < (preparationsMenageParUtilisateur.get(uid) || 0)) return;
+    preparationsMenageParUtilisateur.set(uid, Date.now()+60000);
+    const demande = (async () => {
+        try {
+            const sb = await assurerBibliothequeSupabaseDisponible();
+            if (!sb) return;
+            const session = await obtenirSessionPrincipaleValide(sb);
+            if (String(session.user?.id) !== uid || String(utilisateurConnecte?.id) !== uid) return;
+            await Promise.allSettled([
+                chargerUtilisateursEspaceGarde(), chargerCatalogueMenageHorsConnexion(), chargerGardePourMenage(),
+                prechargerPlanMenageHorsConnexion()
+            ]);
+        } catch (e) { console.warn("Préparation du ménage différée ; caches conservés.",e); }
+    })();
     preparationMenageHorsConnexionEnCours = demande;
-    try { await demande; } finally { preparationMenageHorsConnexionEnCours = null; }
+    try { await demande; }
+    finally { preparationMenageHorsConnexionEnCours = null; }
 }
 function lireMenagesEnAttente() { return lireCacheMenage("envois", []); }
 function texteMenagesEnAttente() {
@@ -22758,14 +22804,18 @@ function actualiserStatutMenagesEnAttente() {
     if (zone) zone.textContent = texteMenagesEnAttente();
 }
 let envoiMenagesEnCours = null;
-let prochaineTentativeMenages = 0;
+const reprisesMenageParUtilisateur = new Map();
 async function synchroniserMenagesEnAttente(force = false) {
-    if (!navigator.onLine || !utilisateurConnecte?.id || (!force && Date.now() < prochaineTentativeMenages)) return false;
+    if (!navigator.onLine || !utilisateurConnecte?.id) return false;
     if (envoiMenagesEnCours) return envoiMenagesEnCours;
     const proprietaire = String(utilisateurConnecte.id), cle = cleCacheMenage("envois", proprietaire);
+    const reprise = reprisesMenageParUtilisateur.get(proprietaire) || {prochaine:0,derniere:0,echecs:0};
+    reprisesMenageParUtilisateur.set(proprietaire,reprise);
+    if ((!force && Date.now() < reprise.prochaine) || (reprise.derniere && Date.now()-reprise.derniere<5000)) return false;
     const demande = (async () => {
         const envois = JSON.parse(localStorage.getItem(cle) || "[]");
         if (!envois.length) return true;
+        reprise.derniere = Date.now();
         try {
             const sb = await assurerBibliothequeSupabaseDisponible();
             if (!sb) throw new Error("Serveur indisponible");
@@ -22778,20 +22828,24 @@ async function synchroniserMenagesEnAttente(force = false) {
                 });
                 if (error) throw error;
                 if (!data?.id) throw new Error("La base n’a pas confirmé l’enregistrement");
+                if (String(utilisateurConnecte?.id || "") !== proprietaire) throw new Error("Compte modifié avant la confirmation du ménage");
                 // The same server idempotency key survives network failures and restarts.
                 const restants = JSON.parse(localStorage.getItem(cle) || "[]").filter(l=>l.cle!==envoi.cle);
                 localStorage.setItem(cle, JSON.stringify(restants));
             }
-            prochaineTentativeMenages = 0;
+            reprise.prochaine = 0;
+            reprise.echecs = 0;
+            preparationsMenageParUtilisateur.delete(proprietaire);
             void preparerMenageHorsConnexion();
             return true;
         } catch (e) {
-            prochaineTentativeMenages = Date.now() + 30000;
+            reprise.echecs++;
+            reprise.prochaine = Date.now() + Math.min(300000,30000*2**Math.min(reprise.echecs-1,4));
             const restants = JSON.parse(localStorage.getItem(cle) || "[]");
             if (restants.length) { restants[0].erreur = e.message || "Connexion indisponible"; localStorage.setItem(cle, JSON.stringify(restants)); }
             console.warn("Ménage conservé localement ; envoi différé.", e);
             return false;
-        } finally { actualiserStatutMenagesEnAttente(); }
+        } finally { if (String(utilisateurConnecte?.id || "") === proprietaire) actualiserStatutMenagesEnAttente(); }
     })();
     envoiMenagesEnCours = demande;
     try { return await demande; } finally { envoiMenagesEnCours = null; }
@@ -23314,6 +23368,15 @@ function ouvrirPlanningEquipeGrand(url){
     document.body.appendChild(div);
 }
 
+async function attendreConfirmationMenage() {
+    let delai;
+    try {
+        return await Promise.race([
+            synchroniserMenagesEnAttente(true),
+            new Promise(resolve => { delai=setTimeout(() => resolve(false),3000); })
+        ]);
+    } finally { clearTimeout(delai); }
+}
 let validationMenageEnCours = false;
 async function enregistrerMenageEquipe(){
     if(validationMenageEnCours)return;
@@ -23326,11 +23389,14 @@ async function enregistrerMenageEquipe(){
     if(!zones.length){afficherStatut("Sélectionne au moins une zone nettoyée.",false);return}
     if(!personnes.length){afficherStatut("Sélectionne au moins une personne présente.",false);return}
     if(!duree){afficherStatut("Sélectionne le temps passé.",false);return}
+    const auteur = String(utilisateurConnecte?.id || "");
+    if (!auteur || String(profilUtilisateurConnecte?.id || "") !== auteur) return;
     validationMenageEnCours=true;
     try{
         if(bouton){bouton.disabled=true;bouton.textContent="Enregistrement…"}
         afficherStatut("Enregistrement en cours…",true);
-        const garde=await chargerGardePourMenage();
+        const garde=await chargerGardePourMenage(false);
+        if (String(utilisateurConnecte?.id || "") !== auteur) throw new Error("La session a changé avant l'enregistrement.");
         const ligne={date_menage:new Date().toISOString(),date_garde:garde?.date_debut||dateISOlocale(vendrediReferenceGarde(new Date())),equipe_id:garde?.equipe?.id||null,zones_nettoyees:zones,personnes_presentes:personnes,duree_minutes:duree,enregistre_par:profilUtilisateurConnecte?.id||null};
         if(!menageProduitsCharges)throw new Error("Les produits ne sont pas chargés. Actualise la rubrique avant d’enregistrer.");
         const produits=[...document.querySelectorAll("[data-menage-vide]:checked")].map(x=>{
@@ -23347,7 +23413,8 @@ async function enregistrerMenageEquipe(){
         if (!journal.some(l=>l.cle===menageSaisieCle)) journal.push({cle:menageSaisieCle,ligne,produits});
         // Always persist before attempting the network, including a connection lost mid-send.
         localStorage.setItem(cleJournal, JSON.stringify(journal));
-        const synchronise = await synchroniserMenagesEnAttente(true);
+        const synchronise = await attendreConfirmationMenage();
+        if (String(utilisateurConnecte?.id || "") !== auteur) return;
         menageSaisieCle=null;
         localStorage.removeItem(cleSelectionMenageGarde());
         document.querySelectorAll("[data-garde-zone],[data-garde-personne]").forEach(x=>x.checked=false);
