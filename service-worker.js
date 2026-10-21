@@ -15,7 +15,7 @@ importScripts("./notifications-history.js");
  * à récupérer le nouvel app.js.
  */
 
-const CACHE_NAME = "inventaire-caserne-v114-ecran-chargement";
+const CACHE_NAME = "inventaire-caserne-v115-travail-equipe";
 
 
 /*
@@ -30,6 +30,8 @@ const FICHIERS_APPLICATION = [
     "./index.html",
 
     "./app.js",
+
+    "./travail-equipe.js",
 
     "./notifications-history.js",
 

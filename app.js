@@ -725,7 +725,7 @@ const DOMAINE_EMAIL_INTERNE =
     "inventaire-caserne.local";
 
 const VERSION_APPLICATION =
-    "2.9.62";
+    "2.9.63";
 
 const CLE_PROFIL_UTILISATEUR_CACHE =
     "profil_utilisateur_connecte_v1";
@@ -1032,7 +1032,7 @@ let minuteurVerificationMiseAJour =
  * Elle permet de détecter une nouvelle version même si seul app.js change.
  */
 const VERSION_APPLICATION_JS =
-    "2026-10-21-ecran-chargement-v75";
+    "2026-10-21-travail-equipe-v76";
 
 async function verifierNouvelleVersionAppJs() {
 
@@ -2322,6 +2322,7 @@ async function chargerProfilUtilisateurDepuisSupabase(
                     acces_entretien_individuel,
                     acces_entretien_individuel_admin,
                     acces_admin_menage,
+                    acces_admin_travail_equipe,
                     acces_admin_heures,
                     acces_envoi_mail
                 )
@@ -8106,6 +8107,7 @@ function optionsRaccourcisAccueil(){
  if(utilisateurAPermission("acces_admin_menage"))o.push({id:"menage_stock",libelle:"Ménage inventaire",icone:"📦",action:"afficherInventaireMenage()"},{id:"menage_admin",libelle:"Ménage admin",icone:"🧹",action:"afficherAdminMenageEquipe()"},{id:"inventaires_admin",libelle:"Inventaires véhicules enregistrés",icone:"🚒",action:"afficherAdminInventairesEquipe()"});
  if(utilisateurAPermission("acces_admin_heures"))o.push({id:"heures_admin",libelle:"Historique des heures",icone:"⏱️",action:"afficherHistoriqueHeuresEquipe()"});
  if(utilisateurAccesAdministratifCentral())o.push({id:"equipe_admin",libelle:"Administratif",icone:"⚙️",action:"afficherAdministratifCaserne()"});
+ o.push({id:'travail_equipe',libelle:'Travail de l’équipe',icone:'✓',action:'CISTravail.ouvrir()'});
  if(utilisateurAPermission("acces_archives"))o.push({id:"pharma_archives",libelle:"Archives pharmacie",icone:"📁",action:"afficherArchivesHistorique()"});
  if(utilisateurAPermission("acces_reapprovisionnement"))o.push({id:"pharma_reappro",libelle:"Réapprovisionnement pharmacie",icone:"📦",action:"afficherReapprovisionnementAdministration()"});
  if(utilisateurPeutExporterPharmaciePDF())o.push({id:"pharma_tracabilite",libelle:"Fiches Meducore et VSAV",icone:"📄",action:"afficherArchivesControlesPharmacie()"});
@@ -10098,7 +10100,7 @@ async function afficherActualitesCaserne(synchronisationDejaFaite = false) {
 
 function utilisateurAccesAdministratifCentral() {
     return utilisateurEstSPVAdmin() || [
-        "acces_admin_menage", "acces_admin_heures", "acces_sport_admin",
+        "acces_admin_travail_equipe", "acces_admin_menage", "acces_admin_heures", "acces_sport_admin",
         "acces_manoeuvre_admin", "acces_casernement_admin", "acces_reunion_admin",
         "acces_amical_admin", "acces_comite_centre_admin",
         "acces_administratif_admin", "acces_entretien_individuel_admin",
@@ -10116,6 +10118,7 @@ function afficherAdministratifCaserne() {
     const admin = utilisateurEstSPVAdmin();
     const autorise = permission => admin || utilisateurAPermission(permission);
     const cartes = [
+        ["✓", "Travail des équipes", "CISTravail.historique()", utilisateurAPermission("acces_admin_travail_equipe")],
         ["📦", "Ménage inventaire", "afficherInventaireMenage()", utilisateurAPermission("acces_admin_menage")],
         ["🧹", "Ménage Admin", "afficherAdminMenageEquipe()", autorise("acces_admin_menage")],
         ["🚒", "Inventaires Admin", "afficherAdminInventairesEquipe()", autorise("acces_admin_menage")],
@@ -22754,6 +22757,7 @@ function afficherEspaceGarde(){
         <button class="retour-button" data-navigation-equipe onclick="retourAccueilDepuisEspaceEquipe()">← Retour</button>
         <header class="garde-menu-entete"><h1>Espace équipe</h1></header><p id="menages-hors-ligne-statut" role="status">${echapperHTML(texteMenagesEnAttente())}</p>
         <div class="garde-menu-cartes">
+          <button id="travail-equipe-carte" class="garde-menu-carte" disabled onclick="CISTravail.ouvrir()"><span class="ico" aria-hidden="true">✓</span><span><strong>Travail de l’équipe</strong><small>Vérification de la garde…</small></span><b class="fleche">›</b></button>
           <button class="garde-menu-carte" onclick="ouvrirRubriqueEquipe('menage')"><span class="ico">🧹</span><span><strong>Ménage</strong></span><b class="fleche">›</b></button>
           <button class="garde-menu-carte" onclick="ouvrirRubriqueEquipe('vehicules')"><span class="ico">🚒</span><span><strong>Inventaire véhicule</strong></span><b class="fleche">›</b></button>
           <button class="garde-menu-carte" onclick="afficherPlanningEspaceGarde()"><span class="ico">📅</span><span><strong>Planning</strong></span><b class="fleche">›</b></button>
@@ -22763,6 +22767,7 @@ function afficherEspaceGarde(){
 
         </div>
       </main>${navigationPrincipale("","accueil")}`;
+    void window.CISTravail?.actualiserCarte();
     actualiserInterfaceBureau();window.scrollTo({top:0,behavior:"auto"});
 }
 
