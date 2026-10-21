@@ -725,7 +725,7 @@ const DOMAINE_EMAIL_INTERNE =
     "inventaire-caserne.local";
 
 const VERSION_APPLICATION =
-    "2.9.63";
+    "2.9.64";
 
 const CLE_PROFIL_UTILISATEUR_CACHE =
     "profil_utilisateur_connecte_v1";
@@ -1032,7 +1032,7 @@ let minuteurVerificationMiseAJour =
  * Elle permet de détecter une nouvelle version même si seul app.js change.
  */
 const VERSION_APPLICATION_JS =
-    "2026-10-21-travail-equipe-v76";
+    "2026-10-21-travail-equipe-v77";
 
 async function verifierNouvelleVersionAppJs() {
 
