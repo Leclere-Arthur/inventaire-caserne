@@ -725,7 +725,7 @@ const DOMAINE_EMAIL_INTERNE =
     "inventaire-caserne.local";
 
 const VERSION_APPLICATION =
-    "2.9.64";
+    "2.9.65";
 
 const CLE_PROFIL_UTILISATEUR_CACHE =
     "profil_utilisateur_connecte_v1";
@@ -1032,7 +1032,7 @@ let minuteurVerificationMiseAJour =
  * Elle permet de détecter une nouvelle version même si seul app.js change.
  */
 const VERSION_APPLICATION_JS =
-    "2026-10-21-travail-equipe-v77";
+    "2026-10-21-enregistrement-mac-v78";
 
 async function verifierNouvelleVersionAppJs() {
 
@@ -8651,7 +8651,73 @@ function afficherErreurExportPDF(erreur) {
     alert("Impossible de creer le PDF : " + (erreur?.message || "erreur inconnue"));
 }
 
+function estMacBureauExport(){return /Macintosh|Mac OS X/i.test(navigator.userAgent||'')&&!partageMobileExportPrincipal();}
+function texteResultatExportPrincipal(resultat){
+ return ({enregistre:'Document enregistré.',annule:'Enregistrement annulé.',partage:'Options d’enregistrement ouvertes.',navigateur:'Document transmis au navigateur.'})[resultat]||'';
+}
+
+async function ecrireDocumentPrincipal(blob,nom){
+ const extension='.'+(nom.split('.').pop()||'pdf').toLowerCase();
+ const mime=({'application/pdf':'application/pdf','image/png':'image/png','text/csv':'text/csv'})[blob.type.split(';')[0]]||'application/octet-stream';
+ const handle=await window.showSaveFilePicker({id:'cis-principal-exports',suggestedName:nom,types:[{description:extension.slice(1).toUpperCase(),accept:{[mime]:[extension]}}]});
+ const flux=await handle.createWritable();
+ try{await flux.write(blob);await flux.close();}
+ catch(erreur){try{await flux.abort();}catch(_){}throw erreur;}
+ return 'enregistre';
+}
+
+function partageMobileExportPrincipal(){const ua=navigator.userAgent||'';return /iPhone|iPad|iPod|Android/i.test(ua)||(/Macintosh/i.test(ua)&&Number(navigator.maxTouchPoints)>1);}
+function choisirEnregistrementDocumentPrincipal(blob,nom){
+ return new Promise(resolve=>{
+  const precedent=document.activeElement;
+  const fond=document.createElement('div');fond.id='principal-enregistrer-document';
+  fond.style.cssText='position:fixed;inset:0;background:#0007;z-index:1000000;display:flex;align-items:center;justify-content:center;padding:16px';
+  fond.innerHTML='<section role="dialog" aria-modal="true" aria-labelledby="principal-save-title" style="width:430px;max-width:100%;background:#fff;color:#000;border:1px solid #dce1e6;border-radius:14px;padding:3px;font:15px Arial,sans-serif"><header style="background:#000080;color:white;padding:6px 8px;display:flex;align-items:center;gap:10px"><strong id="principal-save-title" style="flex:1">Enregistrer sous</strong><button type="button" class="retro" data-save-close aria-label="Fermer">×</button></header><div style="padding:18px"><p style="margin-top:0">Le document est prêt. Choisissez où l’enregistrer.</p><label for="principal-save-name">Nom du fichier</label><input id="principal-save-name" class="retro" style="display:block;width:100%;margin:7px 0 14px;padding:8px;background:white;color:black" maxlength="180"><p data-save-help style="line-height:1.5"></p><p data-save-status role="status" style="color:#900;line-height:1.5"></p><div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap"><button type="button" class="retro" data-save-cancel>Annuler</button><button type="button" class="retro" data-save-confirm>Enregistrer sous…</button></div></div></section>';
+  document.body.appendChild(fond);
+  const input=fond.querySelector('input'),bouton=fond.querySelector('[data-save-confirm]'),statut=fond.querySelector('[data-save-status]');input.value=nom;
+  const natif=typeof window.showSaveFilePicker==='function';
+  const peutPartager=nomFichier=>{if(!partageMobileExportPrincipal()||typeof navigator.share!=='function'||typeof navigator.canShare!=='function')return false;try{return navigator.canShare({files:[new File([blob],nomFichier,{type:blob.type})]});}catch(_){return false;}};
+  fond.querySelector('[data-save-help]').textContent=natif?'':peutPartager(nom)?'Dans le menu de partage, choisissez « Enregistrer dans Fichiers ».':/Macintosh|Mac OS X/i.test(navigator.userAgent||'')?'Le fichier sera téléchargé sur ton Mac. Pour choisir le dossier à chaque fois dans Safari : Safari > Réglages > Général > Emplacement de téléchargement des fichiers > Demander pour chaque téléchargement.':'Le fichier sera téléchargé. Le choix du dossier dépend des réglages de téléchargement de ton navigateur.';
+  let occupe=false;
+  function fermer(resultat){document.removeEventListener('keydown',touche,true);fond.remove();precedent?.focus?.();resolve(resultat);}
+  function annuler(){if(!occupe)fermer('annule');}
+  function touche(e){if(e.key==='Escape'){e.preventDefault();e.stopPropagation();annuler();}if(e.key==='Tab'){const elements=[...fond.querySelectorAll('button,input')].filter(el=>!el.disabled),premier=elements[0],dernier=elements[elements.length-1];if(e.shiftKey&&document.activeElement===premier){e.preventDefault();dernier.focus();}else if(!e.shiftKey&&document.activeElement===dernier){e.preventDefault();premier.focus();}}}
+  document.addEventListener('keydown',touche,true);
+  fond.querySelector('[data-save-close]').onclick=annuler;fond.querySelector('[data-save-cancel]').onclick=annuler;
+  bouton.onclick=async()=>{
+   if(occupe)return;
+   let choix=input.value.trim().replace(/[\\/:*?"<>|]/g,'-');if(!choix){statut.textContent='Indiquez un nom de fichier.';return;}
+   const extension=nom.slice(nom.lastIndexOf('.'));if(!choix.toLowerCase().endsWith(extension.toLowerCase()))choix+=extension;
+   occupe=true;input.disabled=true;bouton.disabled=true;statut.textContent='';
+   try{
+    if(natif){await ecrireDocumentPrincipal(blob,choix);fermer('enregistre');}
+    else if(peutPartager(choix)){await navigator.share({files:[new File([blob],choix,{type:blob.type})],title:choix});fermer('partage');}
+    else{const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=choix;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);fermer('navigateur');}
+   }catch(erreur){if(erreur?.name==='AbortError'){fermer('annule');}else statut.textContent=erreur?.message||'Enregistrement impossible. Réessayez.';}
+   finally{occupe=false;input.disabled=false;bouton.disabled=false;}
+  };
+  bouton.focus();
+ });
+}
+
+let enregistrementDocumentPrincipalEnCours=false;
+async function enregistrerDocumentPrincipal(blob,nom){
+ if(enregistrementDocumentPrincipalEnCours)throw new Error('Terminez l’enregistrement du document en cours.');
+ enregistrementDocumentPrincipalEnCours=true;
+ try{
+  if(typeof window.showSaveFilePicker==='function'&&navigator.userActivation?.isActive!==false){
+   try{return await ecrireDocumentPrincipal(blob,nom);}
+   catch(erreur){if(erreur?.name==='AbortError')return 'annule';if(erreur?.name!=='SecurityError')throw erreur;}
+  }
+  // Un nouveau clic garde le sélecteur utilisable après une génération longue.
+  return await choisirEnregistrementDocumentPrincipal(blob,nom);
+ }finally{enregistrementDocumentPrincipalEnCours=false;}
+}
+window.enregistrerDocumentPrincipal=enregistrerDocumentPrincipal;
+
+
 async function enregistrerPDFSansApercuNavigateur(doc, nomFichier) {
+    if(estMacBureauExport())return enregistrerDocumentPrincipal(doc.output('blob'),nomFichier);
     const blob = doc.output("blob");
     const url = URL.createObjectURL(blob);
 
@@ -23182,6 +23248,7 @@ async function enregistrerPhotoPlanningEquipe(url){
     try{
         const rep=await fetch(url);
         const blob=await rep.blob();
+        if(estMacBureauExport()){await enregistrerDocumentPrincipal(blob,"planning-gardes-cis-le-chesne.png");return;}
         const fichier=new File([blob],"planning-gardes-cis-le-chesne.png",{type:"image/png"});
         if(navigator.share && (!navigator.canShare || navigator.canShare({files:[fichier]}))){
             await navigator.share({files:[fichier],title:"Planning des gardes"});
@@ -23668,6 +23735,7 @@ async function exporterControlePharmaciePDF(type,index,modeMail=false){
  await remplirLignesControlesPharmacie(pdf,lignes,type,lib);
  const bytes=await pdf.save();
  if(modeMail)return pieceJointeDocumentMail(new Blob([bytes],{type:"application/pdf"}),`${type}-${lignes[0].date_intervention}-au-${lignes[lignes.length-1].date_intervention}-feuille-${index+1}.pdf`);
+ if(estMacBureauExport()){await enregistrerDocumentPrincipal(new Blob([bytes],{type:"application/pdf"}),`${type}-${lignes[0].date_intervention}-au-${lignes[lignes.length-1].date_intervention}-feuille-${index+1}.pdf`);return;}
  const blob=new Blob([bytes],{type:"application/pdf"}),url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download=`${type}-${lignes[0].date_intervention}-au-${lignes[lignes.length-1].date_intervention}-feuille-${index+1}.pdf`;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),30000);
  }catch(e){if(modeMail)throw e;alert("Export impossible : "+e.message);}
 }
@@ -23807,6 +23875,7 @@ async function exporterEquipePDF(type,id=null,modeMail=false,periodeMail=null){
   if(!utilisateurAPermission(cfg.permission))throw new Error('Accès non autorisé.');
   const nom=nomFichierPDF(type==='vehicules'?`inventaire-${rows[0].numero_inventaire??rows[0].id}-${rows[0].vehicule_nom||'vehicule'}`:`${type}-cis-le-chesne-${id||'periode'}`);
   if(modeMail)return pieceJointeDocumentMail(doc.output('blob'),nom);
+  if(estMacBureauExport()){const resultat=await enregistrerDocumentPrincipal(doc.output('blob'),nom);if(statut)statut.textContent=texteResultatExportPrincipal(resultat);return;}
   const url=URL.createObjectURL(doc.output('blob'));
   if(apercu){apercu.location.href=url;apercu=null;}
   else {const a=document.createElement('a');a.href=url;a.download=nom;document.body.appendChild(a);a.click();a.remove();}
@@ -24201,3 +24270,4 @@ async function envoyerDocumentsEquipeParMail(){
  }catch(err){if(statut.isConnected){statut.className='mail-doc-statut erreur';statut.textContent=err.message||'Envoi impossible. Réessaie dans un instant.';}}
  finally{e.enCours=false;inputs.forEach(x=>x.disabled=false);if(envoiDocumentsEquipeEtat===e&&btn.isConnected){const pending=e.pending;actualiserSelectionDocumentsMail();e.pending=pending;}}
 }
+

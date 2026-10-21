@@ -15,7 +15,7 @@ importScripts("./notifications-history.js");
  * à récupérer le nouvel app.js.
  */
 
-const CACHE_NAME = "inventaire-caserne-v116-travail-equipe";
+const CACHE_NAME = "inventaire-caserne-v117-enregistrement-mac";
 
 
 /*
@@ -386,3 +386,4 @@ self.addEventListener(
 
     }
 );
+
