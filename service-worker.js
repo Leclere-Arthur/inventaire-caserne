@@ -15,7 +15,7 @@ importScripts("./notifications-history.js");
  * à récupérer le nouvel app.js.
  */
 
-const CACHE_NAME = "inventaire-caserne-v112-reprise-reseau";
+const CACHE_NAME = "inventaire-caserne-v113-notifications-rupture-rouges";
 
 
 /*

@@ -725,7 +725,7 @@ const DOMAINE_EMAIL_INTERNE =
     "inventaire-caserne.local";
 
 const VERSION_APPLICATION =
-    "2.9.60";
+    "2.9.61";
 
 const CLE_PROFIL_UTILISATEUR_CACHE =
     "profil_utilisateur_connecte_v1";
@@ -1032,7 +1032,7 @@ let minuteurVerificationMiseAJour =
  * Elle permet de détecter une nouvelle version même si seul app.js change.
  */
 const VERSION_APPLICATION_JS =
-    "2026-10-20-reprise-reseau-v73";
+    "2026-10-21-notifications-rupture-rouges-v74";
 
 async function verifierNouvelleVersionAppJs() {
 
@@ -23976,14 +23976,20 @@ function chargerHistoriqueNotificationsModule(){
   document.head.appendChild(s);
  });return window.__cisNotificationsModule;
 }
+function notificationEstRuptureStock(r){
+ const texte=[r.title,r.body].filter(Boolean).join(' ').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+ const cible=String(r.target||'').toLowerCase();
+ const stockConcerne=['pharmacie','menage-inventaire'].includes(cible)||/pharma|menage/.test(texte);
+ return stockConcerne && /\brupture\b/.test(texte);
+}
 function initialiserCentreNotifications(){
  if(document.getElementById('btn-historique-notifications'))return;
  const style=document.createElement('style');style.id='style-centre-notifications';
  style.textContent=`
  #btn-historique-notifications{position:fixed;top:calc(12px + env(safe-area-inset-top,0px));right:calc(58px + env(safe-area-inset-right,0px));width:38px;height:38px;display:flex;align-items:center;justify-content:center;z-index:99999;border:0;padding:0;margin:0;background:transparent;color:#1687ff;cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
  #btn-historique-notifications .notif-point{position:absolute;top:0;right:0;width:13px;height:13px;border-radius:50%;background:#dc2626;border:2px solid #fff;box-shadow:0 0 0 1px #dc2626;pointer-events:none}#btn-historique-notifications .notif-point[hidden]{display:none}#btn-historique-notifications[hidden]{display:none!important}#btn-historique-notifications svg{width:27px;height:27px}#btn-historique-notifications:focus-visible{outline:2px solid #1687ff;outline-offset:2px;border-radius:50%}
- html:has(#notifications-historique-page),body:has(#notifications-historique-page){background:#f3f4f6!important}.notifications-page{min-height:100vh;min-height:100dvh;max-width:780px;margin:0 auto;padding:64px 16px 125px;box-sizing:border-box}.notifications-page h1{font-size:28px;margin:24px 0}.notif-retour{border:1px solid #dce1e6;background:#fff;color:#222a32;padding:11px 15px;border-radius:12px;font:inherit;font-weight:700;cursor:pointer}.notif-liste{display:grid;gap:10px}.notif-ligne{width:100%;display:flex;align-items:center;gap:18px;padding:18px;text-align:left;border:1px solid #dfe4e9;border-radius:14px;background:#fff;color:#222a32;font:inherit;cursor:pointer;box-sizing:border-box}.notif-ligne.non-lue{background:#1687ff;border-color:#1687ff;color:#fff}.notif-ligne.non-lue .notif-contenu time,.notif-ligne.non-lue svg{color:#fff}.notif-contenu{min-width:0;flex:1}.notif-contenu strong{display:block;font-size:16px;line-height:1.4;overflow-wrap:anywhere}.notif-contenu p{font-size:14px;line-height:1.5;margin:6px 0 10px;overflow-wrap:anywhere}.notif-contenu time{font-size:12px;color:#68717b;display:block}.notif-ligne svg{width:18px;height:18px;flex-shrink:0;color:#79838e}.notif-vide{border:1px solid #dfe4e9;border-radius:14px;background:#fff;color:#68717b;padding:24px;line-height:1.5}.notif-ligne:focus-visible,.notif-retour:focus-visible{outline:2px solid #1687ff;outline-offset:3px}
- @media(min-width:1000px){html:has(#notifications-historique-page),body:has(#notifications-historique-page){background:var(--pc-fond,#0d141b)!important}body:not(.mode-connexion) .notif-ligne,body:not(.mode-connexion) .notif-retour,body:not(.mode-connexion) .notif-vide{background:#151f28;border-color:#34414c;color:#f2f5f7}body:not(.mode-connexion) .notif-ligne.non-lue{background:#1687ff;border-color:#1687ff;color:#fff}body:not(.mode-connexion) .notif-ligne.non-lue .notif-contenu time,body:not(.mode-connexion) .notif-ligne.non-lue svg{color:#fff}.notif-contenu time{color:#8796a6}}
+ html:has(#notifications-historique-page),body:has(#notifications-historique-page){background:#f3f4f6!important}.notifications-page{min-height:100vh;min-height:100dvh;max-width:780px;margin:0 auto;padding:64px 16px 125px;box-sizing:border-box}.notifications-page h1{font-size:28px;margin:24px 0}.notif-retour{border:1px solid #dce1e6;background:#fff;color:#222a32;padding:11px 15px;border-radius:12px;font:inherit;font-weight:700;cursor:pointer}.notif-liste{display:grid;gap:10px}.notif-ligne{width:100%;display:flex;align-items:center;gap:18px;padding:18px;text-align:left;border:1px solid #dfe4e9;border-radius:14px;background:#fff;color:#222a32;font:inherit;cursor:pointer;box-sizing:border-box}.notif-ligne.non-lue{background:#1687ff;border-color:#1687ff;color:#fff}.notif-ligne.non-lue .notif-contenu time,.notif-ligne.non-lue svg{color:#fff}.notif-ligne.non-lue.rupture-stock{background:#c62828;border-color:#c62828;color:#fff}.notif-ligne.non-lue.rupture-stock:focus-visible{outline-color:#c62828}.notif-contenu{min-width:0;flex:1}.notif-contenu strong{display:block;font-size:16px;line-height:1.4;overflow-wrap:anywhere}.notif-contenu p{font-size:14px;line-height:1.5;margin:6px 0 10px;overflow-wrap:anywhere}.notif-contenu time{font-size:12px;color:#68717b;display:block}.notif-ligne svg{width:18px;height:18px;flex-shrink:0;color:#79838e}.notif-vide{border:1px solid #dfe4e9;border-radius:14px;background:#fff;color:#68717b;padding:24px;line-height:1.5}.notif-ligne:focus-visible,.notif-retour:focus-visible{outline:2px solid #1687ff;outline-offset:3px}
+ @media(min-width:1000px){html:has(#notifications-historique-page),body:has(#notifications-historique-page){background:var(--pc-fond,#0d141b)!important}body:not(.mode-connexion) .notif-ligne,body:not(.mode-connexion) .notif-retour,body:not(.mode-connexion) .notif-vide{background:#151f28;border-color:#34414c;color:#f2f5f7}body:not(.mode-connexion) .notif-ligne.non-lue{background:#1687ff;border-color:#1687ff;color:#fff}body:not(.mode-connexion) .notif-ligne.non-lue.rupture-stock{background:#c62828;border-color:#c62828;color:#fff}body:not(.mode-connexion) .notif-ligne.non-lue .notif-contenu time,body:not(.mode-connexion) .notif-ligne.non-lue svg{color:#fff}.notif-contenu time{color:#8796a6}}
  `;document.head.appendChild(style);
  const button=document.createElement('button');button.id='btn-historique-notifications';button.type='button';button.hidden=true;button.setAttribute('aria-label','Historique des notifications');button.title='Notifications';
  button.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9Z"/><path d="M10 21h4"/></svg><span class="notif-point" hidden aria-hidden="true"></span>';
@@ -24022,7 +24028,7 @@ async function remplirHistoriqueNotifications(){
  try{
   const store=await chargerHistoriqueNotificationsModule(),rows=await store.list(uid);
   if(!zone.isConnected||String(utilisateurConnecte?.id)!==String(uid))return;
-  zone.innerHTML=rows.length?rows.map(r=>`<button type="button" class="notif-ligne ${r.read?'':'non-lue'}" data-notification-id="${echapperHTML(r.id)}"><span class="notif-contenu"><strong>${echapperHTML(r.title)}</strong>${r.body?`<p>${echapperHTML(r.body)}</p>`:''}<time datetime="${echapperHTML(r.receivedAt)}">${echapperHTML(new Date(r.receivedAt).toLocaleString('fr-FR',{timeZone:'Europe/Paris',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}))}</time></span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></button>`).join(''):'<p class="notif-vide">Aucune notification reçue depuis l’activation de cet historique.</p>';
+  zone.innerHTML=rows.length?rows.map(r=>`<button type="button" class="notif-ligne ${r.read?'':'non-lue'} ${notificationEstRuptureStock(r)?'rupture-stock':''}" data-notification-id="${echapperHTML(r.id)}"><span class="notif-contenu"><strong>${echapperHTML(r.title)}</strong>${r.body?`<p>${echapperHTML(r.body)}</p>`:''}<time datetime="${echapperHTML(r.receivedAt)}">${echapperHTML(new Date(r.receivedAt).toLocaleString('fr-FR',{timeZone:'Europe/Paris',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}))}</time></span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></button>`).join(''):'<p class="notif-vide">Aucune notification reçue depuis l’activation de cet historique.</p>';
   afficherEtatPointNotifications(rows.some(r=>!r.read));
   zone.querySelectorAll('[data-notification-id]').forEach(b=>b.addEventListener('click',()=>ouvrirNotificationHistorique(b.dataset.notificationId)));
  }catch(e){if(zone.isConnected)zone.innerHTML='<p class="notif-vide">Impossible de lire l’historique sur cet appareil. Réessayez en rouvrant l’application.</p>';console.warn('Historique notifications :',e);}
