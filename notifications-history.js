@@ -54,12 +54,13 @@
   const id=String(userId)+':'+(stable||crypto.randomUUID());
   const record={id,userId:String(userId),title:plain(data.title)||'Notification',body:plain(data.body),receivedAt:new Date().toISOString(),target:route(data),read:false};
   // Un renvoi de la même alerte ménage ne doit pas créer un doublon ni modifier sa date.
-  const existing=store.get(id);existing.onsuccess=()=>{if(!existing.result)store.put(record);};
+  let dejaRecue=null;
+  const existing=store.get(id);existing.onsuccess=()=>{if(!existing.result)store.put(record);else dejaRecue=existing.result;};
   await completion;
   const cleanup=db.transaction('notifications','readwrite'),cleanDone=done(cleanup),records=cleanup.objectStore('notifications');
   let count=0;const cursor=records.index('user_date').openCursor(range(userId),'prev');
   cursor.onsuccess=()=>{const c=cursor.result;if(!c)return;if(++count>200)c.delete();c.continue();};
-  await cleanDone;return record;
+  await cleanDone;return dejaRecue?{...dejaRecue,duplicate:true}:record;
  }
  async function list(userId) {
   if(!userId)return [];
@@ -76,3 +77,4 @@
  }
  scope.CISNotifications={bind,owner,receive,list,get,read,route,plain};
 })(globalThis);
+

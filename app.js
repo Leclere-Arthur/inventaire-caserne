@@ -725,7 +725,7 @@ const DOMAINE_EMAIL_INTERNE =
     "inventaire-caserne.local";
 
 const VERSION_APPLICATION =
-    "2.9.66";
+    "2.9.67";
 
 const CLE_PROFIL_UTILISATEUR_CACHE =
     "profil_utilisateur_connecte_v1";
@@ -4198,14 +4198,20 @@ async function changerMonMotDePasse() {
 
 // Les appels Edge doivent utiliser le jeton de la session la plus récente.
 const renouvellementsSessionPrincipale = new WeakMap();
+let renouvellementApresRefusRequis = false;
 async function renouvelerSessionPrincipale(client){
     if(renouvellementsSessionPrincipale.has(client))return renouvellementsSessionPrincipale.get(client);
     const demande=(async()=>{
         const {data,error}=await client.auth.refreshSession();
-        if(error)throw new Error([400,401,403].includes(Number(error.status))
-            ? "La connexion n’est plus valide. Une nouvelle identification est nécessaire."
-            : "Impossible de renouveler la connexion pour le moment. Vérifie Internet puis réessaie.");
+        if(error) {
+            const definitive = ["refresh_token_not_found","refresh_token_already_used","session_not_found","user_banned"].includes(String(error.code || ""));
+            const e = new Error(definitive ? "La session a été révoquée. Une nouvelle identification est nécessaire."
+                : "Connexion au serveur momentanément indisponible. Nouvelle tentative automatique.");
+            e.reconnexionNecessaire = definitive;
+            throw e;
+        }
         if(!data?.session?.access_token)throw new Error("La connexion n’est plus disponible. Identifie-toi à nouveau.");
+        renouvellementApresRefusRequis = false;
         return data.session;
     })();
     renouvellementsSessionPrincipale.set(client,demande);
@@ -4217,8 +4223,12 @@ async function obtenirSessionPrincipaleValide(client){
     const {data,error}=await client.auth.getSession();
     if(error)throw error;
     const session=data?.session;
-    if(!session?.access_token)throw new Error("Identifie-toi pour effectuer cette action.");
-    if(Number(session.expires_at||0)<=Math.floor(Date.now()/1000)+90)return renouvelerSessionPrincipale(client);
+    if(!session?.access_token) {
+        const e = new Error("La session n'est plus disponible. Identifie-toi pour effectuer cette action.");
+        e.reconnexionNecessaire = true;
+        throw e;
+    }
+    if(renouvellementApresRefusRequis || Number(session.expires_at||0)<=Math.floor(Date.now()/1000)+90)return renouvelerSessionPrincipale(client);
     return session;
 }
 async function appelerFonctionPrincipale(client,nom,options={}){
@@ -4255,13 +4265,15 @@ function signalerConnexionPrincipaleIndisponible(erreur) {
             zone.id = "cis-etat-connexion-serveur";
             zone.setAttribute("role", "status");
             zone.style.cssText = "position:fixed;z-index:299999;left:12px;right:12px;top:calc(env(safe-area-inset-top,0px) + 8px);max-width:680px;margin:auto;padding:12px;background:#fff4d6;color:#382c12;border:2px solid #b17b00;border-radius:12px;box-shadow:0 3px 12px #0003;font:14px/1.4 Arial,sans-serif";
-            zone.innerHTML = '<span>Synchronisation indisponible pour le moment. Les données locales sont conservées ; les listes affichées peuvent être incomplètes.</span><div style="display:flex;gap:12px;margin-top:8px"><button type="button" style="color:#174f9e;background:white;border:1px solid #777;padding:8px" onclick="void restaurerConnexionPrincipale(true)">Réessayer</button><button type="button" style="color:#174f9e;background:white;border:1px solid #777;padding:8px" onclick="afficherConnexion()">Se connecter</button></div>';
+            zone.innerHTML = '<span>Synchronisation différée. Nouvelle tentative automatique. Les données locales sont conservées ; les listes affichées peuvent être incomplètes.</span><div style="display:flex;gap:12px;margin-top:8px"><button type="button" style="color:#174f9e;background:white;border:1px solid #777;padding:8px" onclick="void restaurerConnexionPrincipale(true)">Réessayer</button><button id="cis-reconnexion-requise" type="button" hidden style="color:#174f9e;background:white;border:1px solid #777;padding:8px" onclick="afficherConnexion()">Se connecter</button></div>';
             const detail = document.createElement("small");
             detail.id = "cis-connexion-detail";
             detail.style.cssText = "display:block;margin-top:8px;overflow-wrap:anywhere";
             zone.appendChild(detail);
             document.body.appendChild(zone);
         }
+        const reconnexion = document.getElementById("cis-reconnexion-requise");
+        if (reconnexion) reconnexion.hidden = erreur?.reconnexionNecessaire !== true;
         const detail = document.getElementById("cis-connexion-detail");
         if (detail) detail.textContent = "Détail : " + derniereErreurConnexionPrincipale;
     };
@@ -4271,22 +4283,35 @@ function signalerConnexionPrincipaleIndisponible(erreur) {
 }
 // The Supabase SDK owns token attachment and its authentication locks.
 // This transport only observes errors; it must not call auth from inside fetch.
+async function requeteProjetAvecDelai(input, options = {}) {
+    const controleur = new AbortController();
+    const signalExterne = options.signal || (typeof input === "object" ? input.signal : null);
+    const annuler = () => controleur.abort();
+    if (signalExterne?.aborted) annuler();
+    else signalExterne?.addEventListener("abort", annuler, {once:true});
+    const delai = setTimeout(annuler, 25000);
+    try { return await window.fetch(input, {...options, signal:controleur.signal}); }
+    finally { clearTimeout(delai); signalExterne?.removeEventListener("abort", annuler); }
+}
 async function requeteSupabaseAuthentifiee(input, options = {}) {
     const adresse = new URL(typeof input === "string" ? input : input.url || String(input), window.SUPABASE_URL);
     const projet = new URL(window.SUPABASE_URL);
     const protegee = adresse.origin === projet.origin && /^\/(rest|functions|storage)\/v1(?:\/|$)/.test(adresse.pathname);
-    if (!protegee) return window.fetch(input, options);
+    if (!protegee) return requeteProjetAvecDelai(input, options);
     const methode = String(options.method || input.method || "GET").toUpperCase();
     const lecture = methode === "GET" || methode === "HEAD";
     try {
-        const reponse = await window.fetch(input, options);
+        const reponse = await requeteProjetAvecDelai(input, options);
         if (lecture) {
             if (reponse.ok) lecturesPrincipaleEnErreur.delete(adresse.pathname);
             else lecturesPrincipaleEnErreur.add(adresse.pathname);
         }
         // 403 denotes a permission refusal, not an Internet outage. The caller
         // handles its own error. No network-layer replay of any mutation.
-        if (reponse.status === 401 && navigator.onLine) signalerConnexionPrincipaleIndisponible(new Error("Session non reconnue par le serveur (401)"));
+        if (reponse.status === 401 && navigator.onLine) {
+            renouvellementApresRefusRequis = true;
+            signalerConnexionPrincipaleIndisponible(new Error("Vérification automatique de la session en cours."));
+        }
         return reponse;
     } catch (erreur) {
         if (lecture) lecturesPrincipaleEnErreur.add(adresse.pathname);
@@ -4483,214 +4508,180 @@ function sauvegarderNotificationsStockEnAttente(
 }
 
 
-function creerNotificationStockSiNecessaire(
-    materiel,
-    ancienStock,
-    nouveauStock
-) {
-
-    const avant =
-        Math.max(
-            0,
-            Math.floor(
-                Number(ancienStock) || 0
-            )
-        );
-
-    const apres =
-        Math.max(
-            0,
-            Math.floor(
-                Number(nouveauStock) || 0
-            )
-        );
-
-    const minimum =
-        Math.max(
-            0,
-            Math.floor(
-                Number(materiel.minimum) || 0
-            )
-        );
-
-
-    /*
-     * Rupture : on prévient uniquement au moment
-     * où le stock passe réellement à zéro.
-     */
-    if (
-        apres === 0 &&
-        avant > 0
-    ) {
-
-        return {
-            id:
-                genererId(),
-            titre:
-                "⚠️ ALERTE STOCK ⚠️",
-            message:
-                "⚠️ " +
-                materiel.nom +
-                " — RUPTURE DE STOCK ⚠️",
-            creeLe:
-                new Date().toISOString()
-        };
-
-    }
-
-
-    /*
-     * Stock minimum : on prévient uniquement quand
-     * le stock franchit le seuil, pour éviter le spam.
-     */
-    if (
-        apres > 0 &&
-        apres <= minimum &&
-        avant > minimum
-    ) {
-
-        return {
-            id:
-                genererId(),
-            titre:
-                "⚠️ ALERTE STOCK ⚠️",
-            message:
-                "⚠️ " +
-                materiel.nom +
-                " — STOCK MINIMUM ⚠️",
-            creeLe:
-                new Date().toISOString()
-        };
-
-    }
-
-
-    return null;
-
+// Journal séparé, durable et rattaché au compte : aucune écriture de stock
+// ne dépend de la réussite d'un simple rafraîchissement de page.
+function cleJournalStock() {
+    if (!utilisateurConnecte?.id) throw new Error("Connexion requise pour enregistrer le stock.");
+    return "cis_operations_stock_v1:" + String(utilisateurConnecte.id);
 }
-
-
-function mettreNotificationStockEnAttente(
-    notification
-) {
-
-    if (!notification) {
-        return;
-    }
-
-
-    const liste =
-        chargerNotificationsStockEnAttente();
-
-
-    liste.push(
-        notification
-    );
-
-
-    sauvegarderNotificationsStockEnAttente(
-        liste
-    );
-
-
-    if (navigator.onLine) {
-
-        void envoyerNotificationsStockEnAttente();
-
-    }
-
+function lireJournalStock() {
+    const texte = localStorage.getItem(cleJournalStock());
+    if (!texte) return [];
+    const lignes = JSON.parse(texte);
+    if (!Array.isArray(lignes)) throw new Error("Journal de stock illisible : les données sont conservées.");
+    return lignes;
 }
-
-
-async function envoyerNotificationsStockEnAttente() {
-
-    if (
-        envoiNotificationsStockEnCours ||
-        !navigator.onLine
-    ) {
-        return;
+function ecrireJournalStock(lignes) {
+    localStorage.setItem(cleJournalStock(), JSON.stringify(lignes));
+}
+// Conserver une copie des données de l'ancienne version et reprendre les
+// retours hors connexion qui n'avaient pas encore atteint le serveur.
+function preparerMigrationJournalStock() {
+    const cle = cleJournalStock() + ":migration";
+    let migration = JSON.parse(localStorage.getItem(cle) || "null");
+    if (!migration) {
+        migration = {terminee:false, retours:historique.filter(i => i.synchronisationEnAttente &&
+            String(i.createdBy || utilisateurConnecte.id) === String(utilisateurConnecte.id)),
+            stocksAvantMigration:materiels.map(m => ({id:String(m.id),stock:m.stock})), date:new Date().toISOString()};
+        localStorage.setItem(cle, JSON.stringify(migration));
     }
-
-
-    envoiNotificationsStockEnCours =
-        true;
-
-
-    try {
-
-        let liste =
-            chargerNotificationsStockEnAttente();
-
-
-        while (
-            liste.length > 0 &&
-            navigator.onLine
-        ) {
-
-            const notification =
-                liste[0];
-
-
-            try {
-
-                await envoyerNotificationPush(
-                    notification.titre,
-                    notification.message,
-                    "pharmacie"
-                );
-
-            } catch (erreur) {
-
-                console.warn(
-                    "Notification stock conservée en attente :",
-                    erreur
-                );
-
-                break;
-
+    return migration;
+}
+async function migrerRetoursVersJournalStock(sb) {
+    const cle = cleJournalStock() + ":migration";
+    const migration = preparerMigrationJournalStock();
+    if (migration.terminee) return;
+    const uid = String(utilisateurConnecte.id);
+    for (const retour of migration.retours) {
+        if (retour.migrationStockTraitee) continue;
+        const {data,error} = await sb.from("interventions").select("id").eq("id",retour.id).maybeSingle();
+        if (error) throw error;
+        if (String(utilisateurConnecte?.id) !== uid) throw new Error("Compte différent pendant la reprise des retours.");
+        if (!data) {
+            const lignes = lireJournalStock();
+            for (const c of retour.consommations || []) {
+                const quantite = Number(c.quantite);
+                const origine = String(retour.id) + ":" + String(c.materielId);
+                if (Number.isSafeInteger(quantite) && quantite > 0 && !lignes.some(x => x.origine === origine))
+                    lignes.push({id:genererUUID(), origine, materielId:String(c.materielId), delta:-quantite,
+                        utilisateurId:uid, creeLe:retour.createdAt || new Date().toISOString()});
             }
-
-
-            liste.shift();
-
-
-            sauvegarderNotificationsStockEnAttente(
-                liste
-            );
-
+            ecrireJournalStock(lignes);
         }
-
-    } finally {
-
-        envoiNotificationsStockEnCours =
-            false;
-
+        retour.migrationStockTraitee = true;
+        localStorage.setItem(cle, JSON.stringify(migration));
     }
-
+    migration.terminee = true;
+    localStorage.setItem(cle, JSON.stringify(migration));
+}
+function enregistrerMouvementStock(materiel, ancienStock, reference = null) {
+    preparerMigrationJournalStock();
+    const avant = Number(ancienStock), apres = Number(materiel.stock);
+    if (!Number.isSafeInteger(avant) || !Number.isSafeInteger(apres) || apres < 0)
+        throw new Error("Quantité de stock invalide.");
+    if (avant === apres) return;
+    const lignes = lireJournalStock();
+    lignes.push({id:genererUUID(), materielId:String(materiel.id), delta:apres-avant, reference,
+        utilisateurId:String(utilisateurConnecte.id), creeLe:new Date().toISOString()});
+    // En cas de stockage plein, la validation est interrompue ; aucune promesse
+    // d'envoi ultérieur n'est faite sans avoir persisté le mouvement.
+    try { ecrireJournalStock(lignes); }
+    catch (e) { materiel.stock = avant; throw e; }
+}
+async function synchroniserJournalStock(sb) {
+    const proprietaire = String(utilisateurConnecte?.id || "");
+    const cle = cleJournalStock();
+    for (const op of lireJournalStock()) {
+        if (String(op.utilisateurId) !== proprietaire) throw new Error("Compte différent du mouvement en attente.");
+        const session = await obtenirSessionPrincipaleValide(sb);
+        if (String(session.user?.id) !== proprietaire || String(utilisateurConnecte?.id) !== proprietaire) throw new Error("Session différente du mouvement en attente.");
+        const {data,error} = await sb.rpc("pharmacie_appliquer_stock", {
+            p_id:op.id, p_materiel:op.materielId, p_delta:op.delta, p_reference:op.reference ?? null
+        });
+        if (error) {
+            if (error.code === "40001" && op.reference != null) afficherComptageStockAConfirmer(op);
+            throw error;
+        }
+        if (!data || data.id !== op.id || !Number.isSafeInteger(data.stock_apres))
+            throw new Error("Le serveur n'a pas confirmé le mouvement de stock.");
+        if (String(utilisateurConnecte?.id) !== proprietaire || cleJournalStock() !== cle)
+            throw new Error("Le compte a changé pendant l'envoi.");
+        if (data.alerte) mettreNotificationStockEnAttente({id:op.id, operationId:op.id,
+            utilisateurId:proprietaire, creeLe:op.creeLe});
+        // Relire le journal : une autre saisie peut avoir eu lieu pendant l'attente.
+        const restantes = lireJournalStock().filter(x => x.id !== op.id);
+        ecrireJournalStock(restantes);
+        const m = materiels.find(x => String(x.id) === op.materielId);
+        if (m) m.stock = data.stock_apres + restantes.filter(x => x.materielId === op.materielId)
+            .reduce((s,x) => s + x.delta, 0);
+        sauvegarderToutesLesDonnees();
+    }
+}
+function afficherComptageStockAConfirmer(op) {
+    if (!document.body || document.getElementById("cis-conflit-comptage-stock")) return;
+    const zone = document.createElement("div");
+    zone.id = "cis-conflit-comptage-stock";
+    zone.setAttribute("role","status");
+    zone.style.cssText = "position:fixed;top:calc(env(safe-area-inset-top,0px) + 12px);left:12px;right:12px;z-index:300000;background:#fff4d6;color:#382c12;border:2px solid #b17b00;border-radius:12px;padding:16px;font:14px Arial";
+    zone.appendChild(document.createTextNode("Un comptage de stock doit être vérifié : la quantité a changé sur un autre appareil. "));
+    const bouton = document.createElement("button");
+    bouton.textContent = "Vérifier le comptage";
+    bouton.onclick = async () => {
+        bouton.disabled = true;
+        try { await resoudreComptageStock(op.id); }
+        catch (e) { alert(e.message || "Vérification indisponible pour le moment."); }
+        finally { bouton.disabled = false; }
+    };
+    zone.appendChild(bouton);document.body.appendChild(zone);
+}
+async function resoudreComptageStock(id) {
+    const op = lireJournalStock().find(x => x.id === id);
+    if (!op || op.reference == null) return;
+    const uid = String(utilisateurConnecte.id);
+    const sb = await assurerBibliothequeSupabaseDisponible();
+    const session = await obtenirSessionPrincipaleValide(sb);
+    if (String(session.user?.id) !== uid) throw new Error("Compte différent du comptage.");
+    const {data,error} = await sb.from("materiels").select("nom,stock").eq("id",op.materielId).single();
+    if (error) throw error;
+    if (!Number.isSafeInteger(data?.stock)) throw new Error("Stock du serveur indisponible.");
+    const cible = op.reference + op.delta;
+    if (!await afficherConfirmationCIS(data.nom + " : le serveur indique " + data.stock +
+        ". Confirmer ton comptage à " + cible + " ?")) return;
+    if (String(utilisateurConnecte?.id) !== uid) throw new Error("Le compte a changé.");
+    const lignes = lireJournalStock();
+    const index = lignes.findIndex(x => x.id === id);
+    if (index < 0) return;
+    if (cible === data.stock) lignes.splice(index,1);
+    else lignes[index] = {...op,id:genererUUID(),reference:data.stock,delta:cible-data.stock};
+    ecrireJournalStock(lignes);
+    document.getElementById("cis-conflit-comptage-stock")?.remove();
+    marquerModificationsEnAttente();
+    reprendreHorsConnexionMaintenant();
+}
+function mettreNotificationStockEnAttente(notification) {
+    if (!notification?.operationId) return;
+    const liste = chargerNotificationsStockEnAttente();
+    if (!liste.some(x => x.id === notification.id)) liste.push(notification);
+    sauvegarderNotificationsStockEnAttente(liste);
+}
+async function envoyerNotificationsStockEnAttente() {
+    if (envoiNotificationsStockEnCours || !navigator.onLine || !utilisateurConnecte?.id) return;
+    envoiNotificationsStockEnCours = true;
+    try {
+        const sb = await assurerBibliothequeSupabaseDisponible();
+        if (!sb) return;
+        const session = await obtenirSessionPrincipaleValide(sb);
+        const uid = String(utilisateurConnecte.id);
+        if (String(session.user?.id) !== uid) return;
+        for (const notification of chargerNotificationsStockEnAttente()) {
+            // Les anciennes notifications locales n'ont aucune preuve serveur :
+            // on ne les réémet pas après une mise à jour ou un réapprovisionnement.
+            if (notification.operationId && notification.utilisateurId !== uid) continue;
+            if (notification.operationId) {
+                const {data,error} = await appelerFonctionPrincipale(sb, "pharmacie-notifications", {
+                    body:{operation_id:notification.operationId}
+                });
+                if (error) throw error;
+                if (!data?.ok) throw new Error("L'alerte reste en attente d'envoi.");
+            }
+            sauvegarderNotificationsStockEnAttente(chargerNotificationsStockEnAttente().filter(x => x.id !== notification.id));
+        }
+    } catch (e) { console.warn("Vérification des alertes différée.", e); }
+    finally { envoiNotificationsStockEnCours = false; }
 }
 
-
-function preparerNotificationStock(
-    materiel,
-    ancienStock
-) {
-
-    const notification =
-        creerNotificationStockSiNecessaire(
-            materiel,
-            ancienStock,
-            materiel.stock
-        );
-
-
-    if (notification) {
-
-        mettreNotificationStockEnAttente(
-            notification
-        );
-
-    }
-
+function preparerNotificationStock(materiel, ancienStock, reference = null) {
+    enregistrerMouvementStock(materiel, ancienStock, reference);
 }
 
 
@@ -7026,7 +7017,7 @@ function convertirDonneesSupabaseEnDonneesApplication(donnees) {
 
 async function appliquerDonneesSupabaseLocalement(donnees) {
 
-    if (existeModificationsEnAttente()) return;
+    if (existeModificationsEnAttente() || (utilisateurConnecte?.id && lireJournalStock().length)) return;
 
     const application =
         convertirDonneesSupabaseEnDonneesApplication(
@@ -7251,6 +7242,7 @@ async function envoyerDonneesLocalesVersSupabase() {
 
     migrerIdentifiantsVersUUID();
 
+    await migrerRetoursVersJournalStock(supabase);
     const ancienSnapshot = lireSnapshotSynchronisation();
 
     const anciennesCategories = new Set(
@@ -7311,7 +7303,6 @@ async function envoyerDonneesLocalesVersSupabase() {
             nom: String(materiel.nom || "Matériel"),
             reference: String(materiel.reference || ""),
             description: String(materiel.description || ""),
-            stock: Math.max(0, Math.floor(Number(materiel.stock || 0))),
             minimum: Math.max(0, Math.floor(Number(materiel.minimum || 0))),
             emplacement: String(materiel.emplacement || ""),
             photo_url: String(materiel.photo || "")
@@ -7320,7 +7311,16 @@ async function envoyerDonneesLocalesVersSupabase() {
     });
 
     if (lignesMateriels.length > 0) {
-
+        const idsConnus = new Set(ancienSnapshot.materiels.map(String));
+        const nouvelles = lignesMateriels.filter(m => !idsConnus.has(m.id)).map(m => {
+            const local = materiels.find(x => String(x.id) === m.id);
+            const deltas = lireJournalStock().filter(x => x.materielId === m.id).reduce((n,x) => n+x.delta,0);
+            return {...m, stock:Math.max(0, Number(local.stock)-deltas)};
+        });
+        if (nouvelles.length) {
+            const creation = await supabase.from("materiels").upsert(nouvelles, {onConflict:"id", ignoreDuplicates:true});
+            if (creation.error) throw creation.error;
+        }
         const resultatMateriels = await supabase
             .from("materiels")
             .upsert(lignesMateriels, { onConflict: "id" });
@@ -7576,6 +7576,9 @@ async function envoyerDonneesLocalesVersSupabase() {
         }
 
     }
+
+    await synchroniserJournalStock(supabase);
+    void envoyerNotificationsStockEnAttente();
 
     // A failed control stays in its own journal; do not resend old stocks solely
     // because a signature or the control service is temporarily unavailable.
@@ -7915,6 +7918,8 @@ async function synchroniserHorsConnexionAutomatiquement() {
     if (existeModificationsEnAttente() && proprietaireModifications && proprietaireModifications !== proprietaire) return;
     // Les anciennes versions n'avaient pas de propriétaire pour ce marqueur.
     if (historique.some(i => i.synchronisationEnAttente && i.createdBy && String(i.createdBy) !== proprietaire)) return;
+    if (lireJournalStock().length) marquerModificationsEnAttente();
+    void envoyerNotificationsStockEnAttente();
     if (!existeModificationsEnAttente() && !lireControlesPharmacieEnAttente().some(c => c.user_id === proprietaire)) return;
     repriseHorsConnexionEnCours = true;
     synchronisationSupabaseEnCours = true;
@@ -11711,7 +11716,8 @@ function ouvrirFenetreStock(
 
 function appliquerNouveauStock(
     materiel,
-    nouveauStock
+    nouveauStock,
+    comptage = false
 ) {
 
     const stockFinal =
@@ -11745,7 +11751,8 @@ function appliquerNouveauStock(
 
     preparerNotificationStock(
         materiel,
-        ancienStock
+        ancienStock,
+        comptage ? ancienStock : null
     );
 
 
@@ -11798,7 +11805,8 @@ function enregistrerStockTotal(
     if (
         !appliquerNouveauStock(
             materiel,
-            valeur
+            valeur,
+            true
         )
     ) {
         return;
@@ -11808,7 +11816,7 @@ function enregistrerStockTotal(
     fermerFenetreStock();
 
     alert(
-        "Stock modifié."
+        "Comptage enregistré sur cet appareil, en attente de confirmation du serveur."
     );
 
     gestionMateriels();
@@ -14794,7 +14802,12 @@ async function afficherReapprovisionnementAdministration() {
 }
 
 
+let validationReapprovisionnementEnCours = false;
 async function validerReapprovisionnementAdministration() {
+    if (validationReapprovisionnementEnCours) return;
+    validationReapprovisionnementEnCours = true;
+    try {
+
 
     if (
         !verifierPermissionOuRetourAccueil(
@@ -14878,6 +14891,7 @@ async function validerReapprovisionnementAdministration() {
         return;
     }
 
+    let confirme = false;
     let nombreModifie = 0;
 
     ajouts.forEach(
@@ -14912,7 +14926,7 @@ async function validerReapprovisionnementAdministration() {
     sauvegarderToutesLesDonnees();
 
     try {
-        await synchroniserApresModification();
+        confirme = await synchroniserApresModification();
     } catch (erreur) {
         console.warn(
             "Synchronisation du réapprovisionnement différée :",
@@ -14921,12 +14935,14 @@ async function validerReapprovisionnementAdministration() {
     }
 
     alert(
-        nombreModifie +
-        " matériel(s) ajouté(s) au stock."
+        confirme
+            ? nombreModifie + " matériel(s) ajouté(s) au stock et confirmé(s) par le serveur."
+            : "Réapprovisionnement enregistré sur cet appareil, en attente de confirmation du serveur. L'envoi sera retenté automatiquement : ne le ressaisis pas."
     );
 
     afficherReapprovisionnementAdministration();
 
+    } finally { validationReapprovisionnementEnCours = false; }
 }
 
 
@@ -15336,6 +15352,10 @@ function ajouterLigneReapprovisionnementArchive() {
 async function validerReapprovisionnementArchive(
     archiveId
 ) {
+    if (validationReapprovisionnementEnCours) return;
+    validationReapprovisionnementEnCours = true;
+    try {
+
 
     if (
         !verifierPermissionOuRetourAccueil(
@@ -15498,6 +15518,7 @@ async function validerReapprovisionnementArchive(
     }
 
 
+    let confirme = false;
     let nombreModifie =
         0;
 
@@ -15572,7 +15593,7 @@ async function validerReapprovisionnementArchive(
 
     try {
 
-        await synchroniserApresModification();
+        confirme = await synchroniserApresModification();
 
     } catch (erreur) {
 
@@ -15585,8 +15606,9 @@ async function validerReapprovisionnementArchive(
 
 
     alert(
-        nombreModifie +
-        " matériel(s) ajouté(s) au stock."
+        confirme
+            ? nombreModifie + " matériel(s) ajouté(s) au stock et confirmé(s) par le serveur."
+            : "Réapprovisionnement enregistré sur cet appareil, en attente de confirmation du serveur. L'envoi sera retenté automatiquement : ne le ressaisis pas."
     );
 
 
@@ -15594,6 +15616,7 @@ async function validerReapprovisionnementArchive(
         archiveId
     );
 
+    } finally { validationReapprovisionnementEnCours = false; }
 }
 
 
@@ -19312,6 +19335,7 @@ function enregistrerMateriel() {
 
         preparerNotificationStock(
             materiel,
+            ancienStock,
             ancienStock
         );
 

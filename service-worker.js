@@ -15,7 +15,7 @@ importScripts("./notifications-history.js");
  * à récupérer le nouvel app.js.
  */
 
-const CACHE_NAME = "inventaire-caserne-v118-suppression-menage";
+const CACHE_NAME = "inventaire-caserne-v119-stock-reseau";
 
 
 /*
@@ -248,7 +248,7 @@ self.addEventListener('push', event => {
    record=await CISNotifications.receive(data,owner);
   }catch(e){console.warn('Historique Push indisponible',e);}
   const url=new URL('./',self.registration.scope);if(record)url.searchParams.set('notification',record.id);
-  await self.registration.showNotification(data.title||'Inventaire Caserne',{
+  if(!record?.duplicate) await self.registration.showNotification(data.title||'Inventaire Caserne',{
    ...(data.tag?{tag:String(data.tag)}:{}),body:data.body||'Nouvelle notification',icon:data.icon||'./icon-192.png',badge:data.badge||'./icon-192.png',
    data:{url:record?url.href:(data.url||'./'),notificationId:record?.id||null,userId:record?.userId||null}
   });
