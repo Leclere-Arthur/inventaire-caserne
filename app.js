@@ -725,7 +725,7 @@ const DOMAINE_EMAIL_INTERNE =
     "inventaire-caserne.local";
 
 const VERSION_APPLICATION =
-    "2.9.65";
+    "2.9.66";
 
 const CLE_PROFIL_UTILISATEUR_CACHE =
     "profil_utilisateur_connecte_v1";
@@ -1032,7 +1032,7 @@ let minuteurVerificationMiseAJour =
  * Elle permet de détecter une nouvelle version même si seul app.js change.
  */
 const VERSION_APPLICATION_JS =
-    "2026-10-21-enregistrement-mac-v78";
+    "2026-10-21-suppression-menage-v79";
 
 async function verifierNouvelleVersionAppJs() {
 
@@ -22855,7 +22855,7 @@ async function afficherMenageEspaceGarde(){
     try{
       if(!navigator.onLine)throw new Error("Classement local conservé");
       const supabase=obtenirClientSupabase();
-      const {data:histPresence}=await supabase.from("menages_garde").select("personnes_presentes");
+      const {data:histPresence}=await supabase.from("menages_garde").select("personnes_presentes").is("supprime_le",null);
       const compte=new Map();
       (histPresence||[]).forEach(r=>(r.personnes_presentes||[]).forEach(id=>compte.set(String(id),(compte.get(String(id))||0)+1)));
       utilisateursEspaceGarde=[...utilisateursEspaceGarde].sort((a,b)=>(compte.get(String(b.id))||0)-(compte.get(String(a.id))||0)||([a.prenom,a.nom].filter(Boolean).join(" ")).localeCompare([b.prenom,b.nom].filter(Boolean).join(" "),"fr"));
@@ -23338,7 +23338,7 @@ async function afficherAdminMenageEquipe(){
     document.getElementById("app").innerHTML=`<main class="garde-section"><button class="retour-button" data-navigation-equipe onclick="retourAdminRubriqueEquipe('menage')">← Retour</button><h1>Administration ménage</h1><div id="admin-menage-chargement" class="garde-planning-attente">Chargement…</div></main>${navigationPrincipale("","accueil")}`;
     actualiserInterfaceBureau();
     const supabase=obtenirClientSupabase();
-    const hist=await chargerMetadonneesHistorique(() => supabase.from("menages_garde").select("id,date_menage,zones_nettoyees,personnes_presentes,duree_minutes").order("date_menage",{ascending:false}).order("id",{ascending:false}));
+    const hist=await chargerMetadonneesHistorique(() => supabase.from("menages_garde").select("id,date_menage,zones_nettoyees,personnes_presentes,duree_minutes").is("supprime_le",null).order("date_menage",{ascending:false}).order("id",{ascending:false}));
     if(!document.getElementById("admin-menage-chargement"))return;
     if(hist.error){document.getElementById("admin-menage-chargement").textContent="Historique ménage indisponible.";return}
     const rows=hist.data||[];
@@ -23360,12 +23360,31 @@ async function afficherAdminMenageEquipe(){
       ${rows.length ? creerListeHistoriqueProgressive(rows, 10, lot => lot.map(r=>`<div class="garde-admin-card"><button onclick="afficherDetailMenageEquipe('${r.id}')"><strong>${new Date(r.date_menage).toLocaleString("fr-FR")}</strong><br><small>${(r.zones_nettoyees||[]).length} zone(s) · ${r.duree_minutes||0} min</small></button></div>`).join("")) : "<div>Aucun ménage enregistré.</div>"}
     </main>${navigationPrincipale("","accueil")}`;void initialiserListesHistoriquesProgressives();actualiserInterfaceBureau();window.scrollTo({top:0,behavior:"auto"});
 }
+const suppressionsMenagesEnCours=new Set();
+async function supprimerMenageEquipe(id,bouton=null){
+ if(!utilisateurAPermission('acces_admin_menage'))return alert('Accès non autorisé.');
+ if(suppressionsMenagesEnCours.has(String(id)))return;
+ if(!navigator.onLine)return alert('Une connexion Internet est nécessaire pour supprimer un ménage.');
+ if(!await afficherConfirmationCIS('Supprimer ce ménage de l’historique ? Il sera également retiré des statistiques, des prochains PDF et du suivi des travaux de l’équipe.'))return;
+ if(suppressionsMenagesEnCours.has(String(id)))return;
+ suppressionsMenagesEnCours.add(String(id));if(bouton)bouton.disabled=true;
+ try{
+  const sb=obtenirClientSupabase();if(!sb)throw new Error('Connexion au serveur indisponible.');
+  await obtenirSessionPrincipaleValide(sb);
+  const {data,error}=await sb.rpc('menage_supprimer_admin',{p_id:id});if(error)throw error;
+  if(!data?.supprime||String(data.id)!==String(id))throw new Error('Le serveur n’a pas confirmé la suppression.');
+  try{localStorage.removeItem('cis_travail_equipe_v1:'+utilisateurConnecte.id);}catch(_){}
+  await afficherAdminMenageEquipe();
+ }catch(e){alert('Suppression impossible : '+(e.message||String(e)));}
+ finally{suppressionsMenagesEnCours.delete(String(id));if(bouton?.isConnected)bouton.disabled=false;}
+}
+
 async function afficherDetailMenageEquipe(id){
     if(!utilisateurAPermission("acces_admin_menage"))return alert("Accès non autorisé.");
     initialiserStyleEspaceGardeUtilisateur();
     document.getElementById("app").innerHTML=`<main class="garde-section"><button class="retour-button" data-navigation-equipe onclick="afficherAdminMenageEquipe()">← Retour</button><h1>Détail du ménage</h1><div id="detail-menage-chargement" class="garde-planning-attente">Chargement…</div></main>${navigationPrincipale("","accueil")}`;
     actualiserInterfaceBureau();
-    const supabase=obtenirClientSupabase();const {data:r,error}=await supabase.from("menages_garde").select("*").eq("id",id).single();
+    const supabase=obtenirClientSupabase();const {data:r,error}=await supabase.from("menages_garde").select("*").is("supprime_le",null).eq("id",id).single();
     if(!document.getElementById("detail-menage-chargement"))return;
     if(error||!r){document.getElementById("detail-menage-chargement").textContent="Détail indisponible.";return}
     if(!utilisateursEspaceGarde.length)utilisateursEspaceGarde=await chargerUtilisateursEspaceGarde();
@@ -23373,7 +23392,7 @@ async function afficherDetailMenageEquipe(id){
     const nom=id=>{const u=utilisateursEspaceGarde.find(x=>String(x.id)===String(id));return u?([u.prenom,u.nom].filter(Boolean).join(" ")||u.identifiant):"Utilisateur"};
     document.getElementById("app").innerHTML=`<main class="garde-section"><button class="retour-button" data-navigation-equipe onclick="afficherAdminMenageEquipe()">← Retour</button><h1>Détail du ménage</h1>
     ${htmlPlanMenageHistorique(r.zones_nettoyees||[])}
-    <div class="garde-admin-card"><strong>Enregistrement créé par</strong><p>${echapperHTML(nom(r.enregistre_par))}</p><strong>Date</strong><p>${new Date(r.date_menage).toLocaleString("fr-FR")}</p><strong>Temps passé</strong><p>${r.duree_minutes||0} min</p><strong>Zones nettoyées</strong><p>${(r.zones_nettoyees||[]).map(echapperHTML).join(" · ")}</p><strong>Personnes présentes</strong><p>${(r.personnes_presentes||[]).map(x=>echapperHTML(nom(x))).join(" · ")}</p>${(r.produits_vides||[]).length?`<strong>Produits vidés</strong><p>${r.produits_vides.map(p=>echapperHTML(p.nom||"Produit")+" × "+Number(p.quantite)).join(" · ")}</p>`:""}</div></main>${navigationPrincipale("","accueil")}`;
+    <div class="garde-admin-card"><strong>Enregistrement créé par</strong><p>${echapperHTML(nom(r.enregistre_par))}</p><strong>Date</strong><p>${new Date(r.date_menage).toLocaleString("fr-FR")}</p><strong>Temps passé</strong><p>${r.duree_minutes||0} min</p><strong>Zones nettoyées</strong><p>${(r.zones_nettoyees||[]).map(echapperHTML).join(" · ")}</p><strong>Personnes présentes</strong><p>${(r.personnes_presentes||[]).map(x=>echapperHTML(nom(x))).join(" · ")}</p>${(r.produits_vides||[]).length?`<strong>Produits vidés</strong><p>${r.produits_vides.map(p=>echapperHTML(p.nom||"Produit")+" × "+Number(p.quantite)).join(" · ")}</p>`:""}<p><button type="button" class="garde-menage-enregistrer" style="background:#b5232c;color:#fff" data-supprimer-menage="${echapperHTML(r.id)}" onclick="supprimerMenageEquipe(this.dataset.supprimerMenage,this)">Supprimer ce ménage</button></p></div></main>${navigationPrincipale("","accueil")}`;
     actualiserInterfaceBureau();
 }
 
@@ -23846,6 +23865,7 @@ async function chargerLignesEquipePDF(type,id,periodeMail=null){
  const rows=[];
  for(let debut=0;;debut+=500){
   let req=sb.from(table).select(select).order(date,{ascending:false}).order('id');
+  if(table==='menages_garde')req=req.is('supprime_le',null);
   if(id)req=req.eq('id',id);
   if(periode)req=req.gte(date,periode.startISO).lt(date,periode.endISO);
   if(filtreVehicule)req=req.eq('vehicule_nom',filtreVehicule);
