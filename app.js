@@ -725,7 +725,7 @@ const DOMAINE_EMAIL_INTERNE =
     "inventaire-caserne.local";
 
 const VERSION_APPLICATION =
-    "2.9.69";
+    "2.9.70";
 
 const CLE_PROFIL_UTILISATEUR_CACHE =
     "profil_utilisateur_connecte_v1";
@@ -6829,7 +6829,7 @@ async function recupererDonneesSupabase() {
         supabase.from("categories").select("id,nom"),
         supabase
             .from("materiels")
-            .select("id,nom,reference,description,stock,minimum,emplacement,photo_url"),
+            .select("id,nom,reference,description,stock,minimum,emplacement"),
         supabase
             .from("materiel_categories")
             .select("materiel_id,categorie_id"),
@@ -6962,7 +6962,7 @@ function convertirDonneesSupabaseEnDonneesApplication(donnees) {
             stock: Math.max(0, Math.floor(Number(materiel.stock || 0))),
             minimum: Math.max(0, Math.floor(Number(materiel.minimum || 0))),
             emplacement: String(materiel.emplacement || ""),
-            photo: String(materiel.photo_url || "")
+            photo: ""
         };
 
     });
@@ -7345,7 +7345,6 @@ async function envoyerDonneesLocalesVersSupabase() {
             description: String(materiel.description || ""),
             minimum: Math.max(0, Math.floor(Number(materiel.minimum || 0))),
             emplacement: String(materiel.emplacement || ""),
-            photo_url: String(materiel.photo || "")
         };
 
     });
@@ -11224,34 +11223,7 @@ function genererCarteInventaire(
     materiel
 ) {
 
-    const photo =
-        materiel.photo
-        ?
-        `
-        <div class="carte-photo-droite">
-
-            <img
-                src="${materiel.photo}"
-                class="photo-materiel"
-                alt="${echapperHTML(
-                    materiel.nom
-                )}"
-            >
-
-        </div>
-        `
-        :
-        `
-        <div
-            class="
-                carte-photo-droite
-                photo-vide
-            "
-        >
-            📦
-        </div>
-        `;
-
+    const photo = "";
 
     const categoriesMateriel =
         materiel.categories
@@ -12191,34 +12163,7 @@ function genererCarteRetour(
         );
 
 
-    const photo =
-        materiel.photo
-        ?
-        `
-        <div class="carte-photo-droite">
-
-            <img
-                src="${materiel.photo}"
-                class="photo-materiel"
-                alt="${echapperHTML(
-                    materiel.nom
-                )}"
-            >
-
-        </div>
-        `
-        :
-        `
-        <div
-            class="
-                carte-photo-droite
-                photo-vide
-            "
-        >
-            📦
-        </div>
-        `;
-
+    const photo = "";
 
     let optionsQuantite =
         `<option value="0" ${quantite === 0 ? "selected" : ""}>0</option>`;
@@ -16784,7 +16729,7 @@ function afficherModificationRetourIntervention(interventionId) {
     const intervention = historique.find(i => String(i.id) === String(interventionId));
     if (!intervention) return alert("Intervention introuvable.");
     const admin = utilisateurEstSPVAdmin();
-    if (!admin && (!auteurInterventionEstUtilisateur(intervention) || ageInterventionMs(intervention) > 36 * 60 * 60 * 1000)) {
+    if (!admin) {
         return alert("Ce retour ne peut plus être modifié.");
     }
 
@@ -16840,7 +16785,7 @@ async function enregistrerModificationRetourIntervention(interventionId) {
     const intervention = historique.find(i => String(i.id) === String(interventionId));
     if (!intervention) return alert("Intervention introuvable.");
     const admin = utilisateurEstSPVAdmin();
-    if (!admin && (!auteurInterventionEstUtilisateur(intervention) || ageInterventionMs(intervention) > 36 * 60 * 60 * 1000)) return alert("Ce retour ne peut plus être modifié.");
+    if (!admin) return alert("Ce retour ne peut plus être modifié.");
     if (!navigator.onLine) return alert("Une connexion Internet est nécessaire pour modifier un retour d'intervention.");
 
     const consommations = Array.from(document.querySelectorAll(".edit-qte-intervention"))
@@ -16873,7 +16818,7 @@ function afficherDetailIntervention(
     if (!intervention) { alert("Intervention introuvable."); return; }
     const auteur = auteurInterventionEstUtilisateur(intervention);
     const admin = utilisateurEstSPVAdmin();
-    const modificationPossible = admin || (auteur && ageInterventionMs(intervention) <= 36 * 60 * 60 * 1000);
+    const modificationPossible = admin;
     const suppressionAuteurPossible = auteur && ageInterventionMs(intervention) <= 60 * 60 * 1000;
     const afficherSuppression = auteur || admin;
     let html = `<main class="page">
@@ -16896,7 +16841,7 @@ function afficherDetailIntervention(
     }
     if (auteur || admin) {
         html += `<div class="actions-intervention">`;
-        if (auteur || admin) html += `<button class="bouton-modifier-intervention" ${modificationPossible ? `onclick="afficherModificationRetourIntervention('${intervention.id}')"` : "disabled"}>Modifier</button>`;
+        if (admin) html += `<button class="bouton-modifier-intervention" ${modificationPossible ? `onclick="afficherModificationRetourIntervention('${intervention.id}')"` : "disabled"}>Modifier</button>`;
         if (afficherSuppression) {
             const suppressionPossible = admin || suppressionAuteurPossible;
             html += `<button class="bouton-supprimer-intervention" ${suppressionPossible ? `onclick="supprimerRetourIntervention('${intervention.id}')"` : "disabled"}>Supprimer</button>`;
@@ -19059,39 +19004,6 @@ function afficherFormulaireMateriel(
                 }</textarea>
 
 
-                <label>
-                    Photo du matériel
-                </label>
-
-
-                ${
-                    modification &&
-                    materiel.photo
-                    ?
-                    `
-                    <img
-                        src="${materiel.photo}"
-                        class="apercu-photo"
-                        alt="Photo actuelle"
-                    >
-                    `
-                    :
-                    ""
-                }
-
-
-                <input
-                    type="file"
-                    id="photo-materiel"
-                    accept="image/*"
-                >
-
-
-                <div
-                    id="apercu-photo"
-                ></div>
-
-
                 <button
                     class="add-button"
                     onclick="
@@ -19306,10 +19218,7 @@ function enregistrerMateriel() {
     }
 
 
-    const fichier =
-        document.getElementById(
-            "photo-materiel"
-        )?.files[0];
+    const fichier = null;
 
 
     /* =====================================================
@@ -22986,8 +22895,7 @@ async function afficherMenageEspaceGarde(){
        ${utilisateursEspaceGarde.length>6?'<button type="button" id="garde-personnes-plus" class="garde-personnes-plus" onclick="basculerToutesPersonnesMenage()">Voir plus</button>':""}
        <h2 class="garde-sous-titre">Temps passé</h2>
        <select id="garde-menage-duree" class="garde-menage-duree">
-         <option value="">Sélectionner</option><option value="15">15 min</option><option value="30">30 min</option><option value="45">45 min</option>
-         <option value="60">1 h</option><option value="90">1 h 30</option><option value="120">2 h</option><option value="150">2 h 30</option><option value="180">3 h</option>
+         <option value="">Sélectionner</option><option value="30">30 min</option><option value="60">1 h</option><option value="90">1 h 30</option>
        </select>
        <h2 class="garde-sous-titre">Matériel terminé</h2>
        <p>Ne cocher uniquement un produit vidé. Indique la quantité de produits entièrement vidés. Seules les cases cochées sont enregistrées.</p>
@@ -23388,7 +23296,7 @@ async function enregistrerMenageEquipe(){
     const duree=Number(document.getElementById("garde-menage-duree")?.value||0);
     if(!zones.length){afficherStatut("Sélectionne au moins une zone nettoyée.",false);return}
     if(!personnes.length){afficherStatut("Sélectionne au moins une personne présente.",false);return}
-    if(!duree){afficherStatut("Sélectionne le temps passé.",false);return}
+    if(![30,60,90].includes(duree)){afficherStatut("Sélectionne 30 min, 1 h ou 1 h 30.",false);return}
     const auteur = String(utilisateurConnecte?.id || "");
     if (!auteur || String(profilUtilisateurConnecte?.id || "") !== auteur) return;
     validationMenageEnCours=true;
@@ -24403,4 +24311,5 @@ async function envoyerDocumentsEquipeParMail(){
  }catch(err){if(statut.isConnected){statut.className='mail-doc-statut erreur';statut.textContent=err.message||'Envoi impossible. Réessaie dans un instant.';}}
  finally{e.enCours=false;inputs.forEach(x=>x.disabled=false);if(envoiDocumentsEquipeEtat===e&&btn.isConnected){const pending=e.pending;actualiserSelectionDocumentsMail();e.pending=pending;}}
 }
+
 
