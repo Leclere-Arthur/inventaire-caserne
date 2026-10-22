@@ -15,7 +15,7 @@ importScripts("./notifications-history.js");
  * à récupérer le nouvel app.js.
  */
 
-const CACHE_NAME = "inventaire-caserne-v122-menage-peremptions";
+const CACHE_NAME = "inventaire-caserne-v123-suivi-pilotage";
 
 
 /*
@@ -32,6 +32,8 @@ const FICHIERS_APPLICATION = [
     "./app.js",
 
     "./travail-equipe.js",
+
+    "./pilotage-suivi.js",
 
     "./notifications-history.js",
 
@@ -386,5 +388,6 @@ self.addEventListener(
 
     }
 );
+
 
 
