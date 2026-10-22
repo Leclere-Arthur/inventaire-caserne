@@ -1,7 +1,7 @@
 /* Suivi agrégé CIS : aucun champ saisi, URL, mot de passe ni contenu de message collecté. */
 (function(){
  'use strict';
- var last=Date.now(),interaction=Date.now(),busy=false,lastSend=0,currentUid=null,mem={},lastNotice=false,visible=!document.hidden;
+ var last=Date.now(),interaction=Date.now(),busy=false,lastSend=0,currentUid=null,mem={},visible=!document.hidden;
  var IDLE=120000,MAX_AGE=7*86400000;
  function client(){try{return typeof obtenirClientSupabase==='function'?obtenirClientSupabase():null}catch(_){return null}}
  function uid(){try{return typeof utilisateurConnecte!=='undefined'&&utilisateurConnecte?String(utilisateurConnecte.id):null}catch(_){return null}}
@@ -33,11 +33,5 @@
  function uuid(){var b=crypto.getRandomValues(new Uint8Array(16));b[6]=(b[6]&15)|64;b[8]=(b[8]&63)|128;var h=Array.from(b,function(x){return x.toString(16).padStart(2,'0')}).join('');return h.slice(0,8)+'-'+h.slice(8,12)+'-'+h.slice(12,16)+'-'+h.slice(16,20)+'-'+h.slice(20)}
  function hook(){var c=client();if(!c||!c.functions||c.functions.__pilotage)return;var invoke=c.functions.invoke.bind(c.functions);c.functions.__pilotage=true;c.functions.invoke=async function(n,o){var r=await invoke(n,o);if(n==='envoyer-notification'&&!r.error&&r.data&&r.data.ok!==false){try{var id=uuid();void c.rpc('pilotage_noter_notification',{p_cle:id}).then(function(){},function(){});}catch(_){}}return r;};}
  hook();setInterval(hook,10000);
- // Information visible pour le personnel, sans dialogue bloquant.
- function inform(){if(!uid()||lastNotice)return;try{if(localStorage.getItem('cis_pilotage_information_v1')==='lu'){lastNotice=true;return}}catch(_){}
-  var el=document.createElement('aside');el.setAttribute('role','note');el.style.cssText='position:fixed;z-index:99990;left:16px;right:16px;bottom:105px;margin:auto;max-width:560px;padding:16px;background:#fff;border:1px solid #cbd5e1;border-radius:12px;box-shadow:0 8px 28px #0002;color:#253447;font:14px/1.5 Arial';
-  var text=document.createElement('p');text.style.margin='0 0 10px';text.textContent='Le temps d’utilisation active et les actions enregistrées dans cette application sont désormais suivis pour son administration et la planification des maintenances. Le contenu des champs saisis n’est pas collecté par ce suivi.';
-  var b=document.createElement('button');b.type='button';b.textContent='Compris';b.style.cssText='padding:8px 14px;border:0;border-radius:7px;background:#1f6f4a;color:white;font:inherit';b.onclick=function(){try{localStorage.setItem('cis_pilotage_information_v1','lu')}catch(_){}el.remove()};el.append(text,b);document.body.appendChild(el);lastNotice=true;
- }
- setInterval(inform,10000);
 })();
+
