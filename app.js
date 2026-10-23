@@ -2885,6 +2885,52 @@ function initialiserStyleConnexion() {
             color: #b31212;
         }
 
+        .profil-applications-liens {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 12px;
+        }
+
+        #app .profil-application-lien {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            min-width: 0;
+            min-height: 112px;
+            box-sizing: border-box;
+            padding: 14px 8px;
+            border: 1px solid #dce2e8;
+            border-radius: 13px;
+            background: #f4f6f8;
+            color: #087be5;
+            font: inherit;
+            font-weight: 750;
+            text-align: center;
+            text-decoration: none;
+            overflow-wrap: anywhere;
+        }
+
+        #app .profil-application-lien img {
+            width: 48px;
+            height: 48px;
+            object-fit: contain;
+            border-radius: 11px;
+        }
+
+        #app .profil-application-lien:hover { background: #e9f2fc; }
+        #app .profil-application-lien:focus-visible { outline: 3px solid #1687ff; outline-offset: 3px; }
+
+        @media (min-width: 1000px) {
+            body:not(.mode-connexion) #app .profil-application-lien {
+                background: #202c36;
+                border-color: #3a4854;
+                color: #75b9ff;
+            }
+            body:not(.mode-connexion) #app .profil-application-lien:hover { background: #2c3d4b; }
+        }
+
         .profil-version {
             margin-top: auto;
             padding:
@@ -3694,25 +3740,7 @@ async function afficherProfilUtilisateur() {
                 </div>
             </section>
 
-            <section class="profil-carte">
 
-                <h3>
-                    Découvrir l'application
-                </h3>
-
-                <button
-                    class="profil-bouton-principal"
-                    type="button"
-                    onclick="demarrerTutorielApplication()"
-                >
-                    Tutoriel de l'application
-                </button>
-
-                <small class="profil-mise-a-jour-texte">
-                    Une visite rapide des fonctions auxquelles tu as accès.
-                </small>
-
-            </section>
 
 
             <section class="profil-carte">
@@ -3737,6 +3765,21 @@ async function afficherProfilUtilisateur() {
                     Appuie ici pour rechercher une nouvelle version.
                 </small>
 
+            </section>
+
+
+            <section class="profil-carte profil-autres-applications" aria-labelledby="profil-autres-applications-titre">
+                <h3 id="profil-autres-applications-titre">Autres applications</h3>
+                <div class="profil-applications-liens">
+                    <a class="profil-application-lien" href="https://admin.cis-lechesne.fr/" target="_blank" rel="noopener noreferrer">
+                        <img src="./profil-logo-admin.png" alt="" width="48" height="48">
+                        <span>CIS Admin</span>
+                    </a>
+                    <a class="profil-application-lien" href="https://pilotage.cis-lechesne.fr/" target="_blank" rel="noopener noreferrer">
+                        <img src="./profil-logo-pilotage.svg" alt="" width="48" height="48">
+                        <span>Pilotage</span>
+                    </a>
+                </div>
             </section>
 
 
@@ -24311,5 +24354,6 @@ async function envoyerDocumentsEquipeParMail(){
  }catch(err){if(statut.isConnected){statut.className='mail-doc-statut erreur';statut.textContent=err.message||'Envoi impossible. Réessaie dans un instant.';}}
  finally{e.enCours=false;inputs.forEach(x=>x.disabled=false);if(envoiDocumentsEquipeEtat===e&&btn.isConnected){const pending=e.pending;actualiserSelectionDocumentsMail();e.pending=pending;}}
 }
+
 
 

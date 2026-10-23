@@ -15,7 +15,7 @@ importScripts("./notifications-history.js");
  * à récupérer le nouvel app.js.
  */
 
-const CACHE_NAME = "inventaire-caserne-v124-statistiques-completes";
+const CACHE_NAME = "inventaire-caserne-v125-profil-applications";
 
 
 /*
@@ -49,6 +49,10 @@ const FICHIERS_APPLICATION = [
     "./icon-512.png",
 
     "./apple-touch-icon.png",
+
+    "./profil-logo-admin.png",
+
+    "./profil-logo-pilotage.svg",
 
     "./fond-connexion.png",
 
@@ -389,6 +393,7 @@ self.addEventListener(
 
     }
 );
+
 
 
 
