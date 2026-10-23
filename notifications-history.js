@@ -6,12 +6,15 @@
  function open() {
   if (opening) return opening;
   opening = new Promise((resolve, reject) => {
-   const req = indexedDB.open('cis-notifications-received-v1', 1);
+   const req = indexedDB.open('cis-notifications-received-v1', 2);
    req.onupgradeneeded = () => {
     const db = req.result;
-    const records = db.createObjectStore('notifications', {keyPath:'id'});
-    records.createIndex('user_date', ['userId','receivedAt']);
-    db.createObjectStore('owners', {keyPath:'endpoint'});
+    if (!db.objectStoreNames.contains('notifications')) {
+     const records = db.createObjectStore('notifications', {keyPath:'id'});
+     records.createIndex('user_date', ['userId','receivedAt']);
+    }
+    if (!db.objectStoreNames.contains('owners')) db.createObjectStore('owners', {keyPath:'endpoint'});
+    if (!db.objectStoreNames.contains('suppressions')) db.createObjectStore('suppressions', {keyPath:'id'});
    };
    req.onsuccess = () => {req.result.onversionchange = () => {req.result.close();opening = null;};resolve(req.result);};
    req.onerror = () => {opening = null;reject(req.error);};
@@ -49,13 +52,17 @@
  }
  async function receive(data,userId) {
   if(!userId) return null;
-  const db=await open(),tx=db.transaction('notifications','readwrite'),completion=done(tx),store=tx.objectStore('notifications');
+  const db=await open(),tx=db.transaction(['notifications','suppressions'],'readwrite'),completion=done(tx),store=tx.objectStore('notifications');
   const stable=data.notification_id||(/^menage-rupture-/.test(String(data.tag||''))?data.tag:null);
   const id=String(userId)+':'+(stable||crypto.randomUUID());
   const record={id,userId:String(userId),title:plain(data.title)||'Notification',body:plain(data.body),receivedAt:new Date().toISOString(),target:route(data),read:false};
   // Un renvoi de la même alerte ménage ne doit pas créer un doublon ni modifier sa date.
   let dejaRecue=null;
-  const existing=store.get(id);existing.onsuccess=()=>{if(!existing.result)store.put(record);else dejaRecue=existing.result;};
+  const suppression=tx.objectStore('suppressions').get(id);
+  suppression.onsuccess=()=>{
+   if(suppression.result){dejaRecue={...record,deleted:true};return;}
+   const existing=store.get(id);existing.onsuccess=()=>{if(!existing.result)store.put(record);else dejaRecue=existing.result;};
+  };
   await completion;
   const cleanup=db.transaction('notifications','readwrite'),cleanDone=done(cleanup),records=cleanup.objectStore('notifications');
   let count=0;const cursor=records.index('user_date').openCursor(range(userId),'prev');
@@ -75,6 +82,14 @@
   const db=await open(),tx=db.transaction('notifications','readwrite'),completion=done(tx),store=tx.objectStore('notifications'),req=store.get(String(id));
   req.onsuccess=()=>{const r=req.result;if(r&&r.userId===String(userId))store.put({...r,read:true});};await completion;
  }
- scope.CISNotifications={bind,owner,receive,list,get,read,route,plain};
+ async function remove(ids,userId) {
+  if(!userId||!Array.isArray(ids))return;
+  const db=await open(),tx=db.transaction(['notifications','suppressions'],'readwrite'),completion=done(tx);
+  const store=tx.objectStore('notifications'),supprimees=tx.objectStore('suppressions');
+  for(const value of ids){const id=String(value);if(!id.startsWith(String(userId)+':'))continue;store.delete(id);supprimees.put({id,userId:String(userId)});}
+  await completion;
+ }
+ scope.CISNotifications={bind,owner,receive,list,get,read,remove,route,plain};
 })(globalThis);
+
 

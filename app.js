@@ -5273,6 +5273,7 @@ function initialiserBoutonNotifications() {
    ========================================================= */
 
 function normaliserToutesLesDonnees() {
+    if (typeof appliquerSuppressionsLocalesPilotage === "function") appliquerSuppressionsLocalesPilotage();
 
     materiels = materiels.map(function (materiel, index) {
 
@@ -7331,6 +7332,7 @@ function migrerIdentifiantsVersUUID() {
 }
 
 async function envoyerDonneesLocalesVersSupabase() {
+    if (typeof appliquerNettoyageAvantSynchronisation === "function") await appliquerNettoyageAvantSynchronisation();
 
     const supabase = obtenirClientSupabase();
 
@@ -24374,6 +24376,7 @@ async function envoyerDocumentsEquipeParMail(){
  }catch(err){if(statut.isConnected){statut.className='mail-doc-statut erreur';statut.textContent=err.message||'Envoi impossible. Réessaie dans un instant.';}}
  finally{e.enCours=false;inputs.forEach(x=>x.disabled=false);if(envoiDocumentsEquipeEtat===e&&btn.isConnected){const pending=e.pending;actualiserSelectionDocumentsMail();e.pending=pending;}}
 }
+
 
 
 
