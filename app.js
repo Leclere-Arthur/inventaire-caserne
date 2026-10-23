@@ -2887,47 +2887,67 @@ function initialiserStyleConnexion() {
 
         .profil-applications-liens {
             display: grid;
-            grid-template-columns: repeat(2, minmax(0, 1fr));
+            grid-template-columns: minmax(0, 1fr);
             gap: 12px;
         }
-
         #app .profil-application-lien {
             display: flex;
-            flex-direction: column;
+            flex-direction: row;
             align-items: center;
-            justify-content: center;
-            gap: 10px;
+            gap: 18px;
+            width: 100%;
             min-width: 0;
-            min-height: 112px;
+            min-height: 100px;
             box-sizing: border-box;
-            padding: 14px 8px;
+            padding: 18px;
             border: 1px solid #dce2e8;
             border-radius: 13px;
             background: #f4f6f8;
             color: #087be5;
             font: inherit;
-            font-weight: 750;
-            text-align: center;
+            text-align: left;
             text-decoration: none;
-            overflow-wrap: anywhere;
         }
-
         #app .profil-application-lien img {
-            width: 48px;
-            height: 48px;
+            width: 58px;
+            height: 58px;
+            flex: 0 0 58px;
             object-fit: contain;
-            border-radius: 11px;
+            border-radius: 12px;
         }
-
+        #app .profil-application-nom {
+            display: block;
+            min-width: 0;
+            font-size: clamp(22px, 6vw, 28px);
+            font-weight: 800;
+            line-height: 1.2;
+        }
+        #app .profil-application-pilotage {
+            background: #101827;
+            border-color: #2b3b54;
+            color: #eff3fa;
+        }
+        #app .profil-application-pilotage .profil-application-nom { letter-spacing: 1px; }
+        #app .profil-application-point { color: #53dbca; }
+        #app .profil-application-sous-titre {
+            display: block;
+            margin-top: 7px;
+            color: #a5b2c7;
+            font-size: 10px;
+            font-weight: 500;
+            letter-spacing: 2.5px;
+            line-height: 1.5;
+        }
         #app .profil-application-lien:hover { background: #e9f2fc; }
+        #app .profil-application-pilotage:hover { background: #1b293c; }
         #app .profil-application-lien:focus-visible { outline: 3px solid #1687ff; outline-offset: 3px; }
-
         @media (min-width: 1000px) {
             body:not(.mode-connexion) #app .profil-application-lien {
                 background: #202c36;
                 border-color: #3a4854;
                 color: #75b9ff;
             }
+            body:not(.mode-connexion) #app .profil-application-pilotage { background: #101827; color: #eff3fa; }
             body:not(.mode-connexion) #app .profil-application-lien:hover { background: #2c3d4b; }
         }
 
@@ -3773,11 +3793,11 @@ async function afficherProfilUtilisateur() {
                 <div class="profil-applications-liens">
                     <a class="profil-application-lien" href="https://admin.cis-lechesne.fr/" target="_blank" rel="noopener noreferrer">
                         <img src="./profil-logo-admin.png" alt="" width="48" height="48">
-                        <span>CIS Admin</span>
+                        <span class="profil-application-nom">CIS Admin</span>
                     </a>
-                    <a class="profil-application-lien" href="https://pilotage.cis-lechesne.fr/" target="_blank" rel="noopener noreferrer">
+                    <a class="profil-application-lien profil-application-pilotage" href="https://pilotage.cis-lechesne.fr/" target="_blank" rel="noopener noreferrer">
                         <img src="./profil-logo-pilotage.svg" alt="" width="48" height="48">
-                        <span>Pilotage</span>
+                        <span><span class="profil-application-nom">PILOTAGE<span class="profil-application-point">.</span></span><span class="profil-application-sous-titre">CIS LE CHESNE</span></span>
                     </a>
                 </div>
             </section>
@@ -24354,6 +24374,7 @@ async function envoyerDocumentsEquipeParMail(){
  }catch(err){if(statut.isConnected){statut.className='mail-doc-statut erreur';statut.textContent=err.message||'Envoi impossible. Réessaie dans un instant.';}}
  finally{e.enCours=false;inputs.forEach(x=>x.disabled=false);if(envoiDocumentsEquipeEtat===e&&btn.isConnected){const pending=e.pending;actualiserSelectionDocumentsMail();e.pending=pending;}}
 }
+
 
 
 
