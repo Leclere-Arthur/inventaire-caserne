@@ -8201,7 +8201,7 @@ function utilisateurPeutAccederPharmacie() {
 
 const CLE_RACCOURCIS_ACCUEIL = "cis_raccourcis_accueil_v1";
 function optionsRaccourcisAccueil(){
- const o=[];
+ const o=[{id:"formations",libelle:"Formation",icone:"▤",action:"CISFormations.ouvrir()"}];
  if(utilisateurAPermission("acces_espace_caserne")){o.push({id:"caserne",libelle:"Espace Caserne",icone:"🏠",action:"afficherEspaceCaserne()"});o.push({id:"agenda",libelle:"Agenda général",icone:"📅",action:"afficherAgendaGeneralCaserne()"});}
  if(utilisateurPeutAccederPharmacie())o.push({id:"pharmacie",libelle:"Espace Pharmacie",icone:"💊",action:"afficherAccueil()"});
  o.push({id:"equipe",libelle:"Espace équipe",icone:"🚒",action:"afficherEspaceGarde()"});
@@ -22900,6 +22900,7 @@ function afficherEspaceGarde(){
           <button id="travail-equipe-carte" class="garde-menu-carte" disabled onclick="CISTravail.ouvrir()"><span class="ico" aria-hidden="true">✓</span><span><strong>Travail de l’équipe</strong><small>Vérification de la garde…</small></span><b class="fleche">›</b></button>
           <button class="garde-menu-carte" onclick="ouvrirRubriqueEquipe('menage')"><span class="ico">🧹</span><span><strong>Ménage</strong></span><b class="fleche">›</b></button>
           <button class="garde-menu-carte" onclick="ouvrirRubriqueEquipe('vehicules')"><span class="ico">🚒</span><span><strong>Inventaire véhicule</strong></span><b class="fleche">›</b></button>
+          <button class="garde-menu-carte" onclick="CISFormations.ouvrir()"><span class="ico" aria-hidden="true"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 4h6a4 4 0 0 1 3 1.4A4 4 0 0 1 15 4h6v16h-6a4 4 0 0 0-3 1 4 4 0 0 0-3-1H3zM12 5.4V21"/></svg></span><span><strong>Formation</strong></span><b class="fleche">›</b></button>
           <button class="garde-menu-carte" onclick="afficherPlanningEspaceGarde()"><span class="ico">📅</span><span><strong>Planning</strong></span><b class="fleche">›</b></button>
           <button class="garde-menu-carte" onclick="ouvrirRubriqueEquipe('heures')"><span class="ico">⏱️</span><span><strong>Enregistrer des heures</strong></span><b class="fleche">›</b></button>
           ${utilisateurAPermission("acces_envoi_mail")?`<button type="button" class="garde-menu-carte" onclick="afficherEnvoiDocumentsEquipe()"><span class="ico" aria-hidden="true"><svg width="27" height="27" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 6 9 7 9-7"/></svg></span><span><strong>Envoi par mail</strong></span><b class="fleche">›</b></button>`:""}
@@ -24376,6 +24377,7 @@ async function envoyerDocumentsEquipeParMail(){
  }catch(err){if(statut.isConnected){statut.className='mail-doc-statut erreur';statut.textContent=err.message||'Envoi impossible. Réessaie dans un instant.';}}
  finally{e.enCours=false;inputs.forEach(x=>x.disabled=false);if(envoiDocumentsEquipeEtat===e&&btn.isConnected){const pending=e.pending;actualiserSelectionDocumentsMail();e.pending=pending;}}
 }
+
 
 
 

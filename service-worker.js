@@ -15,7 +15,7 @@ importScripts("./notifications-history.js");
  * à récupérer le nouvel app.js.
  */
 
-const CACHE_NAME = "inventaire-caserne-v128-nettoyage-selectif";
+const CACHE_NAME = "inventaire-caserne-v129-formations";
 
 
 /*
@@ -30,6 +30,9 @@ const FICHIERS_APPLICATION = [
     "./index.html",
 
     "./app.js",
+    "./formations-commun.js",
+    "./formations.js",
+    "./formations.css",
 
     "./travail-equipe.js",
 
@@ -395,6 +398,7 @@ self.addEventListener(
 
     }
 );
+
 
 
 
