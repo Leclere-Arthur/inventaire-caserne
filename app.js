@@ -22649,6 +22649,11 @@ window.attribuerEquipeSemaineGarde=attribuerEquipeSemaineGarde;
    ESPACE GARDE UTILISATEUR — présentation comme le reste de l'app
    ========================================================= */
 
+function personnelConnecteSaisie(){const u=typeof utilisateurConnecte!=='undefined'?utilisateurConnecte:null,p=typeof profilUtilisateurConnecte!=='undefined'?profilUtilisateurConnecte:null;const id=String(u?.id||p?.id||'');if(!id||p?.actif===false||u?.id&&p?.id&&String(u.id)!==String(p.id))return null;return {...u,...p,id};}
+function personnesAvecAuteur(ids){const moi=personnelConnecteSaisie();return [...new Set([...(moi?[moi.id]:[]),...(ids||[]).map(String).filter(Boolean)])];}
+function listePersonnelAvecAuteur(liste){const moi=personnelConnecteSaisie(),map=new Map((liste||[]).filter(p=>p?.id).map(p=>[String(p.id),p]));if(moi&&!map.has(moi.id))map.set(moi.id,moi);return [...map.values()].sort((a,b)=>Number(String(b.id)===moi?.id)-Number(String(a.id)===moi?.id));}
+function nomsParticipantsInventaire(r,personnes=utilisateursEspaceGarde){const ids=[...new Set([r.controle_par,...(r.personnes_presentes||[])].filter(Boolean).map(String))],snap=new Map((Array.isArray(r.participants_noms)?r.participants_noms:[]).map(p=>[String(p.id),p]));return ids.map(id=>{const p=snap.get(id)||(personnes||[]).find(p=>String(p.id)===id);return p?[p.prenom,p.nom].filter(Boolean).join(' '):'Identité indisponible (ID : '+id.slice(0,8)+')';}).join(', ');}
+
 const ZONES_MENAGE_GARDE = [
     "Remise à engin","Local VSAV","Vestiaire homme","Vestiaire femme",
     "Toilettes PMR","Foyer","Salle de cour","Salle radio","Poubelle de trie",
@@ -22936,6 +22941,7 @@ async function afficherMenageEspaceGarde(){
       utilisateursEspaceGarde=[...utilisateursEspaceGarde].sort((a,b)=>(compte.get(String(b.id))||0)-(compte.get(String(a.id))||0)||([a.prenom,a.nom].filter(Boolean).join(" ")).localeCompare([b.prenom,b.nom].filter(Boolean).join(" "),"fr"));
     }catch(_){}
     if(!chargement.isConnected)return;
+    utilisateursEspaceGarde=listePersonnelAvecAuteur(utilisateursEspaceGarde);
     document.getElementById("app").innerHTML=`
       <main class="garde-section">
        <button class="retour-button" data-navigation-equipe onclick="retourSaisieEquipe('menage')">← Retour</button>
@@ -22957,7 +22963,7 @@ async function afficherMenageEspaceGarde(){
        <h2 class="garde-sous-titre">Zones</h2>
        ${ZONES_MENAGE_GARDE.map(n=>`<label class="garde-zone ${n==="Poubelle de trie"?"garde-zone-poubelle":""}"><input type="checkbox" data-garde-zone value="${echapperHTML(n)}"  onchange="sauvegarderSelectionMenageGarde()"><span>${echapperHTML(n)}</span></label>`).join("")}
        <h2 class="garde-sous-titre">Présents</h2>
-       <div id="garde-personnes-liste">${utilisateursEspaceGarde.length?utilisateursEspaceGarde.map((u,i)=>{const n=[u.prenom,u.nom].filter(Boolean).join(" ")||u.identifiant||"Utilisateur";return `<label class="garde-personne-v2 ${i>=6?"garde-personne-cachee":""}"><input type="checkbox" data-garde-personne value="${echapperHTML(u.id)}"  onchange="sauvegarderSelectionMenageGarde()"><span>${echapperHTML(n)}</span></label>`}).join(""):'<div class="garde-planning-attente">Liste des utilisateurs indisponible.</div>'}</div>
+       <div id="garde-personnes-liste">${utilisateursEspaceGarde.length?utilisateursEspaceGarde.map((u,i)=>{const n=[u.prenom,u.nom].filter(Boolean).join(" ")||u.identifiant||"Utilisateur";return `<label class="garde-personne-v2 ${i>=6?"garde-personne-cachee":""}"><input type="checkbox" data-garde-personne value="${echapperHTML(u.id)}" ${String(u.id)===personnelConnecteSaisie()?.id?"checked disabled":""} onchange="sauvegarderSelectionMenageGarde()"><span>${echapperHTML(n)}</span></label>`}).join(""):'<div class="garde-planning-attente">Liste des utilisateurs indisponible.</div>'}</div>
        ${utilisateursEspaceGarde.length>6?'<button type="button" id="garde-personnes-plus" class="garde-personnes-plus" onclick="basculerToutesPersonnesMenage()">Voir plus</button>':""}
        <h2 class="garde-sous-titre">Temps passé</h2>
        <select id="garde-menage-duree" class="garde-menage-duree">
@@ -23089,7 +23095,8 @@ async function vehInventaireCommencer(id){
   const zones=z.data||[];if(!zones.length){vehInventaireAfficher(`<button class="retour-button veh-retour" onclick="vehInventaireOuvrirVehicule('${id}')">← Retour</button><h1>${vehInventaireHTML(v.nom)}</h1><p>Configure d'abord les coffres dans l'application Admin.</p>`);return;}
   const m=await sb.from("cis_vehicule_materiels").select("id,zone_id,nom,quantite,etat_reference,notes,ordre,photo_path").in("zone_id",zones.map(x=>x.id)).order("ordre");if(m.error)throw m.error;
   vehInventaireZones=zones;vehInventaireMateriels=m.data||[];
-  vehInventaireSession={vehicule:{id:v.id,nom:v.nom,code:v.code},controles:{}};
+  const personnels=listePersonnelAvecAuteur(await chargerUtilisateursEspaceGarde());
+  vehInventaireSession={vehicule:{id:v.id,nom:v.nom,code:v.code},controles:{},participants:personnesAvecAuteur([]),personnels};
   vehInventaireAfficherZones();
  }catch(e){vehInventaireAfficher(`<button class="retour-button veh-retour" onclick="vehInventaireOuvrirVehicule('${id}')">← Retour</button><h1>Erreur de chargement</h1><p>${vehInventaireHTML(e.message)}</p>`);}
 }
@@ -23097,8 +23104,12 @@ function vehInventaireAfficherZones(){
  const session=vehInventaireSession;if(!session)return;
  const nb=vehInventaireZones.filter(z=>CISTechnique.coffreComplet(z.id)).length;
  const total=vehInventaireZones.length+2,realises=nb+(CISTechnique.techniqueComplete(session.technique)?1:0)+(CISTechnique.annexeComplete(session.annexe)?1:0);
- vehInventaireAfficher(`<div class="veh-inventaire-contenu"><button class="retour-button veh-retour" onclick="vehInventaireQuitter()">← Retour</button><h1>${vehInventaireHTML(session.vehicule.nom)}</h1><p class="veh-muted">Inventaire en cours · ${realises}/${total} rubriques contrôlées</p><div class="veh-progress"><div style="width:${100*realises/total}%"></div></div><div class="veh-card"><strong>Zones de contrôle</strong><p class="veh-muted">Sélectionne chaque zone pour contrôler son matériel. Les zones validées apparaissent en vert.</p>${vehInventaireZones.map(z=>`<div class="veh-zone ${CISTechnique.coffreComplet(z.id)?"terminee":""}" style="cursor:default"><div class="veh-zone-identite">${vehPhotoMiniature(z.photo_path,"zone")}<button type="button" style="border:0;background:transparent;color:inherit;font:inherit;font-weight:inherit;text-align:left;cursor:pointer;flex:1;padding:4px" onclick="vehInventaireOuvrirZone('${z.id}')">${CISTechnique.coffreComplet(z.id)?"✓":"●"} ${vehInventaireHTML(z.nom)}</button></div><small>${CISTechnique.coffreComplet(z.id)?"Enregistré":session.controles[z.id]?"Incomplet":"À contrôler"}</small></div>`).join("")}<div class="veh-zone ${CISTechnique.techniqueComplete(session.technique)?"terminee":""}"><button type="button" class="veh-action" onclick="CISTechnique.ouvrir()">Technique</button><small>${CISTechnique.techniqueComplete(session.technique)?"Enregistré":session.technique?"Incomplet":"À contrôler"}</small></div><div class="veh-zone ${CISTechnique.annexeComplete(session.annexe)?"terminee":""}"><button type="button" class="veh-action" onclick="CISTechnique.ouvrirAnnexe()">Annexe</button><small>${CISTechnique.annexeComplete(session.annexe)?"Enregistré":session.annexe?"Incomplet":"À contrôler"}</small></div></div><button class="veh-action"  onclick="vehInventaireTerminer()">Terminer l'enregistrement</button></div>`);
+ vehInventaireAfficher(`<div class="veh-inventaire-contenu"><button class="retour-button veh-retour" onclick="vehInventaireQuitter()">← Retour</button><h1>${vehInventaireHTML(session.vehicule.nom)}</h1><div class="veh-card"><h2>Personnel</h2><p>${vehInventaireHTML((session.personnels||[]).filter(p=>personnesAvecAuteur(session.participants).includes(String(p.id))).map(p=>[p.prenom,p.nom].filter(Boolean).join(" ")).join(", "))}</p><button type="button" class="equipe-action-button" onclick="vehInventaireOuvrirPersonnel()">Modifier le personnel</button></div><p class="veh-muted">Inventaire en cours · ${realises}/${total} rubriques contrôlées</p><div class="veh-progress"><div style="width:${100*realises/total}%"></div></div><div class="veh-card"><strong>Zones de contrôle</strong><p class="veh-muted">Sélectionne chaque zone pour contrôler son matériel. Les zones validées apparaissent en vert.</p>${vehInventaireZones.map(z=>`<div class="veh-zone ${CISTechnique.coffreComplet(z.id)?"terminee":""}" style="cursor:default"><div class="veh-zone-identite">${vehPhotoMiniature(z.photo_path,"zone")}<button type="button" style="border:0;background:transparent;color:inherit;font:inherit;font-weight:inherit;text-align:left;cursor:pointer;flex:1;padding:4px" onclick="vehInventaireOuvrirZone('${z.id}')">${CISTechnique.coffreComplet(z.id)?"✓":"●"} ${vehInventaireHTML(z.nom)}</button></div><small>${CISTechnique.coffreComplet(z.id)?"Enregistré":session.controles[z.id]?"Incomplet":"À contrôler"}</small></div>`).join("")}<div class="veh-zone ${CISTechnique.techniqueComplete(session.technique)?"terminee":""}"><button type="button" class="veh-action" onclick="CISTechnique.ouvrir()">Technique</button><small>${CISTechnique.techniqueComplete(session.technique)?"Enregistré":session.technique?"Incomplet":"À contrôler"}</small></div><div class="veh-zone ${CISTechnique.annexeComplete(session.annexe)?"terminee":""}"><button type="button" class="veh-action" onclick="CISTechnique.ouvrirAnnexe()">Annexe</button><small>${CISTechnique.annexeComplete(session.annexe)?"Enregistré":session.annexe?"Incomplet":"À contrôler"}</small></div></div><button class="veh-action"  onclick="vehInventaireTerminer()">Terminer l'enregistrement</button></div>`);
 }
+
+function vehInventaireOuvrirPersonnel(){const session=vehInventaireSession;if(!session)return;initialiserStyleActionsEquipe();const ids=new Set(personnesAvecAuteur(session.participants));const personnes=listePersonnelAvecAuteur(session.personnels||[]);vehInventaireAfficher(`<div class="veh-inventaire-contenu"><button class="retour-button" onclick="vehInventaireAfficherZones()">← Inventaire</button><h1>Personnel de l’inventaire</h1><div id="veh-personnes-liste">${personnes.map((p,i)=>`<label class="garde-personne-v2 ${i>=6?'garde-personne-cachee':''}"><input type="checkbox" data-veh-participant value="${vehInventaireHTML(p.id)}" ${ids.has(String(p.id))?'checked':''} ${String(p.id)===personnelConnecteSaisie()?.id?'disabled':''}><span>${vehInventaireHTML([p.prenom,p.nom].filter(Boolean).join(' '))}${String(p.id)===personnelConnecteSaisie()?.id?' (toi)':''}</span></label>`).join('')}</div>${personnes.length>6?'<button type="button" class="garde-personnes-plus" onclick="vehInventaireBasculerPersonnel(this)">Voir plus</button>':''}<button type="button" class="garde-menage-enregistrer" onclick="vehInventaireEnregistrerPersonnel()">Enregistrer le personnel</button></div>`);}
+function vehInventaireBasculerPersonnel(b){const liste=document.getElementById('veh-personnes-liste');b.textContent=liste.classList.toggle('garde-personnes-toutes')?'Voir moins':'Voir plus';}
+function vehInventaireEnregistrerPersonnel(){if(!vehInventaireSession)return;vehInventaireSession.participants=personnesAvecAuteur([...document.querySelectorAll('[data-veh-participant]:checked')].map(c=>c.value));vehInventaireAfficherZones();}
 
 function vehInventaireBasculerMateriel(id){
  const carte=document.querySelector(`[data-materiel="${id}"]`);if(!carte)return;
@@ -23147,7 +23158,7 @@ async function vehInventaireTerminerInterne(){
  if(!(await afficherConfirmationCIS(avertissement)))return;
  const btn=document.querySelector(".veh-inventaire-contenu > .veh-action");if(btn){btn.disabled=true;btn.textContent="Enregistrement…";}
  try{
-  const sb=obtenirClientSupabase();const payload={vehicule_id:session.vehicule.id,vehicule_nom:session.vehicule.nom,controle_par:profilUtilisateurConnecte?.id,details:vehInventaireZones.map(z=>({zone_id:z.id,zone_nom:z.nom,cote:z.cote,materiels:vehInventaireMateriels.filter(m=>m.zone_id===z.id).map(m=>({materiel_id:m.id,nom:m.nom,quantite:m.quantite,quantite_constatee:session.controles[z.id]?.[m.id]?.quantite_constatee??m.quantite,etat_reference:m.etat_reference,etat:session.controles[z.id]?.[m.id]?.etat||null,observation:session.controles[z.id]?.[m.id]?.observation||""}))}))};
+  const sb=obtenirClientSupabase();const payload={vehicule_id:session.vehicule.id,vehicule_nom:session.vehicule.nom,controle_par:profilUtilisateurConnecte?.id,personnes_presentes:personnesAvecAuteur(session.participants),details:vehInventaireZones.map(z=>({zone_id:z.id,zone_nom:z.nom,cote:z.cote,materiels:vehInventaireMateriels.filter(m=>m.zone_id===z.id).map(m=>({materiel_id:m.id,nom:m.nom,quantite:m.quantite,quantite_constatee:session.controles[z.id]?.[m.id]?.quantite_constatee??m.quantite,etat_reference:m.etat_reference,etat:session.controles[z.id]?.[m.id]?.etat||null,observation:session.controles[z.id]?.[m.id]?.observation||""}))}))};
   payload.details.push(CISTechnique.zone(session.technique||{}),CISTechnique.zoneAnnexe(session.annexe||{}));
   const {error}=await sb.from("cis_inventaires_vehicules").insert(payload);if(error)throw error;
   vehInventaireSession=null;
@@ -23362,7 +23373,7 @@ async function enregistrerMenageEquipe(){
     const bouton=document.querySelector(".garde-menage-enregistrer");
     const afficherStatut=(message,ok)=>{if(statut){statut.textContent=message;statut.className="garde-menage-statut "+(ok?"ok":"err");}};
     const zones=[...document.querySelectorAll("[data-garde-zone]:checked")].map(x=>x.value);
-    const personnes=[...document.querySelectorAll("[data-garde-personne]:checked")].map(x=>x.value);
+    const personnes=personnesAvecAuteur([...document.querySelectorAll("[data-garde-personne]:checked")].map(x=>x.value));
     const duree=Number(document.getElementById("garde-menage-duree")?.value||0);
     if(!zones.length){afficherStatut("Sélectionne au moins une zone nettoyée.",false);return}
     if(!personnes.length){afficherStatut("Sélectionne au moins une personne présente.",false);return}
@@ -23505,8 +23516,8 @@ async function afficherAdminInventairesEquipe(){
  actualiserInterfaceBureau();
  const sb=obtenirClientSupabase();
  if(!sb){document.getElementById('admin-inventaires-chargement').textContent='Connexion indisponible.';return;}
- let resultat=await chargerMetadonneesHistorique(() => sb.from('cis_inventaires_vehicules').select('id,numero_inventaire,vehicule_nom,controle_par,created_at').order('created_at',{ascending:false}).order('id',{ascending:false}));
- if(resultat.error&&/numero_inventaire/i.test(resultat.error.message||''))resultat=await chargerMetadonneesHistorique(() => sb.from('cis_inventaires_vehicules').select('id,vehicule_nom,controle_par,created_at').order('created_at',{ascending:false}).order('id',{ascending:false}));
+ let resultat=await chargerMetadonneesHistorique(() => sb.from('cis_inventaires_vehicules').select('id,numero_inventaire,vehicule_nom,controle_par,personnes_presentes,participants_noms,created_at').order('created_at',{ascending:false}).order('id',{ascending:false}));
+ if(resultat.error&&/numero_inventaire/i.test(resultat.error.message||''))resultat=await chargerMetadonneesHistorique(() => sb.from('cis_inventaires_vehicules').select('id,vehicule_nom,controle_par,personnes_presentes,participants_noms,created_at').order('created_at',{ascending:false}).order('id',{ascending:false}));
  if(!document.getElementById('admin-inventaires-chargement'))return;
  if(resultat.error){document.getElementById('admin-inventaires-chargement').textContent='Historique indisponible : '+resultat.error.message;return;}
  inventairesAdminCache=resultat.data||[];
@@ -23564,7 +23575,7 @@ async function afficherDetailInventaireAdminEquipe(id){
  const zones=inventairesAdminZones(r),materiels=inventairesAdminMateriels(r);
  const etat=m=>m.etat==='bon'?'Bon':m.etat==='a_surveiller'?'À surveiller':m.etat==='hs'?'HS':'Non renseigné';
  document.getElementById('app').innerHTML=`<main class="garde-section"><button class="retour-button" data-navigation-equipe onclick="afficherAdminInventairesEquipe()">← Retour</button><h1>Détail de l’inventaire</h1>
- <div class="garde-admin-card"><strong>${echapperHTML(inventairesAdminNom(r))}</strong><p><strong>Véhicule :</strong> ${echapperHTML(r.vehicule_nom||'Non renseigné')}</p><p><strong>Date :</strong> <span class="${classeDateMenage(r.created_at)}">${inventairesAdminDate(r.created_at)}</span></p><p><strong>Enregistré par :</strong> ${echapperHTML(inventairesAdminAuteur(r))}</p><p><strong>Zones contrôlées :</strong> ${zones.length}</p><p><strong>Matériel :</strong> ${materiels.filter(m=>m.etat==='bon').length} Bon · ${materiels.filter(m=>m.etat==='a_surveiller').length} À surveiller · ${materiels.filter(m=>m.etat==='hs').length} HS</p></div>
+ <div class="garde-admin-card"><strong>${echapperHTML(inventairesAdminNom(r))}</strong><p><strong>Véhicule :</strong> ${echapperHTML(r.vehicule_nom||'Non renseigné')}</p><p><strong>Date :</strong> <span class="${classeDateMenage(r.created_at)}">${inventairesAdminDate(r.created_at)}</span></p><p><strong>Enregistré par :</strong> ${echapperHTML(inventairesAdminAuteur(r))}</p><p><strong>Réalisé par :</strong> ${echapperHTML(nomsParticipantsInventaire(r))}</p><p><strong>Zones contrôlées :</strong> ${zones.length}</p><p><strong>Matériel :</strong> ${materiels.filter(m=>m.etat==='bon').length} Bon · ${materiels.filter(m=>m.etat==='a_surveiller').length} À surveiller · ${materiels.filter(m=>m.etat==='hs').length} HS</p></div>
  ${zones.map(z=>z.type==='annexe'?CISTechnique.resumeAnnexe(z):z.type==='technique'?CISTechnique.resume(z):`<h2 class="garde-sous-titre">${echapperHTML(z.zone_nom||'Zone')}</h2>${(Array.isArray(z.materiels)?z.materiels:[]).map(m=>`<div class="garde-stat-ligne"><strong>${echapperHTML(m.nom||'Matériel')} × ${Number(m.quantite)||1}${m.quantite_constatee!=null&&Number(m.quantite_constatee)!==Number(m.quantite)?` <span style="color:#b42323;font-weight:900">— QUANTITÉ CONSTATÉE : ${Number(m.quantite_constatee)} (prévu : ${Number(m.quantite)})</span>`:''}</strong><small class="inventaire-etat inventaire-etat-${['bon','a_surveiller','hs'].includes(m.etat)?m.etat:'inconnu'}">${echapperHTML(etat(m))}</small>${m.observation?`<p>Observation : ${echapperHTML(m.observation)}</p>`:''}</div>`).join('')||'<div class="garde-stat-ligne">Aucun matériel.</div>'}`).join('')||'<div class="garde-stat-ligne">Aucune zone enregistrée.</div>'}
  </main>${navigationPrincipale('','accueil')}`;
  actualiserInterfaceBureau();window.scrollTo({top:0,behavior:'auto'});
@@ -24025,7 +24036,7 @@ function creerRapportInventaireEquipePDF(PDF,r,personnes){
  doc.setFont('helvetica','bold');doc.setFontSize(9);doc.setTextColor(25,49,72);doc.text('N° '+vehNum(r),W-margin-5,y+8,{align:'right'});
  text('Date : '+vehDate(r.created_at),margin+5,y+19,8);
  y+=28;
- wrapped('Contrôle réalisé par : '+vehPerson(r),margin,W-2*margin,9,[34,47,62],true);y+=1;
+ doc.setFont('helvetica','bold');doc.setFontSize(9);for(const ligneParticipant of doc.splitTextToSize(clean('Contrôle réalisé par : '+nomsParticipantsInventaire(r,personnes)),W-2*margin)){ensure(6);text(ligneParticipant,margin,y,9,true);y+=5.6;}y+=1;
  const cardW=(W-2*margin-8)/3;
  [['bon','BON'],['a_surveiller','À SURVEILLER'],['hs','HS']].forEach(([key,t],idx)=>{
   const x=margin+idx*(cardW+4),c=palette[key];doc.setFillColor(...c);doc.roundedRect(x,y,cardW,14,2,2,'F');
@@ -24383,6 +24394,7 @@ async function envoyerDocumentsEquipeParMail(){
  }catch(err){if(statut.isConnected){statut.className='mail-doc-statut erreur';statut.textContent=err.message||'Envoi impossible. Réessaie dans un instant.';}}
  finally{e.enCours=false;inputs.forEach(x=>x.disabled=false);if(envoiDocumentsEquipeEtat===e&&btn.isConnected){const pending=e.pending;actualiserSelectionDocumentsMail();e.pending=pending;}}
 }
+
 
 
 
