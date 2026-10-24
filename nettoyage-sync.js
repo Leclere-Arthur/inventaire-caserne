@@ -13,6 +13,7 @@
   try{choixInventairesPDFEquipe=choixInventairesPDFEquipe.filter(function(i){return !supprime('inventaires',i.id)})}catch(_){}
   try{for(var type of ['meducore','vsav'])if(archivesControlesPharmacie[type])archivesControlesPharmacie[type]=archivesControlesPharmacie[type].map(function(page){return page.filter(function(i){return !supprime('controles',i.id)})}).filter(function(page){return page.length});}catch(_){}
   try{var map=window.__publicationsCaserneParId;if(map)Object.keys(map).forEach(function(id){if(supprime('evenements',id))delete map[id]})}catch(_){}
+  try{if(window.CISTravail?.appliquerSuppressions)changed=window.CISTravail.appliquerSuppressions(etat.ids.travail)||changed;}catch(_){}
   return changed;
  }
  async function requete(u,nom,body){if(!u||uid()!==u||!navigator.onLine)throw Error('Indisponible');var c;try{c=obtenirClientSupabase()}catch(_){}if(!c)throw Error('Indisponible');var timer,session;
