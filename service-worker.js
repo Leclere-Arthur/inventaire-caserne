@@ -15,7 +15,7 @@ importScripts("./notifications-history.js");
  * à récupérer le nouvel app.js.
  */
 
-const CACHE_NAME = "inventaire-caserne-v129-formations";
+const CACHE_NAME = "inventaire-caserne-v130-fiche-garde";
 
 
 /*
@@ -35,6 +35,10 @@ const FICHIERS_APPLICATION = [
     "./formations.css",
 
     "./travail-equipe.js",
+    "./fiche-garde.js",
+    "./fiche-garde-pdf.js",
+    "./fiche-garde.css",
+    "./fiche-fin-garde-modele.pdf",
 
     "./pilotage-suivi.js",
     "./pilotage-mesures.js",
@@ -398,6 +402,7 @@ self.addEventListener(
 
     }
 );
+
 
 
 
