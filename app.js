@@ -8782,7 +8782,7 @@ function choisirEnregistrementDocumentPrincipal(blob,nom){
   const precedent=document.activeElement;
   const fond=document.createElement('div');fond.id='principal-enregistrer-document';
   fond.style.cssText='position:fixed;inset:0;background:#0007;z-index:1000000;display:flex;align-items:center;justify-content:center;padding:16px';
-  fond.innerHTML='<section role="dialog" aria-modal="true" aria-labelledby="principal-save-title" style="width:430px;max-width:100%;background:#fff;color:#000;border:1px solid #dce1e6;border-radius:14px;padding:3px;font:15px Arial,sans-serif"><header style="background:#000080;color:white;padding:6px 8px;display:flex;align-items:center;gap:10px"><strong id="principal-save-title" style="flex:1">Enregistrer sous</strong><button type="button" class="retro" data-save-close aria-label="Fermer">×</button></header><div style="padding:18px"><p style="margin-top:0">Le document est prêt. Choisissez où l’enregistrer.</p><label for="principal-save-name">Nom du fichier</label><input id="principal-save-name" class="retro" style="display:block;width:100%;margin:7px 0 14px;padding:8px;background:white;color:black" maxlength="180"><p data-save-help style="line-height:1.5"></p><p data-save-status role="status" style="color:#900;line-height:1.5"></p><div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap"><button type="button" class="retro" data-save-cancel>Annuler</button><button type="button" class="retro" data-save-confirm>Enregistrer sous…</button></div></div></section>';
+  fond.innerHTML='<section role="dialog" aria-modal="true" aria-labelledby="principal-save-title" style="box-sizing:border-box;width:440px;max-width:100%;background:#fff;color:#20272b;border:1px solid #dce1e6;border-radius:20px;padding:24px;font:inherit;box-shadow:0 18px 60px #0003"><header style="display:flex;align-items:center;gap:12px"><h2 id="principal-save-title" style="flex:1;margin:0;font-size:22px">Enregistrer le document</h2><button type="button" data-save-close aria-label="Fermer" style="border:0;background:transparent;color:#52616b;font-size:26px;padding:8px">×</button></header><div><p>Le document est prêt.</p><label for="principal-save-name">Nom du fichier</label><input id="principal-save-name" style="box-sizing:border-box;display:block;width:100%;margin:8px 0 16px;padding:12px;border:1px solid #cbd5df;border-radius:10px;background:white;color:#20272b;font:inherit;font-size:16px" maxlength="180"><p data-save-help style="line-height:1.5;color:#52616b"></p><p data-save-status role="status" style="color:#a12129;line-height:1.5"></p><div style="display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap"><button type="button" data-save-cancel style="padding:12px 18px;border:1px solid #cbd5df;border-radius:10px;background:#fff;color:#20272b;font:inherit">Annuler</button><button type="button" data-save-confirm style="padding:12px 18px;border:0;border-radius:10px;background:#20734b;color:#fff;font:inherit;font-weight:700">Enregistrer</button></div></div></section>';
   document.body.appendChild(fond);
   const input=fond.querySelector('input'),bouton=fond.querySelector('[data-save-confirm]'),statut=fond.querySelector('[data-save-status]');input.value=nom;
   const natif=typeof window.showSaveFilePicker==='function';
@@ -23621,8 +23621,8 @@ async function enregistrerHeuresEquipe(){
 }
 async function afficherHistoriqueHeuresEquipe(){
  if(!utilisateurAPermission("acces_admin_heures")){alert("Accès non autorisé.");return}initialiserStyleEspaceGardeUtilisateur();document.getElementById("app").innerHTML=`<main class="garde-section"><button class="retour-button" data-navigation-equipe onclick="retourAdminRubriqueEquipe('heures')">← Retour</button><h1>Historique des heures</h1><button type="button" class="equipe-action-button" onclick="afficherChoixPDFEquipe('heures')">Télécharger le PDF des heures</button><div id="heures-hist" class="garde-planning-attente">Chargement…</div></main>${navigationPrincipale("","accueil")}`;actualiserInterfaceBureau();
- const sb=obtenirClientSupabase();const {data,error}=await sb.from("heures_equipe").select("id,created_at,duree_minutes,details,enregistre_par,personnes_concernees,motifs_heures(nom)").order("created_at",{ascending:false});if(error){document.getElementById("heures-hist").textContent="Historique indisponible : "+error.message;return}if(!utilisateursEspaceGarde.length)utilisateursEspaceGarde=await chargerUtilisateursEspaceGarde();const nom=id=>nomPersonnelHeures(utilisateursEspaceGarde.find(x=>String(x.id)===String(id)));
- document.getElementById("heures-hist").outerHTML=`<div>${(data||[]).map(r=>`<div class="garde-admin-card"><strong>${new Date(r.created_at).toLocaleString("fr-FR")}</strong><p><b>${echapperHTML(r.motifs_heures?.nom||"Motif")}</b> · ${libelleDureeHeures(r.duree_minutes)}</p><p>${(r.personnes_concernees||[]).map(id=>echapperHTML(nom(id))).join(" · ")}</p>${r.details?`<p>${echapperHTML(r.details)}</p>`:""}<small>Enregistré par ${echapperHTML(nom(r.enregistre_par))}</small><p><button type="button" class="equipe-action-button" onclick="exporterEquipePDF('heures','${echapperHTML(String(r.id))}')">Télécharger le PDF</button></p></div>`).join("")||"Aucune heure enregistrée."}</div>`;
+ const sb=obtenirClientSupabase();const {data,error}=await sb.from("heures_equipe").select("id,created_at,duree_minutes,details,enregistre_par,personnes_concernees,motifs_heures(nom)").order("created_at",{ascending:false});if(!error){try{data.push(...await chargerHeuresTravailEquipe());data.sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));}catch(e){document.getElementById("heures-hist").textContent=e.message;return;}}if(error){document.getElementById("heures-hist").textContent="Historique indisponible : "+error.message;return}if(!utilisateursEspaceGarde.length)utilisateursEspaceGarde=await chargerUtilisateursEspaceGarde();const nom=id=>nomPersonnelHeures(utilisateursEspaceGarde.find(x=>String(x.id)===String(id)));
+ document.getElementById("heures-hist").outerHTML=`<div>${(data||[]).map(r=>`<div class="garde-admin-card"><strong>${new Date(r.created_at).toLocaleString("fr-FR")}</strong><p><b>${echapperHTML(r.motifs_heures?.nom||"Motif")}</b> · ${libelleDureeHeures(r.duree_minutes)}</p><p>${r.participants_noms?.length?r.participants_noms.map(p=>echapperHTML(nomPersonnelHeures(p))).join(" · "):(r.personnes_concernees||[]).map(id=>echapperHTML(nom(id))).join(" · ")}</p>${r.details?`<p>${echapperHTML(r.details)}</p>`:""}<small>Enregistré par ${echapperHTML(r.auteur_nom||nom(r.enregistre_par))}</small><p><button type="button" class="equipe-action-button" onclick="exporterEquipePDF('heures','${echapperHTML(String(r.id))}')">Télécharger le PDF</button></p></div>`).join("")||"Aucune heure enregistrée."}</div>`;
 }
 window.afficherEnregistrerHeuresEquipe=afficherEnregistrerHeuresEquipe;window.enregistrerHeuresEquipe=enregistrerHeuresEquipe;window.rechercherPersonnesHeures=rechercherPersonnesHeures;window.ajouterPersonneHeures=ajouterPersonneHeures;window.retirerPersonneHeures=retirerPersonneHeures;window.verifierMotifHeures=verifierMotifHeures;window.afficherHistoriqueHeuresEquipe=afficherHistoriqueHeuresEquipe;
 
@@ -23957,6 +23957,14 @@ function basculerQuantiteProduitMenage(caseProduit){
  const q=caseProduit.closest('[data-menage-produit]')?.querySelector('[data-menage-quantite]');if(!q)return;
  q.disabled=!caseProduit.checked;if(!caseProduit.checked)q.value='1';
 }
+async function chargerHeuresTravailEquipe(periode=null,id=null){
+ const rows=[];const sb=obtenirClientSupabase();
+ for(let offset=0;;offset+=200){
+  const {data,error}=await sb.rpc('travail_heures_export',{p_debut:periode?.startISO||null,p_fin:periode?.endISO||null,p_offset:offset,p_semaine:id||null});
+  if(error)throw new Error('Heures du travail d’équipe indisponibles : '+error.message);
+  rows.push(...(data||[]));if((data?.length||0)<200)break;
+ }return rows;
+}
 async function chargerLignesEquipePDF(type,id,periodeMail=null){
  const sb=obtenirClientSupabase();
  const table=type==='menage'?'menages_garde':type==='heures'?'heures_equipe':'cis_inventaires_vehicules';
@@ -23964,6 +23972,7 @@ async function chargerLignesEquipePDF(type,id,periodeMail=null){
  const date=type==='menage'?'date_menage':'created_at';
  const filtreVehicule=type==='vehicules'&&!id?(document.getElementById('inventaires-admin-filtre')?.value||''):'';
  const periode=type!=='vehicules'&&!id?(periodeMail||lirePeriodePDFEquipe(type)):null;
+ if(type==='heures'&&id?.startsWith('travail:'))return chargerHeuresTravailEquipe(null,id.slice(8));
  const rows=[];
  for(let debut=0;;debut+=500){
   let req=sb.from(table).select(select).order(date,{ascending:false}).order('id');
@@ -23974,6 +23983,7 @@ async function chargerLignesEquipePDF(type,id,periodeMail=null){
   const {data,error}=await req.range(debut,debut+499);if(error)throw error;
   rows.push(...(data||[]));if((data?.length||0)<500)break;
  }
+ if(type==='heures'&&!id)rows.push(...await chargerHeuresTravailEquipe(periode));
  return rows;
 }
 async function exporterEquipePDF(type,id=null,modeMail=false,periodeMail=null){
@@ -24131,7 +24141,7 @@ function lirePeriodePDFEquipe(type){
 function creerCalendrierEquipePDF(PDF,type,rows,personnes,id,periodeMail=null){
  const noms=ids=>(ids||[]).map(uid=>{const u=personnes.find(p=>String(p.id)===String(uid));return u?nomPersonnelHeures(u):'Utilisateur';}).join(', ');
  const periode=id?{from:dateISOlocale(new Date(rows[0][type==='menage'?'date_menage':'created_at'])),to:dateISOlocale(new Date(rows[0][type==='menage'?'date_menage':'created_at']))}:(periodeMail||lirePeriodePDFEquipe(type));
- const entries=rows.map(r=>({date:r[type==='menage'?'date_menage':'created_at'],names:noms(r[type==='menage'?'personnes_presentes':'personnes_concernees']),motif:type==='menage'?'Ménage':r.motifs_heures?.nom||'Heures enregistrées',duration:libelleDureeHeures(r.duree_minutes||0)})).sort((a,b)=>new Date(a.date)-new Date(b.date));
+ const entries=rows.map(r=>({date:r[type==='menage'?'date_menage':'created_at'],names:r.participants_noms?.length?r.participants_noms.map(nomPersonnelHeures).join(', '):noms(r[type==='menage'?'personnes_presentes':'personnes_concernees']),motif:type==='menage'?'Ménage':r.motifs_heures?.nom||'Heures enregistrées',duration:libelleDureeHeures(r.duree_minutes||0)})).sort((a,b)=>new Date(a.date)-new Date(b.date));
  const doc=new PDF({orientation:'portrait',unit:'mm',format:'a4'});
  const first=new Date(periode.from+'T12:00:00'),last=new Date(periode.to+'T12:00:00');let month=new Date(first.getFullYear(),first.getMonth(),1,12),page=0;
  while(month<=last){
@@ -24394,6 +24404,7 @@ async function envoyerDocumentsEquipeParMail(){
  }catch(err){if(statut.isConnected){statut.className='mail-doc-statut erreur';statut.textContent=err.message||'Envoi impossible. Réessaie dans un instant.';}}
  finally{e.enCours=false;inputs.forEach(x=>x.disabled=false);if(envoiDocumentsEquipeEtat===e&&btn.isConnected){const pending=e.pending;actualiserSelectionDocumentsMail();e.pending=pending;}}
 }
+
 
 
 
