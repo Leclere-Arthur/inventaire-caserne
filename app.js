@@ -16976,7 +16976,7 @@ function afficherMenuAdministration() {
                     <span><strong>Traçabilité Meducore / VSAV</strong><small>Consulter et exporter les feuilles de contrôle</small></span>
                 </button>
 
-                ${
+<button class="menu-button" onclick="ouvrirSuiviVSAVPharma()"><span><strong>Suivi VSAV</strong><small>Matériels à surveiller et remises en état</small></span></button>                ${
                     utilisateurAPermission("acces_ajout_materiel")
                         ? `
                             <button class="menu-button" onclick="ajouterMateriel()">
@@ -24428,3 +24428,6 @@ async function envoyerDocumentsEquipeParMail(){
 
 
 
+
+
+let suiviVSAVChargement;async function ouvrirSuiviVSAVPharma(){try{if(!window.CISSuiviVSAV){suiviVSAVChargement=suiviVSAVChargement||new Promise((resolve,reject)=>{const s=document.createElement('script');s.src='./suivi-vsav.js?v=1';s.onload=resolve;s.onerror=()=>{suiviVSAVChargement=null;reject(Error('Module Suivi VSAV indisponible.'));};document.head.appendChild(s);});await suiviVSAVChargement;}await CISSuiviVSAV.ouvrir();}catch(e){alert(e.message);}}
