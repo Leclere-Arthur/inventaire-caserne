@@ -15,7 +15,7 @@ importScripts("./notifications-history.js");
  * à récupérer le nouvel app.js.
  */
 
-const CACHE_NAME = "cis-principale-2026-10-25-anomalies";
+const CACHE_NAME = "cis-principale-2026-10-25-anomalies-admin2";
 
 
 /*

@@ -23530,13 +23530,21 @@ async function afficherAdminInventairesEquipe(){
  if(!document.getElementById('admin-inventaires-chargement'))return;
  const vehicules=[...new Set(inventairesAdminCache.map(r=>r.vehicule_nom).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'fr'));
  document.getElementById('app').innerHTML=`<main class="garde-section"><button class="retour-button" data-navigation-equipe onclick="retourAdminRubriqueEquipe('vehicules')">← Retour</button><h1>Administration inventaires</h1>
- <h2 class="garde-sous-titre">Dernier inventaire par véhicule</h2>
+ <h2 class="garde-sous-titre">Matériels à surveiller / HS</h2><div id="inventaires-anomalies-actuelles" role="status">Chargement des signalements…</div> <h2 class="garde-sous-titre">Dernier inventaire par véhicule</h2>
  ${vehicules.map(v=>{const r=inventairesAdminCache.find(x=>x.vehicule_nom===v);return `<div class="garde-stat-ligne"><strong>${echapperHTML(v)}</strong><small class="${classeDateMenage(r.created_at)}">${inventairesAdminDate(r.created_at)}</small></div>`}).join('')||'<div class="garde-stat-ligne">Aucun inventaire enregistré.</div>'}
  <h2 class="garde-sous-titre">Contrôles réalisés</h2>
  ${(()=>{const counts=new Map();inventairesAdminCache.forEach(r=>{const id=String(r.controle_par||'');counts.set(id,(counts.get(id)||0)+1)});return [...counts.entries()].sort((a,b)=>b[1]-a[1]).map(([id,n])=>{const r=inventairesAdminCache.find(x=>String(x.controle_par||'')===id);return `<div class="garde-stat-ligne garde-stat-ligne-flex"><div><strong>${echapperHTML(inventairesAdminAuteur(r))}</strong><small>${n} inventaire${n>1?'s':''} réalisé${n>1?'s':''}</small></div></div>`}).join('')})()||'<div class="garde-stat-ligne">Aucun contrôle enregistré.</div>'}
  <h2 class="garde-sous-titre">Historique</h2><div class="garde-admin-card"><label for="inventaires-admin-filtre"><strong>Véhicule</strong></label><select id="inventaires-admin-filtre" class="heures-input" onchange="filtrerAdminInventairesEquipe()"><option value="">Tous les véhicules</option>${vehicules.map(v=>`<option value="${echapperHTML(v)}">${echapperHTML(v)}</option>`).join('')}</select></div>
  <div id="inventaires-admin-liste"></div></main>${navigationPrincipale('','accueil')}`;
+ void chargerAnomaliesAdminPrincipal();
  actualiserInterfaceBureau();filtrerAdminInventairesEquipe();window.scrollTo({top:0,behavior:'auto'});
+}
+async function chargerAnomaliesAdminPrincipal(){
+ const box=document.getElementById('inventaires-anomalies-actuelles');if(!box||!utilisateurAPermission('acces_admin_menage'))return;
+ const auteur=String(utilisateurConnecte?.id||'');let timer;box.textContent='Chargement des signalements…';
+ try{const r=await Promise.race([obtenirClientSupabase().rpc('inventaires_anomalies',{p_vehicule:null}),new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('Le serveur ne répond pas.')),10000)})]);if(!box.isConnected||String(utilisateurConnecte?.id||'')!==auteur)return;if(r.error)throw Error(r.error.message);
+ box.innerHTML=(r.data||[]).map(a=>`<article class="garde-admin-card" style="background:${a.etat==='hs'?'#ffe1e1':'#fff0b3'}!important;color:#38251e!important;border:2px solid ${a.etat==='hs'?'#bc2525':'#bc8d13'}"><strong style="color:inherit!important">${echapperHTML(a.vehicule_nom)} · ${echapperHTML(a.zone_nom)} · ${echapperHTML(a.nom)}</strong><p style="color:inherit!important;font-weight:800">${a.etat==='hs'?'HS':'À surveiller'}</p>${a.observation?`<p style="color:inherit!important">${echapperHTML(a.observation)}</p>`:''}<small style="color:inherit!important">Dernier signalement : ${echapperHTML(new Date(a.date).toLocaleString('fr-FR'))}</small></article>`).join('')||'<p>Aucun matériel signalé à surveiller ou HS.</p>';
+ }catch(e){if(!box.isConnected||String(utilisateurConnecte?.id||'')!==auteur)return;box.textContent='Signalements indisponibles : '+e.message;const b=document.createElement('button');b.type='button';b.className='equipe-action-button';b.textContent='Réessayer';b.onclick=chargerAnomaliesAdminPrincipal;box.appendChild(b);}finally{clearTimeout(timer);}
 }
 function filtrerAdminInventairesEquipe(){
  const liste=document.getElementById('inventaires-admin-liste');if(!liste)return;
