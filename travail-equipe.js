@@ -18,8 +18,8 @@
  function titre(s){return `${s.equipe_nom} · semaine ${s.semaine_iso} (${s.annee_iso})`;}
  function dates(s){const d=new Date(s.date_garde+'T12:00:00'),f=new Date(d);f.setDate(f.getDate()+7);return `${d.toLocaleDateString('fr-FR')} à 19 h → ${f.toLocaleDateString('fr-FR')} à 19 h`;}
  function cacheCle(){return 'cis_travail_equipe_v1:'+String(utilisateurConnecte?.id||'');}
- async function actualiserCarte(){style();const b=document.getElementById('travail-equipe-carte');if(!b)return;b.disabled=false;
-  try{let s;if(navigator.onLine){s=await rpc('travail_lire_semaine');try{localStorage.setItem(cacheCle(),JSON.stringify(s));}catch(_){}}else{s=JSON.parse(localStorage.getItem(cacheCle())||'null');if(s?.date_garde!==dateISOlocale(vendrediReferenceGarde(new Date())))s=null;}
+ async function actualiserCarte(){const b=document.getElementById('travail-equipe-carte');if(!b)return;b.disabled=false;
+  try{style();let memo=null;try{memo=JSON.parse(localStorage.getItem(cacheCle())||'null');}catch(_){}if(memo?.date_garde===dateISOlocale(vendrediReferenceGarde(new Date()))){const e=etats[global(memo)];b.style.setProperty('--travail-couleur',e[1]);b.style.setProperty('--travail-fond',e[2]);b.querySelector('small').textContent=memo.equipe_nom+' · '+compte(memo); }else b.querySelector('small').textContent='Ouvrir le travail de l’équipe';let s;if(navigator.onLine){s=await rpc('travail_lire_semaine');try{localStorage.setItem(cacheCle(),JSON.stringify(s));}catch(_){}}else{s=JSON.parse(localStorage.getItem(cacheCle())||'null');if(s?.date_garde!==dateISOlocale(vendrediReferenceGarde(new Date())))s=null;}
    if(!b.isConnected)return;semaine=s;const actif=!!s?.de_garde;const [label,c,f]=etats[global(s)];b.disabled=false;b.style.setProperty('--travail-couleur',c);b.style.setProperty('--travail-fond',f);b.querySelector('small').textContent=actif?`${s.equipe_nom} · ${compte(s)}${navigator.onLine?'':' · état mémorisé'}`:navigator.onLine?'Aucune équipe de garde programmée':'Connecte-toi pour charger le travail de garde';
   }catch(e){if(b.isConnected){b.disabled=false;b.querySelector('small').textContent='Actualisation indisponible. Ouvrir le suivi.';}}
  }
@@ -85,6 +85,12 @@
  }
  function appliquerSuppressions(ids){if(!ids)return false;let retire=false;try{const cle=cacheCle(),memo=JSON.parse(localStorage.getItem(cle)||'null');if(memo?.id&&ids[memo.id]){localStorage.removeItem(cle);retire=true;}}catch(_){}if(semaine?.id&&ids[semaine.id]){semaine=null;retire=true;if(document.getElementById('travail-contenu'))void ouvrir();}if(window.CISFicheGarde?.retirerSemaines?.(ids))retire=true;return retire;}
  window.CISTravail={actualiserCarte,ouvrir,historique:afficherHistorique,configuration,etat:global,retourFiche,appliquerSuppressions,adopterFiche};
+ if(principal){
+ const cartesVues=new WeakSet();const reprendreCarte=()=>{const carte=document.getElementById('travail-equipe-carte');if(carte&&!cartesVues.has(carte)){cartesVues.add(carte);void actualiserCarte();}};
+ new MutationObserver(reprendreCarte).observe(document.documentElement,{childList:true,subtree:true});
+ window.addEventListener('pageshow',()=>{const carte=document.getElementById('travail-equipe-carte');if(carte){cartesVues.add(carte);void actualiserCarte();}});
+ reprendreCarte();
+ }
  if(principal){setInterval(()=>{if(!document.hidden&&document.getElementById('travail-equipe-carte'))void actualiserCarte();},30000);window.addEventListener('online',()=>{if(document.getElementById('travail-equipe-carte'))void actualiserCarte();});}
 })();
 

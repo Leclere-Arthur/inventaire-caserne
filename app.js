@@ -22902,7 +22902,7 @@ function afficherEspaceGarde(){
         <button class="retour-button" data-navigation-equipe onclick="retourAccueilDepuisEspaceEquipe()">← Retour</button>
         <header class="garde-menu-entete"><h1>Espace équipe</h1></header><p id="menages-hors-ligne-statut" role="status">${echapperHTML(texteMenagesEnAttente())}</p>
         <div class="garde-menu-cartes">
-          <button id="travail-equipe-carte" class="garde-menu-carte" disabled onclick="CISTravail.ouvrir()"><span class="ico" aria-hidden="true">✓</span><span><strong>Travail de l’équipe</strong><small>Vérification de la garde…</small></span><b class="fleche">›</b></button>
+          <button id="travail-equipe-carte" class="garde-menu-carte" onclick="CISTravail.ouvrir()"><span class="ico" aria-hidden="true">✓</span><span><strong>Travail de l’équipe</strong><small>Ouvrir le travail de l’équipe</small></span><b class="fleche">›</b></button>
           <button class="garde-menu-carte" onclick="ouvrirRubriqueEquipe('menage')"><span class="ico">🧹</span><span><strong>Ménage</strong></span><b class="fleche">›</b></button>
           <button class="garde-menu-carte" onclick="ouvrirRubriqueEquipe('vehicules')"><span class="ico">🚒</span><span><strong>Inventaire véhicule</strong></span><b class="fleche">›</b></button>
           <button class="garde-menu-carte" onclick="CISFormations.ouvrir()"><span class="ico" aria-hidden="true"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 4h6a4 4 0 0 1 3 1.4A4 4 0 0 1 15 4h6v16h-6a4 4 0 0 0-3 1 4 4 0 0 0-3-1H3zM12 5.4V21"/></svg></span><span><strong>Formation</strong></span><b class="fleche">›</b></button>
