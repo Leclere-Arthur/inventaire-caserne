@@ -15,7 +15,7 @@ importScripts("./notifications-history.js");
  * à récupérer le nouvel app.js.
  */
 
-const CACHE_NAME = "cis-principale-boutons-zoom-20261025";
+const CACHE_NAME = "cis-principale-evolution20261025";
 
 
 /*
@@ -23,7 +23,7 @@ const CACHE_NAME = "cis-principale-boutons-zoom-20261025";
  * de l'application hors connexion.
  */
 
-const FICHIERS_APPLICATION = [
+const FICHIERS_APPLICATION = ["./maintenance-client.js","./interface-personnelle.js","./equipe-evolution.js",
  "./inventaire-technique.js", "./inventaire-technique.css",
 
     "./",
@@ -403,6 +403,7 @@ self.addEventListener(
 
     }
 );
+
 
 
 
