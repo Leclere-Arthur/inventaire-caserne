@@ -16976,7 +16976,7 @@ function afficherMenuAdministration() {
                     <span><strong>Traçabilité Meducore / VSAV</strong><small>Consulter et exporter les feuilles de contrôle</small></span>
                 </button>
 
-<button class="menu-button" onclick="ouvrirSuiviVSAVPharma()"><span><strong>Suivi VSAV</strong><small>Matériels à surveiller et remises en état</small></span></button>                ${
+                ${
                     utilisateurAPermission("acces_ajout_materiel")
                         ? `
                             <button class="menu-button" onclick="ajouterMateriel()">
@@ -17048,6 +17048,7 @@ function afficherMenuAdministration() {
                         : ""
                 }
 
+<button class="menu-button" onclick="ouvrirSuiviVSAVPharma()"><span><strong>Suivi VSAV</strong><small>Matériels à surveiller et remises en état</small></span></button>
             </div>
 
         </main>
