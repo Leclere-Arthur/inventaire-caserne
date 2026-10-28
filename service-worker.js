@@ -15,7 +15,7 @@ importScripts("./notifications-history.js");
  * à récupérer le nouvel app.js.
  */
 
-const CACHE_NAME = "cis-principale-retour-normal-20261028c";
+const CACHE_NAME = "cis-principale-signature-chef20261028";
 
 
 /*
@@ -403,6 +403,7 @@ self.addEventListener(
 
     }
 );
+
 
 
 
