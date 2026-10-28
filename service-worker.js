@@ -15,7 +15,7 @@ importScripts("./notifications-history.js");
  * à récupérer le nouvel app.js.
  */
 
-const CACHE_NAME = "cis-principale-reprise-menage-chef20261028";
+const CACHE_NAME = "cis-principale-validation-stable20261028b";
 
 
 /*
@@ -35,8 +35,8 @@ const FICHIERS_APPLICATION = ["./maintenance-client.js","./interface-personnelle
     "./formations.js",
     "./formations.css",
 
-    "./travail-equipe.js",
-    "./fiche-garde.js",
+    "./travail-equipe.js?v=validation-stable-20261028b",
+    "./fiche-garde.js?v=validation-stable-20261028b",
     "./fiche-garde-pdf.js",
     "./fiche-garde.css",
     "./fiche-fin-garde-modele.pdf",
@@ -403,6 +403,7 @@ self.addEventListener(
 
     }
 );
+
 
 
 
