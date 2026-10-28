@@ -24,7 +24,7 @@
    if(!b.isConnected)return;semaine=s;const actif=!!s?.de_garde;const [label,c,f]=etats[global(s)];b.disabled=false;b.style.setProperty('--travail-couleur',c);b.style.setProperty('--travail-fond',f);b.querySelector('small').textContent=actif?`${s.equipe_nom} · ${compte(s)}${navigator.onLine?'':' · état mémorisé'}`:navigator.onLine?'Aucune équipe de garde programmée':'Connecte-toi pour charger le travail de garde';
   }catch(e){if(b.isConnected){b.disabled=false;b.querySelector('small').textContent='Actualisation indisponible. Ouvrir le suivi.';}}
  }
- function cadre(t,retour='afficherEspaceGarde()'){style();document.getElementById('app').innerHTML=`<main class="garde-section travail-page"><button class="retour-button" onclick="${retour}">← Retour</button><h1>${html(t)}</h1><div id="travail-contenu" role="status">Chargement…</div></main>${navigationPrincipale('','accueil')}`;actualiserInterfaceBureau();}
+ function cadre(t,retour='afficherEspaceGarde()'){style();document.getElementById('app').innerHTML=`<main class="garde-section travail-page"><button type="button" class="retour-button" data-navigation-equipe onclick="${retour}">← Retour</button><h1>${html(t)}</h1><div id="travail-contenu" role="status">Chargement…</div></main>${navigationPrincipale('','accueil')}`;actualiserInterfaceBureau();}
  function preuveHTML(s,t){return (t.preuves||[]).map(p=>`<div class="travail-preuves"><strong>${html((p.personnes||[]).map(id=>nom(s,id)).join(', '))}</strong><small>${html(new Date(p.date).toLocaleString('fr-FR'))}</small>${p.zones?`<p>${html(p.zones.join(', '))}</p>`:''}${p.type!=='autre'&&contexte==='admin'?`<button class="equipe-action-button" data-travail-pdf="${html(t.id)}" data-source="${html(p.id)}">Télécharger le PDF ${p.type==='menage'?'du ménage':'de l’inventaire'}</button>`:''}</div>`).join('');}
 
  function carteTache(s,t){const e=etats[t.avec_anomalie&&t.etat==='fait'?'fait_anomalie':t.etat];return `<article class="travail-carte" style="--travail-couleur:${e[1]};--travail-fond:${e[2]}"><span class="travail-badge">${e[0]}</span><h2>${html(t.nom)}</h2>${t.description?`<p>${html(t.description)}</p>`:''}${t.zones?.length?`<p>Zones : ${html(t.zones.join(', '))}</p>`:''}${t.commence_le?`<small>Commencé par ${html(nom(s,t.commence_par))} le ${html(new Date(t.commence_le).toLocaleString('fr-FR'))}</small>`:''}${contexte==='courant'&&s.peut_modifier!==false&&t.etat!=='fait'?`<p><button class="equipe-action-button" data-travail-ouvrir="${html(t.id)}">${t.type==='inventaire'?'Réaliser l’inventaire':t.type==='menage'?'Enregistrer le ménage':'Commencer ce travail'}</button>${t.type==='autre'?`<button class="equipe-action-button" data-travail-fin="${html(t.id)}">Marquer comme réalisé</button>`:''}</p>`:''}${(t.preuves||[]).length?`<details class="travail-details"><summary>Voir les enregistrements</summary>${preuveHTML(s,t)}</details>`:''}</article>`}
@@ -98,6 +98,7 @@
  }
  if(principal){setInterval(()=>{if(!document.hidden&&document.getElementById('travail-equipe-carte'))void actualiserCarte();},30000);window.addEventListener('online',()=>{if(document.getElementById('travail-equipe-carte'))void actualiserCarte();});}
 })();
+
 
 
 

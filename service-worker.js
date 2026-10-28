@@ -15,7 +15,7 @@ importScripts("./notifications-history.js");
  * à récupérer le nouvel app.js.
  */
 
-const CACHE_NAME = "cis-principale-validation-stable20261028b";
+const CACHE_NAME = "cis-principale-retour-normal-20261028c";
 
 
 /*
@@ -30,13 +30,13 @@ const FICHIERS_APPLICATION = ["./maintenance-client.js","./interface-personnelle
 
     "./index.html",
 
-    "./app.js",
+    "./app.js?v=retour-normal-20261028c",
     "./formations-commun.js",
     "./formations.js",
     "./formations.css",
 
-    "./travail-equipe.js?v=validation-stable-20261028b",
-    "./fiche-garde.js?v=validation-stable-20261028b",
+    "./travail-equipe.js?v=retour-normal-20261028c",
+    "./fiche-garde.js?v=retour-normal-20261028c",
     "./fiche-garde-pdf.js",
     "./fiche-garde.css",
     "./fiche-fin-garde-modele.pdf",
@@ -403,6 +403,7 @@ self.addEventListener(
 
     }
 );
+
 
 
 

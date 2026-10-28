@@ -807,9 +807,10 @@ function installerHistoriqueNavigationApplication() {
     document.addEventListener("click", (event) => {
         const bouton = event.target?.closest?.(".retour-button, .reappro-retour, [data-retour-page]");
         if (!bouton) return;
-        // Les retours de l'inventaire véhicules ont leur propre navigation :
-        // restaurer un ancien HTML laisserait les photos et listes non initialisées.
-        if (bouton.classList.contains("veh-retour") || bouton.hasAttribute("data-navigation-equipe")) return;
+        // Les modules d'équipe gèrent leurs retours et réinitialisent leurs actions.
+        // Ne pas remplacer leur navigation par une restauration de HTML sans écouteurs.
+        if (bouton.classList.contains("veh-retour") || bouton.hasAttribute("data-navigation-equipe") ||
+            bouton.hasAttribute("data-fg-action") || bouton.closest(".travail-page")) return;
         event.preventDefault();
         event.stopImmediatePropagation();
         retourPagePrecedente();
@@ -829,6 +830,21 @@ function retourPagePrecedente() {
     if (!app) {
         restaurationNavigationEnCours = false;
         afficherPortailPrincipal();
+        return;
+    }
+
+    // Recréer les pages dynamiques : leurs événements ne sont pas stockés dans innerHTML.
+    const pageEquipe = document.createElement("template");
+    pageEquipe.innerHTML = precedent.html;
+    const ficheEquipe = pageEquipe.content.querySelector("#fiche-garde-page[data-fg-semaine]");
+    if (ficheEquipe && window.CISFicheGarde) {
+        restaurationNavigationEnCours = false;
+        void CISFicheGarde.ouvrir(ficheEquipe.dataset.fgSemaine, ficheEquipe.dataset.fgMode || "recap");
+        return;
+    }
+    if (pageEquipe.content.querySelector("#travail-contenu") && window.CISTravail) {
+        restaurationNavigationEnCours = false;
+        CISTravail.retourFiche();
         return;
     }
 
@@ -24479,5 +24495,6 @@ async function envoyerDocumentsEquipeParMail(){
 
 
 let suiviVSAVChargement;async function ouvrirSuiviVSAVPharma(){try{if(!window.CISSuiviVSAV){suiviVSAVChargement=suiviVSAVChargement||new Promise((resolve,reject)=>{const s=document.createElement('script');s.src='./suivi-vsav.js?v=1';s.onload=resolve;s.onerror=()=>{suiviVSAVChargement=null;reject(Error('Module Suivi VSAV indisponible.'));};document.head.appendChild(s);});await suiviVSAVChargement;}await CISSuiviVSAV.ouvrir();}catch(e){alert(e.message);}}
+
 
 
