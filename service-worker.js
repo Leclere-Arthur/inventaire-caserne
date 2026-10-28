@@ -15,7 +15,7 @@ importScripts("./notifications-history.js");
  * à récupérer le nouvel app.js.
  */
 
-const CACHE_NAME = "cis-principale-travail-simple20261028";
+const CACHE_NAME = "cis-principale-travail-retours20261028";
 
 
 /*
@@ -403,6 +403,7 @@ self.addEventListener(
 
     }
 );
+
 
 
 

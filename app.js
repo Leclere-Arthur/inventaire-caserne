@@ -8234,6 +8234,17 @@ function enregistrerRaccourcisProfil(){
 function verifierRaccourcisProfil(el){const c=[...document.querySelectorAll("[data-raccourci-profil]:checked")];if(c.length>6){el.checked=false;alert("Tu peux choisir au maximum 6 raccourcis.")}}
 function htmlRaccourcisAccueil(){const ids=lireRaccourcisAccueil(),opts=optionsRaccourcisAccueil();const a=ids.map(id=>opts.find(x=>x.id===id)).filter(Boolean);if(!a.length)return "";return `<section class="raccourcis-accueil-rapides">${a.map(x=>`<button type="button" onclick="${x.action}">${x.logo?`<img class="raccourci-logo-appli" src="${echapperHTML(x.logo)}" alt="Logo ${echapperHTML(x.libelle)}">`:`<span>${x.icone}</span>`}<strong>${echapperHTML(x.libelle)}</strong></button>`).join("")}</section>`}
 
+let observationCarteEquipeAccueil=null;
+function positionnerCarteEquipeAccueil(){
+ observationCarteEquipeAccueil?.disconnect();
+ const carte=document.getElementById('carte-garde-accueil'),nav=document.querySelector('.caserne-nav-bas');
+ if(!carte||!nav)return;
+ const ajuster=()=>{if(!carte.isConnected)return;if(innerWidth<=520){const bas=Math.max(0,innerHeight-nav.getBoundingClientRect().top)+8;carte.style.setProperty('--equipe-accueil-bas',bas+'px');}};
+ ajuster();requestAnimationFrame(ajuster);
+ if(typeof ResizeObserver!=='undefined'){observationCarteEquipeAccueil=new ResizeObserver(ajuster);observationCarteEquipeAccueil.observe(nav);}
+ window.addEventListener('resize',ajuster,{once:true});
+}
+
 function afficherPortailPrincipal() {
     if (sessionPrincipaleInvalidee) { afficherConnexion(); return; }
     initialiserStyleConnexion();
@@ -8258,6 +8269,7 @@ function afficherPortailPrincipal() {
         </main>${navigationPrincipale("accueil", "accueil")}`;
     actualiserInterfaceBureau();
     void actualiserCarteGardeAccueil();
+    positionnerCarteEquipeAccueil();
 }
 
 
@@ -22484,7 +22496,7 @@ function initialiserStyleGardes() {
         .gestion-gardes-page{padding-bottom:110px}.gardes-bloc{margin:16px 0;padding:16px;border-radius:16px;background:#fff;box-shadow:0 4px 18px rgba(0,0,0,.08)}.gardes-bloc h3{margin:0 0 12px}.gardes-form-ligne{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.gardes-form-ligne input,.gardes-form-ligne select{min-height:44px;padding:9px 11px;border:1px solid #d5d9de;border-radius:10px;font:inherit;box-sizing:border-box}.gardes-form-ligne input{flex:1;min-width:170px}.gardes-form-ligne button,.garde-equipe-actions button,.garde-semaine button{min-height:42px;border:0;border-radius:10px;padding:9px 13px;font:inherit;font-weight:800;cursor:pointer}.gardes-form-ligne button{background:#1f6f4a;color:#fff}
         .garde-equipe{margin-top:12px;padding:14px;border:1px solid #e2e5e8;border-radius:13px}.garde-equipe-entete{display:flex;align-items:center;justify-content:space-between;gap:10px}.garde-equipe-entete strong{font-size:16px}.garde-equipe-actions{display:flex;gap:6px}.garde-equipe-actions button{min-height:36px;padding:7px 9px;background:#eef1f3}.garde-equipe-actions .danger{background:#fbe8e8;color:#9f2832}.garde-membres{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:7px;margin-top:12px}.garde-membres label{display:flex;gap:8px;align-items:center;padding:8px 9px;border-radius:9px;background:#f6f7f8;font-size:14px}.garde-membres input{width:18px;height:18px}.garde-enregistrer-membres{margin-top:10px;background:#171d24!important;color:#fff}
         .garde-semaine{display:grid;grid-template-columns:minmax(145px,1fr) minmax(150px,1fr);gap:9px;align-items:center;padding:10px 0;border-bottom:1px solid #eceef0}.garde-semaine:last-child{border-bottom:0}.garde-semaine span{font-size:14px;font-weight:700}.garde-semaine select{width:100%;min-height:42px;border:1px solid #d5d9de;border-radius:10px;padding:8px;font:inherit;background:#fff}
-        @media(max-width:520px){.garde-semaine{grid-template-columns:1fr}.gardes-bloc{padding:14px}.portail-cis-page{padding-bottom:300px!important}.portail-cis-page .garde-accueil-zone{position:fixed;left:22px;right:22px;bottom:calc(104px + env(safe-area-inset-bottom, 0px));z-index:90;margin:0;max-width:none}.portail-cis-page .garde-accueil-carte{padding:18px 20px;border-radius:18px}}
+        @media(max-width:520px){.garde-semaine{grid-template-columns:1fr}.gardes-bloc{padding:14px}.portail-cis-page{padding-bottom:300px!important}.portail-cis-page .garde-accueil-zone{position:fixed;left:22px;right:22px;bottom:var(--equipe-accueil-bas,104px);z-index:90;margin:0;max-width:none}.portail-cis-page .garde-accueil-carte{padding:18px 20px;border-radius:18px}}
     `;
     document.head.appendChild(style);
 }
@@ -22686,7 +22698,7 @@ function actualiserPlanMenageGarde(){
 function basculerZoneDepuisPlanGarde(nomZone){
     const cases=[...document.querySelectorAll("[data-garde-zone]")];
     const cible=cases.find(x=>x.value===nomZone);
-    if(!cible)return;
+    if(!cible||cible.disabled)return;
     cible.checked=!cible.checked;
     sauvegarderSelectionMenageGarde();
 }
@@ -22922,11 +22934,36 @@ function afficherAdministrationEquipe(){ afficherAdministratifCaserne(); }
 
 window.afficherAdministrationEquipe=afficherAdministrationEquipe;
 
-async function afficherMenageEspaceGarde(){
+let menageTravailContexte=null;
+function contexteMenageTravailActif(){return menageTravailContexte&&menageTravailContexte.owner===String(utilisateurConnecte?.id||'')&&document.querySelector('[data-menage-travail]')?menageTravailContexte:null;}
+async function chargerMenagesTravail(c){
+ const cle=cleCacheMenage('travail:'+c.id),cache=lireCacheMenage('travail:'+c.id,null);
+ let lignes=cache;
+ if(navigator.onLine){try{const ac=new AbortController();let timer;try{
+ const lecture=(async()=>{const resultat=[];for(let off=0;;off+=200){let q=obtenirClientSupabase().from('menages_garde').select('*').eq('date_garde',c.date_garde).is('supprime_le',null);if(c.equipe_id)q=q.eq('equipe_id',c.equipe_id);const r=await q.order('date_menage').order('id').range(off,off+199).abortSignal(ac.signal);if(r.error)throw Error(r.error.message);resultat.push(...r.data);if(r.data.length<200)return resultat;}})();
+ lignes=await Promise.race([lecture,new Promise((_,rej)=>timer=setTimeout(()=>{ac.abort();rej(Error('Lecture des ménages indisponible.'));},10000))]);
+ if(c.owner!==String(utilisateurConnecte?.id||''))throw Error('Compte modifié.');localStorage.setItem(cle,JSON.stringify(lignes));
+ }finally{clearTimeout(timer);}}catch(e){if(!lignes)throw e;}}
+ if(!lignes){const preuves=[...new Map((c.taches||[]).filter(t=>t.type==='menage').flatMap(t=>t.preuves||[]).map(p=>[String(p.id),p])).values()];lignes=preuves.map(p=>({id:p.id,zones_nettoyees:p.zones||[],personnes_presentes:p.personnes||[]}));}
+ const attente=lireMenagesEnAttente().filter(e=>e.ligne.date_garde===c.date_garde&&(!c.equipe_id||e.ligne.equipe_id===c.equipe_id)).map(e=>({...e.ligne,id:e.cle,en_attente:true}));
+ return [...lignes,...attente];
+}
+function appliquerMenagesTravail(c,lignes){
+ if(contexteMenageTravailActif()!==c)return;
+ c.zones=new Set(lignes.flatMap(r=>r.zones_nettoyees||[]));c.personnes=new Set(lignes.flatMap(r=>r.personnes_presentes||[]).map(String));
+ document.querySelectorAll('[data-garde-zone]').forEach(el=>{if(c.zones.has(el.value)){el.checked=true;el.disabled=true;el.dataset.dejaEnregistre='1';}});
+ document.querySelectorAll('[data-garde-personne]').forEach(el=>{if(c.personnes.has(el.value)){el.checked=true;el.disabled=true;el.dataset.dejaEnregistre='1';el.closest('label')?.classList.remove('garde-personne-cachee');}});
+ const box=document.getElementById('menage-travail-existant');if(box){const nom=id=>{const p=[...(c.personnels||[]),...utilisateursEspaceGarde].find(p=>String(p.id)===String(id));return p?[p.prenom,p.nom].filter(Boolean).join(' '):'Personnel précédemment enregistré';};box.innerHTML='<h2>Déjà enregistré pour cette garde</h2>'+(lignes.length?'<p><strong>Zones réalisées :</strong> '+[...c.zones].map(z=>echapperHTML(z==='Extérieur'?'Nettoyage extérieur':z)).join(' · ')+'</p><p><strong>Personnel :</strong> '+[...c.personnes].map(id=>echapperHTML(nom(id))).join(' · ')+'</p><p>Ces réalisations sont conservées. Tu peux ajouter des zones et du personnel ci-dessous.</p>':'<p>Aucun ménage enregistré pour cette garde.</p>')+(lignes.some(r=>r.en_attente)?'<p>Certains ajouts attendent leur synchronisation.</p>':'')+(c.fiche_resume?.valide?'<p>La fiche du chef de garde est validée : les nouveaux ajouts ne modifieront cette fiche qu’après sa réouverture et une nouvelle validation.</p>':'');}
+ actualiserPlanMenageGarde();c.charge=true;
+}
+async function afficherMenageEspaceGarde(travail=null){
+    menageTravailContexte=travail?{...travail,owner:String(utilisateurConnecte?.id||''),charge:false}:null;
+    const contexteTravail=menageTravailContexte;
+
     initialiserStyleEspaceGardeUtilisateur();
     menageProduitsCharges=false;menageSaisieCle=null;menageSaisieSignature="";
     try{localStorage.removeItem(cleSelectionMenageGarde())}catch(_){}
-    document.getElementById("app").innerHTML=`<main class="garde-section"><button class="retour-button" data-navigation-equipe onclick="retourSaisieEquipe('menage')">← Retour</button><h1>Ménage</h1><div id="menage-garde-chargement" class="garde-planning-attente">Chargement…</div></main>${navigationPrincipale("","accueil")}`;
+    document.getElementById("app").innerHTML=`<main class="garde-section" ${contexteTravail?'data-menage-travail="1"':''}><button class="retour-button" data-navigation-equipe onclick="retourSaisieEquipe('menage')">← Retour</button><h1>Ménage</h1>${contexteTravail?'<section id="menage-travail-existant" class="garde-admin-card" role="status">Lecture des réalisations…</section>':''}<div id="menage-garde-chargement" class="garde-planning-attente">Chargement…</div></main>${navigationPrincipale("","accueil")}`;
     actualiserInterfaceBureau();
     const chargement=document.getElementById("menage-garde-chargement");
     utilisateursEspaceGarde=await chargerUtilisateursEspaceGarde();
@@ -22944,9 +22981,9 @@ async function afficherMenageEspaceGarde(){
     if(!chargement.isConnected)return;
     utilisateursEspaceGarde=listePersonnelAvecAuteur(utilisateursEspaceGarde);
     document.getElementById("app").innerHTML=`
-      <main class="garde-section">
+      <main class="garde-section" ${contexteTravail?'data-menage-travail="1"':''}>
        <button class="retour-button" data-navigation-equipe onclick="retourSaisieEquipe('menage')">← Retour</button>
-       <h1>Ménage</h1>
+       <h1>Ménage</h1>${contexteTravail?'<section id="menage-travail-existant" class="garde-admin-card" role="status">Lecture des réalisations…</section>':''}
        <p id="menages-hors-ligne-statut" role="status">${echapperHTML(texteMenagesEnAttente())}</p>
        <div class="plan-menage-wrap"><div class="plan-menage">
          <img src="./plan-caserne.png" alt="Plan de la caserne">
@@ -22966,7 +23003,7 @@ async function afficherMenageEspaceGarde(){
        <h2 class="garde-sous-titre">Présents</h2>
        <div id="garde-personnes-liste">${utilisateursEspaceGarde.length?utilisateursEspaceGarde.map((u,i)=>{const n=[u.prenom,u.nom].filter(Boolean).join(" ")||u.identifiant||"Utilisateur";return `<label class="garde-personne-v2 ${i>=6?"garde-personne-cachee":""}"><input type="checkbox" data-garde-personne value="${echapperHTML(u.id)}" ${String(u.id)===personnelConnecteSaisie()?.id?"checked disabled":""} onchange="sauvegarderSelectionMenageGarde()"><span>${echapperHTML(n)}</span></label>`}).join(""):'<div class="garde-planning-attente">Liste des utilisateurs indisponible.</div>'}</div>
        ${utilisateursEspaceGarde.length>6?'<button type="button" id="garde-personnes-plus" class="garde-personnes-plus" onclick="basculerToutesPersonnesMenage()">Voir plus</button>':""}
-       <h2 class="garde-sous-titre">Temps passé</h2>
+       <h2 class="garde-sous-titre">${contexteTravail?"Temps passé pour cet ajout":"Temps passé"}</h2>
        <select id="garde-menage-duree" class="garde-menage-duree">
          <option value="">Sélectionner</option><option value="30">30 min</option><option value="60">1 h</option><option value="90">1 h 30</option>
        </select>
@@ -22978,6 +23015,8 @@ async function afficherMenageEspaceGarde(){
        <button type="button" class="garde-menage-enregistrer" onclick="enregistrerMenageEquipe()">Enregistrer la saisie</button>
       </main>${navigationPrincipale("","accueil")}`;
     actualiserInterfaceBureau();actualiserPlanMenageGarde();chargerProduitsVidesMenage();window.scrollTo({top:0,behavior:"auto"});
+    if(contexteTravail){try{const lignes=await chargerMenagesTravail(contexteTravail);appliquerMenagesTravail(contexteTravail,lignes);}catch(e){if(contexteMenageTravailActif()===contexteTravail){document.getElementById('menage-travail-existant').textContent=e.message+' Reviens au travail d’équipe puis réessaie.';document.querySelector('.garde-menage-enregistrer').disabled=true;}}}
+
 }
 
 
@@ -23378,7 +23417,13 @@ async function enregistrerMenageEquipe(){
     const statut=document.getElementById("garde-menage-statut");
     const bouton=document.querySelector(".garde-menage-enregistrer");
     const afficherStatut=(message,ok)=>{if(statut){statut.textContent=message;statut.className="garde-menage-statut "+(ok?"ok":"err");}};
-    const zones=[...document.querySelectorAll("[data-garde-zone]:checked")].map(x=>x.value);
+    const travail=contexteMenageTravailActif();
+    if(travail&&!travail.charge){afficherStatut('Attends la lecture des réalisations déjà enregistrées.',false);return;}
+    const selectionZones=[...document.querySelectorAll('[data-garde-zone]:checked')].map(x=>x.value);
+    const nouvellesZones=selectionZones.filter(z=>!travail?.zones?.has(z));
+    const nouveauxPersonnels=[...document.querySelectorAll('[data-garde-personne]:checked')].map(x=>x.value).filter(id=>!travail?.personnes?.has(id));
+    if(travail&&!nouvellesZones.length&&!nouveauxPersonnels.length){afficherStatut('Aucune nouvelle zone ni personne à ajouter.',false);return;}
+    const zones=travail?(nouvellesZones.length?nouvellesZones:selectionZones):selectionZones;
     const personnes=personnesAvecAuteur([...document.querySelectorAll("[data-garde-personne]:checked")].map(x=>x.value));
     const duree=Number(document.getElementById("garde-menage-duree")?.value||0);
     if(!zones.length){afficherStatut("Sélectionne au moins une zone nettoyée.",false);return}
@@ -23390,7 +23435,7 @@ async function enregistrerMenageEquipe(){
     try{
         if(bouton){bouton.disabled=true;bouton.textContent="Enregistrement…"}
         afficherStatut("Enregistrement en cours…",true);
-        const garde=await chargerGardePourMenage(false);
+        const garde=travail?{date_debut:travail.date_garde,equipe:{id:travail.equipe_id}}:await chargerGardePourMenage(false);
         if (String(utilisateurConnecte?.id || "") !== auteur) throw new Error("La session a changé avant l'enregistrement.");
         const ligne={date_menage:new Date().toISOString(),date_garde:garde?.date_debut||dateISOlocale(vendrediReferenceGarde(new Date())),equipe_id:garde?.equipe?.id||null,zones_nettoyees:zones,personnes_presentes:personnes,duree_minutes:duree,enregistre_par:profilUtilisateurConnecte?.id||null};
         if(!menageProduitsCharges)throw new Error("Les produits ne sont pas chargés. Actualise la rubrique avant d’enregistrer.");
@@ -23415,7 +23460,7 @@ async function enregistrerMenageEquipe(){
         document.querySelectorAll("[data-garde-zone],[data-garde-personne]").forEach(x=>x.checked=false);
         const dureeEl=document.getElementById("garde-menage-duree");if(dureeEl)dureeEl.value="";
         actualiserPlanMenageGarde();
-        await animationValidationEnregistrementCIS(synchronise ? "Ménage enregistré" : "Ménage enregistré sur cet appareil — envoi automatique en attente", () => afficherEspaceGarde());
+        await animationValidationEnregistrementCIS(synchronise ? "Ménage enregistré" : "Ménage enregistré sur cet appareil — envoi automatique en attente", () => {if(travail){menageTravailContexte=null;CISTravail.retourFiche();}else afficherEspaceGarde();});
     }catch(e){
         console.error("Enregistrement ménage :",e);
         afficherStatut("Échec de l’enregistrement : "+(e?.message||"erreur inconnue"),false);
@@ -23961,6 +24006,8 @@ function ouvrirRubriqueEquipe(type){
  actualiserInterfaceBureau();window.scrollTo({top:0,behavior:'auto'});
 }
 function retourSaisieEquipe(type){
+ if(type==='menage'&&contexteMenageTravailActif()){menageTravailContexte=null;CISTravail.retourFiche();return;}
+
  const cfg=rubriquesEquipeConfig[type];
  if(cfg&&utilisateurAPermission(cfg.permission))ouvrirRubriqueEquipe(type);else afficherEspaceGarde();
 }
@@ -24432,4 +24479,5 @@ async function envoyerDocumentsEquipeParMail(){
 
 
 let suiviVSAVChargement;async function ouvrirSuiviVSAVPharma(){try{if(!window.CISSuiviVSAV){suiviVSAVChargement=suiviVSAVChargement||new Promise((resolve,reject)=>{const s=document.createElement('script');s.src='./suivi-vsav.js?v=1';s.onload=resolve;s.onerror=()=>{suiviVSAVChargement=null;reject(Error('Module Suivi VSAV indisponible.'));};document.head.appendChild(s);});await suiviVSAVChargement;}await CISSuiviVSAV.ouvrir();}catch(e){alert(e.message);}}
+
 
