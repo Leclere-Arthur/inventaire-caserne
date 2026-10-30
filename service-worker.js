@@ -1,5 +1,5 @@
 "use strict";
-importScripts("./notifications-history.js");
+importScripts("./notifications-history.js?v=pharmacie-vsav-prod-20261030-v1");
 
 /* =========================================================
    INVENTAIRE CASERNE
@@ -15,7 +15,7 @@ importScripts("./notifications-history.js");
  * à récupérer le nouvel app.js.
  */
 
-const CACHE_NAME = "cis-principale-signature-chef20261028";
+const CACHE_NAME = "cis-principale-pharmacie-vsav-20261030-v1";
 
 
 /*
@@ -29,8 +29,11 @@ const FICHIERS_APPLICATION = ["./maintenance-client.js","./interface-personnelle
     "./",
 
     "./index.html",
+    "./vsav-sans-stock.js?v=pharmacie-vsav-prod-20261030-v1",
+    "./suivi-vsav.js?v=pharmacie-vsav-prod-20261030-v1",
 
-    "./app.js?v=retour-normal-20261028c",
+    "./app.js?v=pharmacie-vsav-prod-20261030-v1",
+    "./pharmacie-categories.js?v=3",
     "./formations-commun.js",
     "./formations.js",
     "./formations.css",

@@ -945,15 +945,7 @@ const STORAGE = {
     archivesHistoriqueV3: "archives_historique_v3"
 };
 
-const CATEGORIES_PAR_DEFAUT = [
-    "ROUGE",
-    "BLEUE",
-    "VERT",
-    "JAUNE",
-    "CONSOMABLE",
-    "EPI",
-    "AUTRE"
-];
+
 
 let materiels = [];
 let categories = [];
@@ -963,6 +955,14 @@ let archivesHistorique = [];
 let consommationsEnCours = {};
 let materielEnModification = null;
 
+// Diagnostic limité à l'erreur et à l'étape : aucun jeton ni mot de passe.
+let etapeSynchronisationPharmacie = '';
+let dernierEchecSynchronisationPharmacie = null;
+function detailEchecSynchronisationPharmacie() {
+    const d=dernierEchecSynchronisationPharmacie;
+    if(!d||d.proprietaire!==String(utilisateurConnecte?.id||''))return '';
+    return '\n\nDétail : '+d.etape+' — '+d.message+(d.code?' ('+d.code+')':'');
+}
 let validationRetourInterventionEnCours = false;
 
 
@@ -4669,6 +4669,7 @@ async function migrerRetoursVersJournalStock(sb) {
         if (!data) {
             const lignes = lireJournalStock();
             for (const c of retour.consommations || []) {
+                if(c.sansStockPharmacie || materiels.find(m=>String(m.id)===String(c.materielId))?.gere_stock_pharmacie===false) continue;
                 const quantite = Number(c.quantite);
                 const origine = String(retour.id) + ":" + String(c.materielId);
                 if (Number.isSafeInteger(quantite) && quantite > 0 && !lignes.some(x => x.origine === origine))
@@ -4800,6 +4801,7 @@ async function envoyerNotificationsStockEnAttente() {
 }
 
 function preparerNotificationStock(materiel, ancienStock, reference = null) {
+    if (materiel.gere_stock_pharmacie === false) return;
     enregistrerMouvementStock(materiel, ancienStock, reference);
 }
 
@@ -5323,27 +5325,6 @@ function normaliserToutesLesDonnees() {
         .filter(Boolean);
 
 
-    CATEGORIES_PAR_DEFAUT.forEach(function (categorie) {
-
-        const existe = categories.some(function (nom) {
-
-            return (
-                nom.toLowerCase() ===
-                categorie.toLowerCase()
-            );
-
-        });
-
-
-        if (!existe) {
-
-            categories.push(categorie);
-
-        }
-
-    });
-
-
     categories = categories.filter(
         function (categorie, index, array) {
 
@@ -5461,15 +5442,6 @@ function normaliserMateriel(materiel, index) {
     }
 
 
-    if (cats.length === 0) {
-
-        cats = [
-            "AUTRE"
-        ];
-
-    }
-
-
     return {
 
         id: id,
@@ -5494,6 +5466,9 @@ function normaliserMateriel(materiel, index) {
 
         categories:
             cats,
+
+        gere_stock_pharmacie: m.gere_stock_pharmacie !== false,
+        inventaire_vsav_materiel_id: m.inventaire_vsav_materiel_id || null,
 
         stock:
             Math.max(
@@ -6053,6 +6028,9 @@ function initialiserIndicateurSynchronisation() {
             border-radius: 50%;
         }
 
+        .historique-sans-reserve, .historique-sans-reserve * { color:#b71924 !important; }
+        .historique-sans-reserve { background:#fff0f0 !important; border:2px solid #bd252b !important; border-radius:14px; padding:16px; }
+
         .historique-total.historique-rupture-stock {
             background: #d71920 !important;
             border-color: #d71920 !important;
@@ -6604,6 +6582,9 @@ async function synchroniserApresModification() {
 
     }
 
+    const proprietaireSynchronisation=String(utilisateurConnecte?.id||"");
+    dernierEchecSynchronisationPharmacie=null;
+    let envoiConfirme=false;
     demarrerIndicateurSynchronisation();
 
     try {
@@ -6613,6 +6594,7 @@ async function synchroniserApresModification() {
         try {
 
             await envoyerDonneesLocalesVersSupabase();
+            envoiConfirme=true;
             effacerModificationsEnAttente();
 
         } finally {
@@ -6623,6 +6605,7 @@ async function synchroniserApresModification() {
 
         // Une fois l'envoi terminé, on relit immédiatement la base centrale.
         // Cela évite qu'un iPhone/iPad garde une ancienne copie locale.
+        etapeSynchronisationPharmacie="Relecture après envoi confirmé";
         const donnees =
             await recupererDonneesSupabase();
 
@@ -6653,6 +6636,15 @@ async function synchroniserApresModification() {
         return true;
 
     } catch (erreur) {
+        dernierEchecSynchronisationPharmacie={proprietaire:proprietaireSynchronisation,etape:etapeSynchronisationPharmacie||'Envoi au serveur',message:String(erreur?.message||'Réponse du serveur indisponible.').slice(0,500),code:String(erreur?.code||'').slice(0,30)};
+        if(envoiConfirme){
+            // Les écritures sont confirmées. Une relecture échouée ne doit pas
+            // transformer cet acquittement en échec d'enregistrement.
+            signalerConnexionPrincipaleIndisponible(erreur);
+            console.warn('Envoi confirmé ; actualisation différée.',erreur);
+            return true;
+        }
+
 
         console.warn(
             "⚠️ La modification reste enregistrée localement et sera renvoyée plus tard.",
@@ -6906,10 +6898,10 @@ async function recupererDonneesSupabase() {
 
     await obtenirSessionPrincipaleValide(supabase);
     const resultats = await Promise.all([
-        supabase.from("categories").select("id,nom"),
+        supabase.from("categories").select("id,nom,parent_id"),
         supabase
             .from("materiels")
-            .select("id,nom,reference,description,stock,minimum,emplacement"),
+            .select("id,nom,reference,description,stock,minimum,emplacement,gere_stock_pharmacie,inventaire_vsav_materiel_id"),
         supabase
             .from("materiel_categories")
             .select("materiel_id,categorie_id"),
@@ -6918,7 +6910,7 @@ async function recupererDonneesSupabase() {
             .select("id,date,numero,created_by,created_by_prenom,created_by_nom,created_at"),
         supabase
             .from("consommations")
-            .select("id,intervention_id,materiel_id,materiel_nom,quantite")
+            .select("id,intervention_id,materiel_id,materiel_nom,quantite,sans_stock_pharmacie")
     ]);
 
     resultats.forEach(function (resultat) {
@@ -7030,7 +7022,7 @@ function convertirDonneesSupabaseEnDonneesApplication(donnees) {
             categoriesParMateriel.get(String(materiel.id)) || [];
 
         if (listeCategories.length === 0) {
-            listeCategories = ["AUTRE"];
+            listeCategories = [];
         }
 
         return {
@@ -7039,6 +7031,8 @@ function convertirDonneesSupabaseEnDonneesApplication(donnees) {
             reference: String(materiel.reference || ""),
             description: String(materiel.description || ""),
             categories: listeCategories,
+            gere_stock_pharmacie: materiel.gere_stock_pharmacie !== false,
+            inventaire_vsav_materiel_id: materiel.inventaire_vsav_materiel_id || null,
             stock: Math.max(0, Math.floor(Number(materiel.stock || 0))),
             minimum: Math.max(0, Math.floor(Number(materiel.minimum || 0))),
             emplacement: String(materiel.emplacement || ""),
@@ -7064,6 +7058,7 @@ function convertirDonneesSupabaseEnDonneesApplication(donnees) {
 
         consommationsParIntervention.get(interventionId).push({
             materielId: String(consommation.materiel_id),
+            sansStockPharmacie: consommation.sans_stock_pharmacie === true,
             materiel: String(consommation.materiel_nom || "Matériel"),
             quantite: Math.max(
                 0,
@@ -7139,14 +7134,15 @@ async function appliquerDonneesSupabaseLocalement(donnees) {
 
     if (existeModificationsEnAttente() || (utilisateurConnecte?.id && lireJournalStock().length)) return;
 
+    CISPharmaCategories.recevoir(donnees.categories);
+
     const application =
         convertirDonneesSupabaseEnDonneesApplication(
             donnees
         );
 
-    if (application.categories.length > 0) {
-        categories = application.categories;
-    }
+    // Une liste distante vide est un résultat valide, pas un échec de lecture.
+    categories = application.categories;
 
     materiels = application.materiels;
     historique = application.historique;
@@ -7353,9 +7349,10 @@ async function envoyerDonneesLocalesVersSupabase() {
     const supabase = obtenirClientSupabase();
 
     if (!supabase) {
-        return;
+        throw new Error("Serveur indisponible : le retour reste enregistré sur cet appareil.");
     }
 
+    etapeSynchronisationPharmacie = "Vérification de la session";
     const sessionEnvoi = await obtenirSessionPrincipaleValide(supabase);
     if (String(sessionEnvoi.user?.id || "") !== String(utilisateurConnecte?.id || "")) throw new Error("La session ne correspond pas aux données à envoyer");
     const auteurEnAttente = localStorage.getItem("cis_sync_proprietaire");
@@ -7363,6 +7360,7 @@ async function envoyerDonneesLocalesVersSupabase() {
 
     migrerIdentifiantsVersUUID();
 
+    etapeSynchronisationPharmacie = "Reprise des retours enregistrés localement";
     await migrerRetoursVersJournalStock(supabase);
     const ancienSnapshot = lireSnapshotSynchronisation();
 
@@ -7378,6 +7376,7 @@ async function envoyerDonneesLocalesVersSupabase() {
         })
         .filter(Boolean);
 
+    etapeSynchronisationPharmacie = "Enregistrement des catégories";
     if (categoriesLocales.length > 0) {
 
         const lignesCategories =
@@ -7417,6 +7416,7 @@ async function envoyerDonneesLocalesVersSupabase() {
         );
     });
 
+    etapeSynchronisationPharmacie = "Enregistrement du matériel";
     const lignesMateriels = materiels.map(function (materiel) {
 
         return {
@@ -7424,6 +7424,8 @@ async function envoyerDonneesLocalesVersSupabase() {
             nom: String(materiel.nom || "Matériel"),
             reference: String(materiel.reference || ""),
             description: String(materiel.description || ""),
+            gere_stock_pharmacie: materiel.gere_stock_pharmacie !== false,
+            inventaire_vsav_materiel_id: materiel.inventaire_vsav_materiel_id || null,
             minimum: Math.max(0, Math.floor(Number(materiel.minimum || 0))),
             emplacement: String(materiel.emplacement || ""),
         };
@@ -7451,6 +7453,7 @@ async function envoyerDonneesLocalesVersSupabase() {
 
     }
 
+    etapeSynchronisationPharmacie = "Rattachement du matériel aux catégories";
     for (const materiel of materiels) {
 
         const idMateriel = String(materiel.id);
@@ -7502,6 +7505,7 @@ async function envoyerDonneesLocalesVersSupabase() {
      * de la table archives_historique.
      */
 
+    etapeSynchronisationPharmacie = "Enregistrement des retours";
     const lignesInterventions = historique.map(function (intervention) {
 
         return {
@@ -7531,6 +7535,7 @@ async function envoyerDonneesLocalesVersSupabase() {
 
     }
 
+    etapeSynchronisationPharmacie = "Enregistrement des consommations";
     const lignesConsommations = [];
 
     historique.forEach(function (intervention) {
@@ -7669,6 +7674,7 @@ async function envoyerDonneesLocalesVersSupabase() {
 
     }
 
+    etapeSynchronisationPharmacie = "Mise à jour des catégories supprimées";
     const nouvellesCategoriesMaj = new Set(
         categoriesLocales.map(function (nom) {
             return String(nom).trim().toLowerCase();
@@ -7697,6 +7703,7 @@ async function envoyerDonneesLocalesVersSupabase() {
 
     }
 
+    etapeSynchronisationPharmacie = "Confirmation des mouvements de stock";
     await synchroniserJournalStock(supabase);
     void envoyerNotificationsStockEnAttente();
 
@@ -11167,99 +11174,8 @@ function afficherResultatsInventaire() {
     conteneur.innerHTML = "";
 
 
-    categories.forEach(
-        function (categorie) {
-
-            const liste =
-                materiels.filter(
-                    function (materiel) {
-
-                        return materiel.categories
-                            .some(
-                                function (cat) {
-
-                                    return (
-                                        cat.toLowerCase()
-                                        ===
-                                        categorie.toLowerCase()
-                                    );
-
-                                }
-                            );
-
-                    }
-                );
-
-
-            conteneur.innerHTML += `
-
-                <section
-                    class="categorie-bloc"
-                >
-
-                    <button
-                        class="categorie-titre"
-                        type="button"
-                        onclick="
-                            basculerCategorie(this)
-                        "
-                    >
-
-                        <span>
-
-                            📂
-                            ${echapperHTML(
-                                categorie
-                            )}
-
-                            <small>
-                                ${liste.length}
-                            </small>
-
-                        </span>
-
-
-                        <span>
-                            ▼
-                        </span>
-
-                    </button>
-
-
-                    <div
-                        class="categorie-contenu"
-                        style="display:none"
-                    >
-
-                        ${
-                            liste.length === 0
-                            ?
-                            `
-                            <div class="materiel">
-
-                                <p>
-                                    Aucun matériel
-                                    dans cette catégorie.
-                                </p>
-
-                            </div>
-                            `
-                            :
-                            liste
-                                .map(
-                                    genererCarteInventaire
-                                )
-                                .join("")
-                        }
-
-                    </div>
-
-                </section>
-
-            `;
-
-        }
-    );
+    CISPharmaCategories.style();
+    conteneur.innerHTML = CISPharmaCategories.blocs(categories, materiels, genererCarteInventaire);
 
 }
 
@@ -11281,6 +11197,7 @@ function basculerCategorie(
 
     const ouvert =
         contenu.style.display !== "none";
+    bouton.setAttribute("aria-expanded", String(!ouvert));
 
 
     if (ouvert) {
@@ -11320,9 +11237,7 @@ function genererCarteInventaire(
 
     const categoriesMateriel =
         materiel.categories
-            .map(
-                echapperHTML
-            )
+            .map(nom => echapperHTML(CISPharmaCategories.chemin(nom)))
             .join(
                 " • "
             );
@@ -11332,7 +11247,7 @@ function genererCarteInventaire(
 
 
     if (
-        materiel.minimum > 0 &&
+        materiel.gere_stock_pharmacie !== false && materiel.minimum > 0 &&
         materiel.stock <=
         materiel.minimum
     ) {
@@ -11409,7 +11324,7 @@ function genererCarteInventaire(
                     </span>
 
                     <strong>
-                        ${materiel.stock}
+                        ${materiel.gere_stock_pharmacie === false ? 'Sans réserve pharmacie' : materiel.stock}
                     </strong>
 
                 </div>
@@ -12134,106 +12049,10 @@ async function afficherRetourIntervention() {
 
 
 function afficherCategoriesRetour() {
-
-    const conteneur =
-        document.getElementById(
-            "categories-retour"
-        );
-
-
-    if (!conteneur) {
-
-        return;
-
-    }
-
-
-    conteneur.innerHTML = "";
-
-
-    categories.forEach(
-        function (categorie) {
-
-            const liste =
-                materiels.filter(
-                    function (materiel) {
-
-                        return materiel.categories
-                            .some(
-                                function (cat) {
-
-                                    return (
-                                        cat.toLowerCase()
-                                        ===
-                                        categorie.toLowerCase()
-                                    );
-
-                                }
-                            );
-
-                    }
-                );
-
-
-            conteneur.innerHTML += `
-
-                <section
-                    class="categorie-bloc"
-                >
-
-                    <button
-                        class="categorie-titre"
-                        type="button"
-                        onclick="
-                            basculerCategorie(this)
-                        "
-                    >
-
-                        <span>
-
-                            📂
-                            ${echapperHTML(
-                                categorie
-                            )}
-
-                            <small>
-                                ${liste.length}
-                            </small>
-
-                        </span>
-
-
-                        <span>
-                            ▼
-                        </span>
-
-                    </button>
-
-
-                    <div
-                        class="categorie-contenu"
-                        style="display:none"
-                    >
-
-                        ${
-                            liste
-                                .map(
-                                    genererCarteRetour
-                                )
-                                .join("")
-                        }
-
-                    </div>
-
-                </section>
-
-            `;
-
-        }
-    );
-
+    const conteneur=document.getElementById('categories-retour');
+    CISPharmaCategories.style();
+    if(conteneur) conteneur.innerHTML=CISPharmaCategories.blocs(categories,materiels,genererCarteRetour);
 }
-
 
 /* =========================================================
    CARTE RETOUR
@@ -12269,7 +12088,7 @@ function genererCarteRetour(
     ) {
 
         const indisponible =
-            nombre >
+            materiel.gere_stock_pharmacie !== false && nombre >
             Number(
                 materiel.stock
             );
@@ -12325,7 +12144,7 @@ function genererCarteRetour(
                 <p>
                     Stock :
                     <strong>
-                        ${materiel.stock}
+                        ${materiel.gere_stock_pharmacie === false ? 'Sans réserve pharmacie — réarmement à prévoir' : materiel.stock}
                     </strong>
                 </p>
 
@@ -12417,7 +12236,7 @@ function augmenterConsommation(
 
 
     if (
-        actuelle >=
+        materiel.gere_stock_pharmacie !== false && actuelle >=
         Number(
             materiel.stock
         )
@@ -12548,7 +12367,7 @@ function selectionnerQuantiteRetour(
 
 
     if (
-        quantite >
+        materiel.gere_stock_pharmacie !== false && quantite >
         Number(
             materiel.stock
         )
@@ -13024,7 +12843,7 @@ async function validerRetourIntervention() {
 
 
         if (
-            quantite >
+            materiel.gere_stock_pharmacie !== false && quantite >
             Number(
                 materiel.stock
             )
@@ -13110,7 +12929,7 @@ async function validerRetourIntervention() {
                 );
 
 
-            materiel.stock =
+            if (materiel.gere_stock_pharmacie !== false) materiel.stock =
                 Math.max(
                     0,
                     ancienStock -
@@ -13125,6 +12944,7 @@ async function validerRetourIntervention() {
 
 
             consommations.push({
+                sansStockPharmacie: materiel.gere_stock_pharmacie === false,
 
                 materielId:
                     materiel.id,
@@ -13196,7 +13016,7 @@ async function validerRetourIntervention() {
         } else {
 
             alert(
-                "⚠️ Retour enregistré sur cet appareil, mais la synchronisation avec la base de données a échoué. Les données sont conservées et pourront être renvoyées."
+                "Retour conservé sur cet appareil. Son envoi au serveur reste en attente." + detailEchecSynchronisationPharmacie()
             );
 
         }
@@ -14613,7 +14433,7 @@ async function afficherReapprovisionnementArchive(
                 function (materiel) {
 
                     if (
-                        !materiel ||
+                        !materiel || materiel.gere_stock_pharmacie === false ||
                         materielsDejaAjoutes.has(
                             String(materiel.id)
                         )
@@ -15177,7 +14997,7 @@ function ajouterLigneReapprovisionnementArchive() {
 
 
         const correspondances =
-            [...materiels]
+            [...materiels].filter(m=>m.gere_stock_pharmacie!==false)
                 .filter(
                     function (materiel) {
 
@@ -15821,10 +15641,10 @@ function afficherHistoriqueTotal() {
 
                     // Les ruptures de stock sont tout en haut.
                     const aRupture =
-                        Number(a.materiel.stock) === 0;
+                        a.materiel.gere_stock_pharmacie !== false && Number(a.materiel.stock) === 0;
 
                     const bRupture =
-                        Number(b.materiel.stock) === 0;
+                        b.materiel.gere_stock_pharmacie !== false && Number(b.materiel.stock) === 0;
 
                     if (aRupture !== bRupture) {
 
@@ -15887,13 +15707,14 @@ function afficherHistoriqueTotal() {
                         ligne.materiel.minimum;
 
                     const ruptureStock =
-                        Number(
+                        ligne.materiel.gere_stock_pharmacie !== false && Number(
                             ligne.materiel.stock
                         ) === 0;
 
 
+                    const sansReserve = ligne.materiel.gere_stock_pharmacie === false;
                     const classeAlerte =
-                        ruptureStock
+                        (ruptureStock || sansReserve)
                             ? " historique-rupture-stock"
                             : (
                                 stockMinimum
@@ -15954,7 +15775,9 @@ function afficherHistoriqueTotal() {
 
                                 <small>
                                     ${
-                                        ruptureStock
+                                        sansReserve
+                                            ? "Sans réserve pharmacie"
+                                            : ruptureStock
                                             ? "⛔ RUPTURE DE STOCK"
                                             : (
                                                 stockMinimum
@@ -16104,6 +15927,7 @@ function afficherDetailConsommation(
     );
 
 
+    const sansReserve = materiel.gere_stock_pharmacie === false;
     const stockMinimum =
         materiel.minimum > 0 &&
         materiel.stock <=
@@ -16129,7 +15953,7 @@ function afficherDetailConsommation(
 
             <div
                 class="
-                    detail-header
+                    detail-header ${sansReserve ? "historique-sans-reserve" : ""}
                     ${
                         stockMinimum
                         ?
@@ -16148,8 +15972,7 @@ function afficherDetailConsommation(
 
 
                 <span>
-                    Stock actuel :
-                    ${materiel.stock}
+                    ${sansReserve ? "Sans réserve pharmacie" : "Stock actuel : " + materiel.stock}
                 </span>
 
             </div>
@@ -16179,7 +16002,7 @@ function afficherDetailConsommation(
                 html += `
 
                     <div
-                        class="detail-historique"
+                        class="detail-historique ${sansReserve ? "historique-sans-reserve" : ""}"
                     >
 
                         <div>
@@ -16929,7 +16752,8 @@ function afficherDetailIntervention(
         intervention.consommations.forEach(function(consommation) {
             const materiel = materiels.find(m => String(m.id) === String(consommation.materielId));
             const stockMinimum = materiel && materiel.minimum > 0 && materiel.stock <= materiel.minimum;
-            html += `<div class="detail-historique ${stockMinimum ? "detail-stock-faible" : ""}"><div><strong>${echapperHTML(consommation.materiel)}</strong>${materiel ? `<span>Stock actuel : ${materiel.stock}</span>` : ""}</div><strong class="detail-quantite ${stockMinimum ? "texte-stock-faible" : ""}">${consommation.quantite}</strong></div>`;
+            const sansReserve = consommation.sansStockPharmacie === true || materiel?.gere_stock_pharmacie === false;
+            html += `<div class="detail-historique ${sansReserve ? "historique-sans-reserve" : stockMinimum ? "detail-stock-faible" : ""}"><div><strong>${echapperHTML(consommation.materiel)}</strong>${sansReserve ? '<span>Sans réserve pharmacie</span>' : materiel ? `<span>Stock actuel : ${materiel.stock}</span>` : ""}</div><strong class="detail-quantite ${stockMinimum && !sansReserve ? "texte-stock-faible" : ""}">${consommation.quantite}</strong></div>`;
         });
     }
     if (auteur || admin) {
@@ -18915,7 +18739,7 @@ function afficherFormulaireMateriel(
 
                             <span>
                                 ${echapperHTML(
-                                    categorie
+                                    CISPharmaCategories.chemin(categorie)
                                 )}
                             </span>
 
@@ -19019,6 +18843,9 @@ function afficherFormulaireMateriel(
                 </div>
 
 
+                <label style="display:flex;align-items:center;gap:10px"><input id="gere-stock-pharmacie" type="checkbox" ${materiel?.gere_stock_pharmacie !== false ? 'checked' : ''} style="width:auto"> Géré dans le stock pharmacie</label>
+                <p>Sans réserve pharmacie : l’utilisation est signalée dans Suivi VSAV jusqu’au réarmement.</p>
+                <div id="vsav-lien-groupe"><label>Matériel correspondant dans l’inventaire VSAV<input type="hidden" id="inventaire-vsav-lien" value="${echapperHTML(materiel?.inventaire_vsav_materiel_id||'')}"></label><div id="vsav-lien-selecteur"></div><p id="vsav-lien-statut" role="status"></p></div>
                 <label>
                     Quantité en stock
                 </label>
@@ -19124,6 +18951,7 @@ function afficherFormulaireMateriel(
     `;
 
 
+    CISVSAVSansStock.configurerFormulaire(materiel);
     const photo =
         document.getElementById(
             "photo-materiel"
@@ -19207,6 +19035,8 @@ function afficherApercuPhoto(
 
 function enregistrerMateriel() {
 
+    const gereStock = document.getElementById("gere-stock-pharmacie")?.checked !== false;
+    const lienVSAV = gereStock ? null : document.getElementById("inventaire-vsav-lien")?.value || null;
     const nom =
         document.getElementById(
             "nom-materiel"
@@ -19356,6 +19186,8 @@ function enregistrerMateriel() {
             );
 
 
+        materiel.gere_stock_pharmacie = gereStock;
+        materiel.inventaire_vsav_materiel_id = lienVSAV;
         materiel.nom =
             nom;
 
@@ -19445,6 +19277,8 @@ function enregistrerMateriel() {
        ===================================================== */
 
     const nouveauMateriel = {
+        gere_stock_pharmacie: gereStock,
+        inventaire_vsav_materiel_id: lienVSAV,
 
         id:
             genererUUID(),
@@ -19570,400 +19404,11 @@ function lirePhotoPuis(
    CATEGORIES
    ========================================================= */
 
-function gestionCategories() {
-
-    if (!verifierPermissionOuRetourAccueil(
-        "acces_gestion_categories"
-    )) {
-        return;
-    }
-
-
-    let html = `
-
-        <main class="page">
-
-            <button
-                class="retour-button"
-                onclick="
-                    afficherMenuAdministration()
-                "
-            >
-                ← Retour
-            </button>
-
-
-            <h2>
-                📂 Gestion des catégories
-            </h2>
-
-
-            <button
-                class="add-button"
-                onclick="
-                    ajouterCategorie()
-                "
-            >
-                ➕ Nouvelle catégorie
-            </button>
-
-    `;
-
-
-    categories.forEach(
-        function (categorie) {
-
-            html += `
-
-                <div
-                    class="materiel"
-                >
-
-                    <h3>
-                        📂
-                        ${echapperHTML(
-                            categorie
-                        )}
-                    </h3>
-
-
-                    <div
-                        class="
-                            actions-materiel
-                        "
-                    >
-
-                        <button
-                            onclick="
-                                modifierCategorie(
-                                    '${echapperHTML(
-                                        categorie
-                                    )}'
-                                )
-                            "
-                        >
-                            ✏️ Modifier
-                        </button>
-
-
-                        <button
-                            onclick="
-                                supprimerCategorie(
-                                    '${echapperHTML(
-                                        categorie
-                                    )}'
-                                )
-                            "
-                        >
-                            🗑️ Supprimer
-                        </button>
-
-                    </div>
-
-                </div>
-
-            `;
-
-        }
-    );
-
-
-    html += `
-        </main>
-    `;
-
-
-    document.getElementById(
-        "app"
-    ).innerHTML =
-        html;
-
-}
-
-
-async function ajouterCategorie() {
-
-    const nom =
-        await afficherSaisieCIS(
-            "Nom de la nouvelle catégorie :"
-        );
-
-
-    if (
-        nom === null
-    ) {
-
-        return;
-
-    }
-
-
-    const nouveau =
-        nom.trim();
-
-
-    if (!nouveau) {
-
-        alert(
-            "Le nom ne peut pas être vide."
-        );
-
-        return;
-
-    }
-
-
-    const existe =
-        categories.some(
-            function (categorie) {
-
-                return (
-                    categorie.toLowerCase()
-                    ===
-                    nouveau.toLowerCase()
-                );
-
-            }
-        );
-
-
-    if (existe) {
-
-        alert(
-            "Cette catégorie existe déjà."
-        );
-
-        return;
-
-    }
-
-
-    categories.push(
-        nouveau
-    );
-
-
-    sauvegarderToutesLesDonnees();
-
-    void synchroniserApresModification();
-
-
-    alert(
-        "✅ Catégorie créée."
-    );
-
-
-    gestionCategories();
-
-}
-
-
-async function modifierCategorie(
-    ancienNom
-) {
-
-    const nouveauNom =
-        await afficherSaisieCIS(
-            "Nouveau nom de la catégorie :",
-            ancienNom
-        );
-
-
-    if (
-        nouveauNom === null
-    ) {
-
-        return;
-
-    }
-
-
-    const nouveau =
-        nouveauNom.trim();
-
-
-    if (!nouveau) {
-
-        alert(
-            "Le nom ne peut pas être vide."
-        );
-
-        return;
-
-    }
-
-
-    const existe =
-        categories.some(
-            function (categorie) {
-
-                return (
-                    categorie !==
-                    ancienNom
-                    &&
-                    categorie.toLowerCase()
-                    ===
-                    nouveau.toLowerCase()
-                );
-
-            }
-        );
-
-
-    if (existe) {
-
-        alert(
-            "Cette catégorie existe déjà."
-        );
-
-        return;
-
-    }
-
-
-    const index =
-        categories.indexOf(
-            ancienNom
-        );
-
-
-    if (index === -1) {
-
-        return;
-
-    }
-
-
-    categories[index] =
-        nouveau;
-
-
-    materiels.forEach(
-        function (materiel) {
-
-            materiel.categories =
-                materiel.categories.map(
-                    function (categorie) {
-
-                        if (
-                            categorie.toLowerCase()
-                            ===
-                            ancienNom.toLowerCase()
-                        ) {
-
-                            return nouveau;
-
-                        }
-
-                        return categorie;
-
-                    }
-                );
-
-        }
-    );
-
-
-    sauvegarderToutesLesDonnees();
-
-    void synchroniserApresModification();
-
-
-    alert(
-        "✅ Catégorie modifiée."
-    );
-
-
-    gestionCategories();
-
-}
-
-
-async function supprimerCategorie(
-    nom
-) {
-
-    if (!verifierPermissionOuRetourAccueil(
-        "acces_administration"
-    )) {
-        return;
-    }
-
-
-    if (
-        !await afficherConfirmationCIS(
-            "Veux-tu supprimer « " +
-            nom +
-            " » ?"
-        )
-    ) {
-
-        return;
-
-    }
-
-
-
-    categories =
-        categories.filter(
-            function (categorie) {
-
-                return (
-                    categorie !==
-                    nom
-                );
-
-            }
-        );
-
-
-    materiels.forEach(
-        function (materiel) {
-
-            materiel.categories =
-                materiel.categories.filter(
-                    function (categorie) {
-
-                        return (
-                            categorie !==
-                            nom
-                        );
-
-                    }
-                );
-
-
-            if (
-                materiel.categories.length ===
-                0
-            ) {
-
-                materiel.categories =
-                    categories.includes(
-                        "AUTRE"
-                    )
-                        ? ["AUTRE"]
-                        : [];
-
-            }
-
-        }
-    );
-
-
-    sauvegarderToutesLesDonnees();
-
-    void synchroniserApresModification();
-
-
-    alert(
-        "✅ Catégorie supprimée."
-    );
-
-
-    gestionCategories();
-
-}
+function gestionCategories() { return CISPharmaCategories.ouvrir(); }
+// Conserve les points d’entrée exportés par l’application et les anciens liens.
+function ajouterCategorie() { return CISPharmaCategories.ouvrirAction('nouvelle'); }
+function modifierCategorie(nom) { return CISPharmaCategories.ouvrirAction('modifier', nom); }
+function supprimerCategorie(nom) { return CISPharmaCategories.ouvrirAction('supprimer', nom); }
 
 
 /* =========================================================
@@ -19974,6 +19419,8 @@ function modifierStock(
     id
 ) {
 
+    const sansStock = materiels.find(m=>String(m.id)===String(id))?.gere_stock_pharmacie===false;
+    if(sansStock){alert('Ce matériel se réarme dans Suivi VSAV, sans ajouter de stock pharmacie.');return;}
     if (!verifierPermissionOuRetourAccueil(
         "acces_administration"
     )) {
@@ -23187,12 +22634,13 @@ function vehInventaireActualiserQuantite(input){
   e.textContent=erreur?(Number.isInteger(valeur)&&valeur>=0&&valeur<attendue?'Matériel manquant : ':'Écart de quantité : ')+(Number.isInteger(valeur)&&valeur>=0?valeur:'à renseigner')+' / '+attendue:'Quantité conforme';
  });
 }
+function quantiteVSAVDisponible(m,session){const a=(session?.anomalies||[]).find(a=>a.materiel_id===m.id&&a.source==='utilisation_pharmacie');return a?.quantite_constatee??m.quantite;}
 function vehInventaireOuvrirZone(id){
  if(id==='__technique'){CISTechnique.ouvrir();return;}
  const session=vehInventaireSession,z=vehInventaireZones.find(x=>x.id===id);if(!session||!z)return;
  const materiels=vehInventaireMateriels.filter(m=>m.zone_id===id);
  const precedent=session.controles[id]||{};
- vehInventaireAfficher(`<div class="veh-inventaire-contenu"><button class="retour-button veh-retour" onclick="vehInventaireAfficherZones()">← Coffres</button><h1>${vehInventaireHTML(z.nom)}</h1>${vehPhotoMiniature(z.photo_path,"detail")}<p class="veh-muted">Choisis l'état de chaque matériel. Appuie sur son nom pour ajouter une observation ou modifier la quantité constatée.</p><div id="veh-materiels">${materiels.length?materiels.map(m=>{const alerte=(session.anomalies||[]).find(a=>a.materiel_id===m.id);const valeur=precedent[m.id]||{},q=valeur.quantite_constatee??m.quantite,ecart=Number(q)!==Number(m.quantite);return `<div class="veh-materiel-ligne" data-materiel="${m.id}" data-quantite-attendue="${Number(m.quantite)}"><div class="veh-materiel-haut"><button type="button" class="veh-materiel-ouvrir" aria-expanded="false" onclick="vehInventaireBasculerMateriel('${m.id}')"><strong>${vehInventaireHTML(m.nom)}</strong><small>Prévu : <b>${Number(m.quantite)}</b> ${ecart?`· <span class="veh-quantite-erreur">${Number(q)<Number(m.quantite)?'Matériel manquant':'Constaté'} : ${Number(q)}</span>`:''}</small></button><span class="veh-materiel-chevron" aria-hidden="true">⌄</span></div>${alerte?`<p role="note" style="padding:12px;border-radius:9px;background:${alerte.etat==='hs'?'#ffe1e1':'#fff0b3'};color:#442b25;border:2px solid ${alerte.etat==='hs'?'#bc2525':'#bc8d13'}"><strong>Dernier signalement : ${alerte.etat==='hs'?'HS':'À surveiller'}</strong>${alerte.observation?'<br>'+vehInventaireHTML(alerte.observation):''}<br><small>${new Date(alerte.date).toLocaleString('fr-FR')}</small></p>`:''}<div class="veh-etat">${[["bon","Bon"],["a_surveiller","À surveiller"],["hs","HS"]].map(([val,lib])=>`<label><input type="radio" name="etat-${m.id}" value="${val}" ${valeur.etat===val?"checked":""}> ${lib}</label>`).join("")}</div><div class="veh-materiel-details">${vehPhotoMiniature(m.photo_path,"materiel")}<label class="veh-quantite-saisie"><strong>Quantité constatée</strong><input type="number" min="0" step="1" inputmode="numeric" value="${Number(q)}" oninput="vehInventaireActualiserQuantite(this)" aria-label="Quantité constatée de ${vehInventaireHTML(m.nom)}"></label><p class="veh-quantite-statut ${ecart?'veh-quantite-erreur':''}">${ecart?`${Number(q)<Number(m.quantite)?'Matériel manquant':'Écart de quantité'} : ${Number(q)} / ${Number(m.quantite)}`:'Quantité conforme'}</p><label>Observation<textarea class="veh-note" rows="2" placeholder="Observation (facultatif)">${vehInventaireHTML(valeur.observation||"")}</textarea></label></div></div>`}).join(""):'<p>Aucun matériel configuré pour cette zone.</p>'}</div><button class="veh-action" onclick="vehInventaireEnregistrerZone('${id}')">Enregistrer ce coffre</button></div>`);
+ vehInventaireAfficher(`<div class="veh-inventaire-contenu"><button class="retour-button veh-retour" onclick="vehInventaireAfficherZones()">← Coffres</button><h1>${vehInventaireHTML(z.nom)}</h1>${vehPhotoMiniature(z.photo_path,"detail")}<p class="veh-muted">Choisis l'état de chaque matériel. Appuie sur son nom pour ajouter une observation ou modifier la quantité constatée.</p><div id="veh-materiels">${materiels.length?materiels.map(m=>{const alerte=(session.anomalies||[]).find(a=>a.materiel_id===m.id);const valeur=precedent[m.id]||{},q=valeur.quantite_constatee??quantiteVSAVDisponible(m,session),ecart=Number(q)!==Number(m.quantite);return `<div class="veh-materiel-ligne" data-materiel="${m.id}" data-quantite-attendue="${Number(m.quantite)}"><div class="veh-materiel-haut"><button type="button" class="veh-materiel-ouvrir" aria-expanded="false" onclick="vehInventaireBasculerMateriel('${m.id}')"><strong>${vehInventaireHTML(m.nom)}</strong><small>Prévu : <b>${Number(m.quantite)}</b> ${ecart?`· <span class="veh-quantite-erreur">${Number(q)<Number(m.quantite)?'Matériel manquant':'Constaté'} : ${Number(q)}</span>`:''}</small></button><span class="veh-materiel-chevron" aria-hidden="true">⌄</span></div>${alerte?`<p role="note" style="padding:12px;border-radius:9px;background:${alerte.etat==='hs'?'#ffe1e1':'#fff0b3'};color:#442b25;border:2px solid ${alerte.etat==='hs'?'#bc2525':'#bc8d13'}"><strong>${alerte.source==='utilisation_pharmacie'?'Matériel manquant — réarmement en attente'+(alerte.etat==='hs'?' · HS':''):'Dernier signalement : '+(alerte.etat==='hs'?'HS':'À surveiller')}</strong>${alerte.observation?'<br>'+vehInventaireHTML(alerte.observation):''}<br><small>${new Date(alerte.date).toLocaleString('fr-FR')}</small></p>`:''}<div class="veh-etat">${[["bon","Bon"],["a_surveiller","À surveiller"],["hs","HS"]].map(([val,lib])=>`<label><input type="radio" name="etat-${m.id}" value="${val}" ${valeur.etat===val?"checked":""}> ${lib}</label>`).join("")}</div><div class="veh-materiel-details">${vehPhotoMiniature(m.photo_path,"materiel")}<label class="veh-quantite-saisie"><strong>Quantité constatée</strong><input type="number" min="0" step="1" inputmode="numeric" value="${Number(q)}" oninput="vehInventaireActualiserQuantite(this)" aria-label="Quantité constatée de ${vehInventaireHTML(m.nom)}"></label><p class="veh-quantite-statut ${ecart?'veh-quantite-erreur':''}">${ecart?`${Number(q)<Number(m.quantite)?'Matériel manquant':'Écart de quantité'} : ${Number(q)} / ${Number(m.quantite)}`:'Quantité conforme'}</p><label>Observation<textarea class="veh-note" rows="2" placeholder="Observation (facultatif)">${vehInventaireHTML(valeur.observation||"")}</textarea></label></div></div>`}).join(""):'<p>Aucun matériel configuré pour cette zone.</p>'}</div><button class="veh-action" onclick="vehInventaireEnregistrerZone('${id}')">Enregistrer ce coffre</button></div>`);
 }
 function vehInventaireEnregistrerZone(id){
  const session=vehInventaireSession;if(!session)return;
@@ -23219,7 +22667,7 @@ async function vehInventaireTerminerInterne(){
  if(!(await afficherConfirmationCIS(avertissement)))return;
  const btn=document.querySelector(".veh-inventaire-contenu > .veh-action");if(btn){btn.disabled=true;btn.textContent="Enregistrement…";}
  try{
-  const sb=obtenirClientSupabase();const payload={vehicule_id:session.vehicule.id,vehicule_nom:session.vehicule.nom,controle_par:profilUtilisateurConnecte?.id,personnes_presentes:personnesAvecAuteur(session.participants),details:vehInventaireZones.map(z=>({zone_id:z.id,zone_nom:z.nom,cote:z.cote,materiels:vehInventaireMateriels.filter(m=>m.zone_id===z.id).map(m=>({materiel_id:m.id,nom:m.nom,quantite:m.quantite,quantite_constatee:session.controles[z.id]?.[m.id]?.quantite_constatee??m.quantite,etat_reference:m.etat_reference,etat:session.controles[z.id]?.[m.id]?.etat||null,observation:session.controles[z.id]?.[m.id]?.observation||""}))}))};
+  const sb=obtenirClientSupabase();const payload={vehicule_id:session.vehicule.id,vehicule_nom:session.vehicule.nom,controle_par:profilUtilisateurConnecte?.id,personnes_presentes:personnesAvecAuteur(session.participants),details:vehInventaireZones.map(z=>({zone_id:z.id,zone_nom:z.nom,cote:z.cote,materiels:vehInventaireMateriels.filter(m=>m.zone_id===z.id).map(m=>({materiel_id:m.id,nom:m.nom,quantite:m.quantite,quantite_constatee:session.controles[z.id]?.[m.id]?.quantite_constatee??quantiteVSAVDisponible(m,session),etat_reference:m.etat_reference,etat:session.controles[z.id]?.[m.id]?.etat||null,observation:session.controles[z.id]?.[m.id]?.observation||""}))}))};
   payload.details.push(CISTechnique.zone(session.technique||{}),CISTechnique.zoneAnnexe(session.annexe||{}));
   const {error}=await sb.from("cis_inventaires_vehicules").insert(payload);if(error)throw error;
   vehInventaireSession=null;
@@ -24265,6 +23713,7 @@ function notificationEstRuptureStock(r){
  const texte=[r.title,r.body].filter(Boolean).join(' ').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
  const cible=String(r.target||'').toLowerCase();
  const stockConcerne=['pharmacie','menage-inventaire'].includes(cible)||/pharma|menage/.test(texte);
+ if(r.target==='suivi-vsav')return true;
  return stockConcerne && /\brupture\b/.test(texte);
 }
 function initialiserCentreNotifications(){
@@ -24311,6 +23760,7 @@ async function afficherHistoriqueNotifications(){
 async function remplirHistoriqueNotifications(){
  const zone=document.getElementById('notifications-liste'),uid=utilisateurConnecte?.id;if(!zone||!uid)return;
  try{
+  if(window.CISVSAVSansStock) await CISVSAVSansStock.importerAlertes();
   const store=await chargerHistoriqueNotificationsModule(),rows=await store.list(uid);
   if(!zone.isConnected||String(utilisateurConnecte?.id)!==String(uid))return;
   zone.innerHTML=rows.length?rows.map(r=>`<button type="button" class="notif-ligne ${r.read?'':'non-lue'} ${notificationEstRuptureStock(r)?'rupture-stock':''}" data-notification-id="${echapperHTML(r.id)}"><span class="notif-contenu"><strong>${echapperHTML(r.title)}</strong>${r.body?`<p>${echapperHTML(r.body)}</p>`:''}<time datetime="${echapperHTML(r.receivedAt)}">${echapperHTML(new Date(r.receivedAt).toLocaleString('fr-FR',{timeZone:'Europe/Paris',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}))}</time></span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></button>`).join(''):'<p class="notif-vide">Aucune notification reçue depuis l’activation de cet historique.</p>';
@@ -24329,6 +23779,7 @@ async function ouvrirNotificationHistorique(id){
   if(String(utilisateurConnecte?.id)!==String(uid))return;
   if(!r)return alert('Cette notification n’est pas disponible pour ce compte.');
   const target=r.target;
+  if(target==='suivi-vsav'&&!utilisateurAPermission('acces_administration'))return alert('Accès réservé aux admins pharmacie.');
   if(target==='menage-inventaire'&&!utilisateurAPermission('acces_admin_menage'))return alert('Vous n’avez plus accès à l’inventaire ménage.');
   if(target==='vehicules-inventaire'&&!utilisateurAPermission('acces_admin_menage'))return alert('Vous n’avez plus accès aux inventaires véhicules.');
   if(target.startsWith('caserne:')){const rubrique=obtenirRubriquesCaserne().find(x=>x[0]===target.slice(8));if(!rubrique||!utilisateurPeutVoirRubriqueCaserne(rubrique))return alert('Vous n’avez plus accès à cette rubrique.');}
@@ -24336,6 +23787,7 @@ async function ouvrirNotificationHistorique(id){
   await store.read(id,uid);
   await actualiserPointNotifications();
   if(String(utilisateurConnecte?.id)!==String(uid))return;
+  if(target==='suivi-vsav')return ouvrirSuiviVSAVPharma();
   if(target==='menage-inventaire'){rubriqueEquipeOrigine='menage';return afficherInventaireMenage();}
   if(target==='vehicules-inventaire'){rubriqueEquipeOrigine='vehicules';return afficherAdminInventairesEquipe();}
   if(target==='heures')return ouvrirRubriqueEquipe('heures');
@@ -24355,6 +23807,7 @@ async function actualiserPointNotifications(){
  // Une lecture plus récente ou un changement de compte invalide une réponse tardive.
  const sequence=(window.__cisPointNotificationsSequence||0)+1;window.__cisPointNotificationsSequence=sequence;
  try{
+  if(window.CISVSAVSansStock) await CISVSAVSansStock.importerAlertes();
   const store=await chargerHistoriqueNotificationsModule(),rows=await store.list(uid);
   if(sequence!==window.__cisPointNotificationsSequence||String(utilisateurConnecte?.id)!==String(uid))return;
   afficherEtatPointNotifications(rows.some(r=>!r.read));
@@ -24494,7 +23947,7 @@ async function envoyerDocumentsEquipeParMail(){
 
 
 
-let suiviVSAVChargement;async function ouvrirSuiviVSAVPharma(){try{if(!window.CISSuiviVSAV){suiviVSAVChargement=suiviVSAVChargement||new Promise((resolve,reject)=>{const s=document.createElement('script');s.src='./suivi-vsav.js?v=1';s.onload=resolve;s.onerror=()=>{suiviVSAVChargement=null;reject(Error('Module Suivi VSAV indisponible.'));};document.head.appendChild(s);});await suiviVSAVChargement;}await CISSuiviVSAV.ouvrir();}catch(e){alert(e.message);}}
+let suiviVSAVChargement;async function ouvrirSuiviVSAVPharma(){try{if(!window.CISSuiviVSAV){suiviVSAVChargement=suiviVSAVChargement||new Promise((resolve,reject)=>{const s=document.createElement('script');s.src='./suivi-vsav.js?v=pharmacie-vsav-prod-20261030-v1';s.onload=resolve;s.onerror=()=>{suiviVSAVChargement=null;reject(Error('Module Suivi VSAV indisponible.'));};document.head.appendChild(s);});await suiviVSAVChargement;}await CISSuiviVSAV.ouvrir();}catch(e){alert(e.message);}}
 
 
 
