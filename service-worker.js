@@ -12,10 +12,10 @@ importScripts("./notifications-history.js?v=pharmacie-vsav-prod-20261030-v1");
  * VERSION DU CACHE
  *
  * On passe à V4 pour forcer l'iPhone et l'iPad
- * à récupérer le nouvel app.js?v=categories-retours-prod-20261031-v1.
+ * à récupérer le nouvel app.js?v=sous-coffres-prod-20261031-v1.
  */
 
-const CACHE_NAME = "cis-principale-categories-retours-prod-20261031-v1";
+const CACHE_NAME = "cis-principale-sous-coffres-prod-20261031-v1";
 
 
 /*
@@ -24,7 +24,7 @@ const CACHE_NAME = "cis-principale-categories-retours-prod-20261031-v1";
  */
 
 const FICHIERS_APPLICATION = ["./maintenance-client.js","./interface-personnelle.js","./equipe-evolution.js",
- "./inventaire-technique.js", "./inventaire-technique.css",
+ "./inventaire-technique.js?v=sous-coffres-prod-20261031-v1", "./inventaire-technique.css",
 
     "./",
 
@@ -32,14 +32,14 @@ const FICHIERS_APPLICATION = ["./maintenance-client.js","./interface-personnelle
     "./vsav-sans-stock.js?v=pharmacie-vsav-prod-20261030-v1",
     "./suivi-vsav.js?v=pharmacie-vsav-prod-20261030-v1",
 
-    "./app.js?v=categories-retours-prod-20261031-v1",
-    "./pharmacie-categories.js?v=categories-retours-prod-20261031-v1",
+    "./app.js?v=sous-coffres-prod-20261031-v1",
+    "./pharmacie-categories.js?v=sous-coffres-prod-20261031-v1",
     "./formations-commun.js",
-    "./formations.js?v=categories-retours-prod-20261031-v1",
+    "./formations.js?v=sous-coffres-prod-20261031-v1",
     "./formations.css",
 
-    "./travail-equipe.js?v=categories-retours-prod-20261031-v1",
-    "./fiche-garde.js?v=categories-retours-prod-20261031-v1",
+    "./travail-equipe.js?v=sous-coffres-prod-20261031-v1",
+    "./fiche-garde.js?v=sous-coffres-prod-20261031-v1",
     "./fiche-garde-pdf.js",
     "./fiche-garde.css",
     "./fiche-fin-garde-modele.pdf",
