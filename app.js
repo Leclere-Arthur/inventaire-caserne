@@ -22578,7 +22578,7 @@ async function vehInventaireQuitter(){
 document.addEventListener("click",async function(event){
  if(!vehInventaireSession||vehInventaireNavigationConfirmee)return;
  // Les boutons de la fenêtre de confirmation ne sont pas une navigation.
- if(event.target?.closest?.(".fenetre-cis-overlay, .fenetre-cis"))return;
+ if(event.target?.closest?.(".fenetre-cis-overlay, .fenetre-cis, [role=dialog]"))return;
  const btn=event.target?.closest?.("button,a");if(!btn||btn.closest(".veh-inventaire-contenu"))return;
  if(!document.querySelector(".veh-inventaire-contenu"))return;
  event.preventDefault();event.stopImmediatePropagation();
