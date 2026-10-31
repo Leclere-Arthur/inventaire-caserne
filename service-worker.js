@@ -12,10 +12,10 @@ importScripts("./notifications-history.js?v=pharmacie-vsav-prod-20261030-v1");
  * VERSION DU CACHE
  *
  * On passe à V4 pour forcer l'iPhone et l'iPad
- * à récupérer le nouvel app.js?v=connexion-pc-20261031-v4.
+ * à récupérer le nouvel app.js?v=peremptions-20261031-v5.
  */
 
-const CACHE_NAME = "cis-principale-connexion-pc-20261031-v4";
+const CACHE_NAME = "cis-principale-peremptions-20261031-v5";
 
 
 /*
@@ -24,7 +24,7 @@ const CACHE_NAME = "cis-principale-connexion-pc-20261031-v4";
  */
 
 const FICHIERS_APPLICATION = ["./maintenance-client.js","./interface-personnelle.js","./equipe-evolution.js",
- "./inventaire-technique.js?v=sous-coffres-prod-20261031-v1", "./inventaire-technique.css",
+ "./peremptions-controle.js?v=1", "./inventaire-technique.js?v=sous-coffres-prod-20261031-v1", "./inventaire-technique.css",
 
     "./",
 
@@ -32,7 +32,7 @@ const FICHIERS_APPLICATION = ["./maintenance-client.js","./interface-personnelle
     "./vsav-sans-stock.js?v=pharmacie-vsav-prod-20261030-v1",
     "./suivi-vsav.js?v=pharmacie-vsav-prod-20261030-v1",
 
-    "./app.js?v=connexion-pc-20261031-v4",
+    "./app.js?v=peremptions-20261031-v5",
     "./pharmacie-categories.js?v=sous-coffres-prod-20261031-v1",
     "./formations-commun.js",
     "./formations.js?v=sous-coffres-prod-20261031-v1",

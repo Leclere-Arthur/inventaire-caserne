@@ -1042,10 +1042,10 @@ let minuteurVerificationMiseAJour =
 /*
  * VERSION DU FICHIER APP.JS
  * Cette valeur change à chaque nouvelle version que je te prépare.
- * Elle permet de détecter une nouvelle version même si seul app.js?v=connexion-pc-20261031-v4 change.
+ * Elle permet de détecter une nouvelle version même si seul app.js?v=peremptions-20261031-v5 change.
  */
 const VERSION_APPLICATION_JS =
-    "2026-10-31-connexion-pc-v4";
+    "2026-10-31-peremptions-v5";
 
 async function verifierNouvelleVersionAppJs() {
 
@@ -1053,7 +1053,7 @@ async function verifierNouvelleVersionAppJs() {
 
         const url =
             new URL(
-                "./app.js?v=connexion-pc-20261031-v4",
+                "./app.js?v=peremptions-20261031-v5",
                 window.location.href
             );
 
@@ -1101,7 +1101,7 @@ async function verifierNouvelleVersionAppJs() {
     } catch (erreur) {
 
         console.warn(
-            "Vérification directe app.js?v=connexion-pc-20261031-v4 impossible :",
+            "Vérification directe app.js?v=peremptions-20261031-v5 impossible :",
             erreur
         );
 
@@ -1426,9 +1426,9 @@ async function verifierMiseAJourApplication(
     try {
 
         /*
-         * Contrôle direct de app.js?v=connexion-pc-20261031-v4 sur le réseau.
+         * Contrôle direct de app.js?v=peremptions-20261031-v5 sur le réseau.
          * Contrairement au Service Worker, ceci détecte aussi une mise à jour
-         * lorsque seul app.js?v=connexion-pc-20261031-v4 a changé sur GitHub.
+         * lorsque seul app.js?v=peremptions-20261031-v5 a changé sur GitHub.
          */
         const nouvelleVersionAppJs =
             await verifierNouvelleVersionAppJs();
@@ -1621,7 +1621,7 @@ async function appliquerMiseAJourApplication() {
     try {
 
         /*
-         * Si seul app.js?v=connexion-pc-20261031-v4 a changé, il n'y a pas forcément de nouveau
+         * Si seul app.js?v=peremptions-20261031-v5 a changé, il n'y a pas forcément de nouveau
          * Service Worker en attente. On vide alors les caches de l'application
          * et on recharge immédiatement la version publiée sur GitHub.
          */
@@ -1882,10 +1882,10 @@ async function initialiserSystemeMiseAJourApplication() {
     initialiserStyleMiseAJourApplication();
 
     /*
-     * IMPORTANT : la vérification directe de app.js?v=connexion-pc-20261031-v4 fonctionne même
+     * IMPORTANT : la vérification directe de app.js?v=peremptions-20261031-v5 fonctionne même
      * si le Service Worker n'est pas disponible ou rencontre un problème.
      * C'est ce qui permet d'afficher le bouton de mise à jour après une
-     * simple modification de app.js?v=connexion-pc-20261031-v4 sur GitHub.
+     * simple modification de app.js?v=peremptions-20261031-v5 sur GitHub.
      */
     async function verifierMaintenant() {
 
@@ -1971,7 +1971,7 @@ async function initialiserSystemeMiseAJourApplication() {
 
     /*
      * Le Service Worker reste un deuxième moyen de détecter une mise à jour,
-     * mais son absence ne bloque plus la vérification directe de app.js?v=connexion-pc-20261031-v4.
+     * mais son absence ne bloque plus la vérification directe de app.js?v=peremptions-20261031-v5.
      */
     if (!("serviceWorker" in navigator)) {
         return;
@@ -22615,7 +22615,7 @@ async function vehInventaireCommencer(id){
   const charger=async()=>{
    const z=await sb.from('cis_vehicule_zones').select('id,vehicule_id,nom,cote,ordre,actif,photo_path,parent_id').eq('vehicule_id',id).eq('actif',true).order('ordre').abortSignal(ac.signal);if(z.error)throw z.error;
    if(!active())return null;const liste=z.data||[],zones=liste.filter(z=>!z.parent_id||liste.some(p=>p.id===z.parent_id&&!p.parent_id));if(!zones.length)return {zones,materiels:[],anomalies:[],personnels:[]};
-   const m=await sb.from('cis_vehicule_materiels').select('id,zone_id,nom,quantite,etat_reference,notes,ordre,photo_path').in('zone_id',zones.map(x=>x.id)).order('ordre').abortSignal(ac.signal);if(m.error)throw m.error;
+   const m=await sb.from('cis_vehicule_materiels').select('id,zone_id,nom,quantite,etat_reference,notes,ordre,photo_path,dates_peremption').in('zone_id',zones.map(x=>x.id)).order('ordre').abortSignal(ac.signal);if(m.error)throw m.error;
    if(!active())return null;
    const signalements=await sb.rpc('inventaires_anomalies',{p_vehicule:id}).abortSignal(ac.signal);if(signalements.error)throw signalements.error;
    if(!active())return null;
@@ -22633,9 +22633,15 @@ async function vehInventaireCommencer(id){
   vehInventaireAfficher(`<div data-veh-inventaire-erreur="${vehInventaireHTML(id)}"><button class="retour-button veh-retour" onclick="vehInventaireOuvrirVehicule('${id}')">← Retour</button><h1>${vehInventaireHTML(v.nom)}</h1><p role="status">${vehInventaireHTML(delaiDepasse?'Le serveur ne répond pas. Vérifie la connexion puis réessaie.':e.message||'Chargement impossible.')}</p><button type="button" class="veh-action" onclick="vehInventaireCommencer('${id}')">Réessayer</button></div>`);
  }finally{clearTimeout(timer);observation.disconnect();if(vehInventaireChargementActif===ac)vehInventaireChargementActif=null;}
 }
+function vehDatesAControler(m){return (m.dates_peremption||[]).map((date,i)=>({date,unite:i+1})).filter(x=>x.date);}
+function vehDateValide(date){return /^\d{4}-\d{2}-\d{2}$/.test(date)&&Number.isFinite(Date.parse(date+'T00:00:00Z'))&&new Date(date+'T00:00:00Z').toISOString().slice(0,10)===date;}
+function vehPeremptionsHTML(m,valeur){const controles=valeur.peremptions_controle||[];return vehDatesAControler(m).map(x=>{const c=controles.find(c=>c.unite===x.unite),date=c?.date||x.date;return `<fieldset data-peremption-unite="${x.unite}" style="margin:12px 0;padding:12px;border:1px solid #bdc9d3;border-radius:10px"><legend>Péremption — unité ${x.unite}</legend><strong>${vehInventaireHTML(x.date.split('-').reverse().join('/'))}</strong><div style="display:flex;gap:12px;flex-wrap:wrap;margin:10px 0"><label><input type="radio" name="peremption-${m.id}-${x.unite}" value="confirmer" ${c?.action==='confirmer'?'checked':''} onchange="vehPeremptionChoix(this)"> Confirmer</label><label><input type="radio" name="peremption-${m.id}-${x.unite}" value="modifier" ${c?.action==='modifier'?'checked':''} onchange="vehPeremptionChoix(this)"> Modifier</label></div><label data-peremption-nouvelle ${c?.action==='modifier'?'':'hidden'}>Nouvelle date<input type="date" value="${vehInventaireHTML(date)}" data-peremption-date style="display:block;padding:10px;font:inherit;font-size:16px;max-width:100%;box-sizing:border-box"></label><small data-peremption-erreur role="status"></small></fieldset>`}).join('');}
+function vehPeremptionChoix(input){const f=input.closest('[data-peremption-unite]');f.querySelector('[data-peremption-nouvelle]').hidden=input.value!=='modifier';f.querySelector('[data-peremption-erreur]').textContent='';}
+function vehLirePeremptions(m,carte){return vehDatesAControler(m).map(x=>{const f=carte.querySelector(`[data-peremption-unite="${x.unite}"]`),action=f?.querySelector('input[type="radio"]:checked')?.value,date=action==='confirmer'?x.date:f?.querySelector('[data-peremption-date]')?.value;if(!action||!vehDateValide(date||'')){if(f)f.querySelector('[data-peremption-erreur]').textContent='Confirme ou modifie cette date.';throw Error(m.nom+' — unité '+x.unite+' : confirme ou modifie la date de péremption.');}return {unite:x.unite,initiale:x.date,date,action};});}
+function vehPeremptionsCompletes(m,c){return vehDatesAControler(m).every(x=>(c?.peremptions_controle||[]).some(p=>p.unite===x.unite&&p.initiale===x.date&&['confirmer','modifier'].includes(p.action)&&vehDateValide(p.date)));}
 function vehInventaireSousZones(id){return vehInventaireZones.filter(z=>z.parent_id===id);}
 function vehInventaireCheminZone(z){const p=vehInventaireZones.find(p=>p.id===z.parent_id);return p?p.nom+' › '+z.nom:z.nom;}
-function vehInventaireZoneControleComplet(id){const ms=vehInventaireMateriels.filter(m=>m.zone_id===id),c=vehInventaireSession?.controles[id];return ms.length?!!c&&ms.every(m=>['bon','a_surveiller','hs'].includes(c[m.id]?.etat)):vehInventaireSousZones(id).length>0||!!c;}
+function vehInventaireZoneControleComplet(id){const ms=vehInventaireMateriels.filter(m=>m.zone_id===id),c=vehInventaireSession?.controles[id];return ms.length?!!c&&ms.every(m=>['bon','a_surveiller','hs'].includes(c[m.id]?.etat)&&vehPeremptionsCompletes(m,c[m.id])):vehInventaireSousZones(id).length>0||!!c;}
 function vehInventaireZoneComplete(id){return vehInventaireZoneControleComplet(id)&&vehInventaireSousZones(id).every(z=>vehInventaireZoneControleComplet(z.id));}
 function vehInventaireZonesAControler(){return vehInventaireZones.filter(z=>vehInventaireMateriels.some(m=>m.zone_id===z.id)||!vehInventaireSousZones(z.id).length);}
 function vehInventaireCarteZone(z){const enfants=vehInventaireSousZones(z.id),finie=vehInventaireZoneComplete(z.id),commence=vehInventaireSession?.controles[z.id]||enfants.some(e=>vehInventaireSession?.controles[e.id]);return `<div class="veh-zone ${finie?'terminee':''}" style="cursor:default"><div class="veh-zone-identite">${vehPhotoMiniature(z.photo_path,'zone')}<button type="button" class="veh-zone-ouvrir" style="border:0;background:transparent;color:inherit;font:inherit;font-weight:inherit;text-align:left;cursor:pointer;flex:1;padding:4px" onclick="vehInventaireOuvrirZone('${z.id}')">${finie?'✓':'●'} ${vehInventaireHTML(z.nom)}${enfants.length?`<small style="display:block">${enfants.length} sous-catégorie${enfants.length>1?'s':''}</small>`:''}</button></div><small>${finie?'Enregistré':commence?'Incomplet':'À contrôler'}</small></div>`;}
@@ -22675,17 +22681,18 @@ function vehInventaireOuvrirZone(id){
  const session=vehInventaireSession,z=vehInventaireZones.find(x=>x.id===id);if(!session||!z)return;
  const materiels=vehInventaireMateriels.filter(m=>m.zone_id===id);
  const precedent=session.controles[id]||{},enfants=vehInventaireSousZones(id),parent=vehInventaireZones.find(p=>p.id===z.parent_id);
- vehInventaireAfficher(`<div class="veh-inventaire-contenu" data-veh-zone="${z.id}"><button class="retour-button veh-retour" onclick="${parent?`vehInventaireOuvrirZone('${parent.id}')`:'vehInventaireAfficherZones()'}">← Retour</button><h1>${vehInventaireHTML(z.nom)}</h1><p class="veh-muted">${vehInventaireHTML(session.vehicule.nom+' › '+vehInventaireCheminZone(z))}</p>${enfants.length?`<section class="veh-card"><h2>Sous-catégories</h2>${enfants.map(vehInventaireCarteZone).join('')}</section>`:''}${vehPhotoMiniature(z.photo_path,"detail")}<p class="veh-muted">Choisis l'état de chaque matériel. Appuie sur son nom pour ajouter une observation ou modifier la quantité constatée.</p><div id="veh-materiels">${materiels.length?materiels.map(m=>{const alerte=(session.anomalies||[]).find(a=>a.materiel_id===m.id);const valeur=precedent[m.id]||{},q=valeur.quantite_constatee??quantiteVSAVDisponible(m,session),ecart=Number(q)!==Number(m.quantite);return `<div class="veh-materiel-ligne" data-materiel="${m.id}" data-quantite-attendue="${Number(m.quantite)}"><div class="veh-materiel-haut"><button type="button" class="veh-materiel-ouvrir" aria-expanded="false" onclick="vehInventaireBasculerMateriel('${m.id}')"><strong>${vehInventaireHTML(m.nom)}</strong><small>Prévu : <b>${Number(m.quantite)}</b> ${ecart?`· <span class="veh-quantite-erreur">${Number(q)<Number(m.quantite)?'Matériel manquant':'Constaté'} : ${Number(q)}</span>`:''}</small></button><span class="veh-materiel-chevron" aria-hidden="true">⌄</span></div>${alerte?`<p role="note" style="padding:12px;border-radius:9px;background:${alerte.etat==='hs'?'#ffe1e1':'#fff0b3'};color:#442b25;border:2px solid ${alerte.etat==='hs'?'#bc2525':'#bc8d13'}"><strong>${alerte.source==='utilisation_pharmacie'?'Matériel manquant — réarmement en attente'+(alerte.etat==='hs'?' · HS':''):'Dernier signalement : '+(alerte.etat==='hs'?'HS':'À surveiller')}</strong>${alerte.observation?'<br>'+vehInventaireHTML(alerte.observation):''}<br><small>${new Date(alerte.date).toLocaleString('fr-FR')}</small></p>`:''}<div class="veh-etat">${[["bon","Bon"],["a_surveiller","À surveiller"],["hs","HS"]].map(([val,lib])=>`<label><input type="radio" name="etat-${m.id}" value="${val}" ${valeur.etat===val?"checked":""}> ${lib}</label>`).join("")}</div><div class="veh-materiel-details">${vehPhotoMiniature(m.photo_path,"materiel")}<label class="veh-quantite-saisie"><strong>Quantité constatée</strong><input type="number" min="0" step="1" inputmode="numeric" value="${Number(q)}" oninput="vehInventaireActualiserQuantite(this)" aria-label="Quantité constatée de ${vehInventaireHTML(m.nom)}"></label><p class="veh-quantite-statut ${ecart?'veh-quantite-erreur':''}">${ecart?`${Number(q)<Number(m.quantite)?'Matériel manquant':'Écart de quantité'} : ${Number(q)} / ${Number(m.quantite)}`:'Quantité conforme'}</p><label>Observation<textarea class="veh-note" rows="2" placeholder="Observation (facultatif)">${vehInventaireHTML(valeur.observation||"")}</textarea></label></div></div>`}).join(""):(enfants.length?'':'<p>Aucun matériel configuré pour cette zone.</p>')}</div><button class="veh-action" onclick="vehInventaireEnregistrerZone('${id}')">Enregistrer ${parent?'cette sous-catégorie':'cette catégorie'}</button></div>`);
+ vehInventaireAfficher(`<div class="veh-inventaire-contenu" data-veh-zone="${z.id}"><button class="retour-button veh-retour" onclick="${parent?`vehInventaireOuvrirZone('${parent.id}')`:'vehInventaireAfficherZones()'}">← Retour</button><h1>${vehInventaireHTML(z.nom)}</h1><p class="veh-muted">${vehInventaireHTML(session.vehicule.nom+' › '+vehInventaireCheminZone(z))}</p>${enfants.length?`<section class="veh-card"><h2>Sous-catégories</h2>${enfants.map(vehInventaireCarteZone).join('')}</section>`:''}${vehPhotoMiniature(z.photo_path,"detail")}<p class="veh-muted">Choisis l'état de chaque matériel. Appuie sur son nom pour ajouter une observation ou modifier la quantité constatée.</p><div id="veh-materiels">${materiels.length?materiels.map(m=>{const alerte=(session.anomalies||[]).find(a=>a.materiel_id===m.id);const valeur=precedent[m.id]||{},q=valeur.quantite_constatee??quantiteVSAVDisponible(m,session),ecart=Number(q)!==Number(m.quantite);return `<div class="veh-materiel-ligne" data-materiel="${m.id}" data-quantite-attendue="${Number(m.quantite)}"><div class="veh-materiel-haut"><button type="button" class="veh-materiel-ouvrir" aria-expanded="false" onclick="vehInventaireBasculerMateriel('${m.id}')"><strong>${vehInventaireHTML(m.nom)}</strong><small>Prévu : <b>${Number(m.quantite)}</b> ${ecart?`· <span class="veh-quantite-erreur">${Number(q)<Number(m.quantite)?'Matériel manquant':'Constaté'} : ${Number(q)}</span>`:''}</small></button><span class="veh-materiel-chevron" aria-hidden="true">⌄</span></div>${alerte?`<p role="note" style="padding:12px;border-radius:9px;background:${alerte.etat==='hs'?'#ffe1e1':'#fff0b3'};color:#442b25;border:2px solid ${alerte.etat==='hs'?'#bc2525':'#bc8d13'}"><strong>${alerte.source==='utilisation_pharmacie'?'Matériel manquant — réarmement en attente'+(alerte.etat==='hs'?' · HS':''):'Dernier signalement : '+(alerte.etat==='hs'?'HS':'À surveiller')}</strong>${alerte.observation?'<br>'+vehInventaireHTML(alerte.observation):''}<br><small>${new Date(alerte.date).toLocaleString('fr-FR')}</small></p>`:''}<div class="veh-etat">${[["bon","Bon"],["a_surveiller","À surveiller"],["hs","HS"]].map(([val,lib])=>`<label><input type="radio" name="etat-${m.id}" value="${val}" ${valeur.etat===val?"checked":""}> ${lib}</label>`).join("")}</div>${vehPeremptionsHTML(m,valeur)}<div class="veh-materiel-details">${vehPhotoMiniature(m.photo_path,"materiel")}<label class="veh-quantite-saisie"><strong>Quantité constatée</strong><input type="number" min="0" step="1" inputmode="numeric" value="${Number(q)}" oninput="vehInventaireActualiserQuantite(this)" aria-label="Quantité constatée de ${vehInventaireHTML(m.nom)}"></label><p class="veh-quantite-statut ${ecart?'veh-quantite-erreur':''}">${ecart?`${Number(q)<Number(m.quantite)?'Matériel manquant':'Écart de quantité'} : ${Number(q)} / ${Number(m.quantite)}`:'Quantité conforme'}</p><label>Observation<textarea class="veh-note" rows="2" placeholder="Observation (facultatif)">${vehInventaireHTML(valeur.observation||"")}</textarea></label></div></div>`}).join(""):(enfants.length?'':'<p>Aucun matériel configuré pour cette zone.</p>')}</div><button class="veh-action" onclick="vehInventaireEnregistrerZone('${id}')">Enregistrer ${parent?'cette sous-catégorie':'cette catégorie'}</button></div>`);
 }
 function vehInventaireEnregistrerZone(id){
  const session=vehInventaireSession;if(!session)return;
  const controles={};for(const m of vehInventaireMateriels.filter(x=>x.zone_id===id)){
-  const card=document.querySelector(`[data-materiel="${m.id}"]`),etat=card?.querySelector('input[type="radio"]:checked')?.value;
+  const card=document.querySelector(`[data-materiel="${m.id}"]`),etat=card?.querySelector('.veh-etat input[type="radio"]:checked')?.value;
   // Un contrôle non renseigné reste explicitement incomplet dans le rapport.
   const input=card.querySelector('input[type="number"]');
   const quantite=input.value.trim()===''?NaN:Number(input.value);
   if(!Number.isInteger(quantite)||quantite<0){card.classList.add('ouvert');input.focus();alert('Indique une quantité constatée valide pour '+m.nom+'.');return;}
-  controles[m.id]={etat:etat||null,observation:card.querySelector('textarea')?.value?.trim()||"",quantite_constatee:quantite};
+  let peremptions;try{peremptions=vehLirePeremptions(m,card);}catch(e){alert(e.message);return;}
+  controles[m.id]={peremptions_controle:peremptions,etat:etat||null,observation:card.querySelector('textarea')?.value?.trim()||"",quantite_constatee:quantite};
  }
  session.controles[id]=controles;session.revisionControles=(session.revisionControles||0)+1;
  const zone=vehInventaireZones.find(z=>z.id===id);
@@ -22702,12 +22709,13 @@ async function vehInventaireTerminer(){
 }
 async function vehInventaireTerminerInterne(){
  const session=vehInventaireSession;if(!session)return;
+ const nonConfirme=vehInventaireMateriels.find(m=>!vehPeremptionsCompletes(m,session.controles[m.zone_id]?.[m.id]));if(nonConfirme){vehInventaireOuvrirZone(nonConfirme.zone_id);alert('Confirme ou modifie les dates de péremption avant de terminer l’inventaire.');return;}
  const manquants=CISTechnique.manquants(session);
  const avertissement=manquants.length?"Cet inventaire n’est pas entièrement complété :\n\n"+manquants.join("\n")+"\n\nEnregistrer quand même ? Les contrôles manquants resteront visibles.":"Confirmer l’enregistrement définitif de l’inventaire ?";
  if(!(await afficherConfirmationCIS(avertissement)))return;
  const btn=document.querySelector(".veh-inventaire-contenu > .veh-action");if(btn){btn.disabled=true;btn.textContent="Enregistrement…";}
  try{
-  const sb=obtenirClientSupabase();const payload={vehicule_id:session.vehicule.id,vehicule_nom:session.vehicule.nom,controle_par:profilUtilisateurConnecte?.id,personnes_presentes:personnesAvecAuteur(session.participants),details:vehInventaireZones.map(z=>({zone_id:z.id,parent_zone_id:z.parent_id||null,zone_nom_propre:z.nom,zone_nom:vehInventaireCheminZone(z),cote:z.cote,materiels:vehInventaireMateriels.filter(m=>m.zone_id===z.id).map(m=>({materiel_id:m.id,nom:m.nom,quantite:m.quantite,quantite_constatee:session.controles[z.id]?.[m.id]?.quantite_constatee??quantiteVSAVDisponible(m,session),etat_reference:m.etat_reference,etat:session.controles[z.id]?.[m.id]?.etat||null,observation:session.controles[z.id]?.[m.id]?.observation||""}))}))};
+  const sb=obtenirClientSupabase();const payload={vehicule_id:session.vehicule.id,vehicule_nom:session.vehicule.nom,controle_par:profilUtilisateurConnecte?.id,personnes_presentes:personnesAvecAuteur(session.participants),details:vehInventaireZones.map(z=>({zone_id:z.id,parent_zone_id:z.parent_id||null,zone_nom_propre:z.nom,zone_nom:vehInventaireCheminZone(z),cote:z.cote,materiels:vehInventaireMateriels.filter(m=>m.zone_id===z.id).map(m=>({controle_peremptions_version:1,dates_peremption_reference:m.dates_peremption||[],peremptions_controle:session.controles[z.id]?.[m.id]?.peremptions_controle||[],materiel_id:m.id,nom:m.nom,quantite:m.quantite,quantite_constatee:session.controles[z.id]?.[m.id]?.quantite_constatee??quantiteVSAVDisponible(m,session),etat_reference:m.etat_reference,etat:session.controles[z.id]?.[m.id]?.etat||null,observation:[session.controles[z.id]?.[m.id]?.observation||"",...(session.controles[z.id]?.[m.id]?.peremptions_controle||[]).map(p=>"Péremption unité "+p.unite+" : "+p.date.split("-").reverse().join("/")+(p.date===p.initiale?" (confirmée)":" (modifiée, avant : "+p.initiale.split("-").reverse().join("/")+")"))].filter(Boolean).join("\n")}))}))};
   payload.details.push(CISTechnique.zone(session.technique||{}),CISTechnique.zoneAnnexe(session.annexe||{}));
   const {error}=await sb.from("cis_inventaires_vehicules").insert(payload);if(error)throw error;
   vehInventaireSession=null;
@@ -23801,6 +23809,7 @@ async function remplirHistoriqueNotifications(){
  const zone=document.getElementById('notifications-liste'),uid=utilisateurConnecte?.id;if(!zone||!uid)return;
  try{
   if(window.CISVSAVSansStock) await CISVSAVSansStock.importerAlertes();
+  if(window.CISPeremptions) await CISPeremptions.importer();
   const store=await chargerHistoriqueNotificationsModule(),rows=await store.list(uid);
   if(!zone.isConnected||String(utilisateurConnecte?.id)!==String(uid))return;
   zone.innerHTML=rows.length?rows.map(r=>`<button type="button" class="notif-ligne ${r.read?'':'non-lue'} ${notificationEstRuptureStock(r)?'rupture-stock':''}" data-notification-id="${echapperHTML(r.id)}"><span class="notif-contenu"><strong>${echapperHTML(r.title)}</strong>${r.body?`<p>${echapperHTML(r.body)}</p>`:''}<time datetime="${echapperHTML(r.receivedAt)}">${echapperHTML(new Date(r.receivedAt).toLocaleString('fr-FR',{timeZone:'Europe/Paris',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}))}</time></span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></button>`).join(''):'<p class="notif-vide">Aucune notification reçue depuis l’activation de cet historique.</p>';
