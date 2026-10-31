@@ -797,7 +797,7 @@ function pageNavigationTransitoire(app=document.getElementById('app')){
  const main=app.querySelector('main');return !!main&&!main.querySelector('button,a,input,select,textarea')&&[...main.querySelectorAll('p,[role="status"]')].some(n=>/^Chargement[ ….]/i.test(n.textContent.trim()));
 }
 function obtenirSignaturePageApplication() {
-    const app=document.getElementById('app');if(!app||pageNavigationTransitoire(app))return '';
+    const app=document.getElementById('app');if(!app||!profilUtilisateurConnecte||document.body.classList.contains('mode-connexion')||pageNavigationTransitoire(app))return '';
     const module=contexteModuleNavigation(app);if(module)return module.cle;
     const main=app.querySelector('main'),titre=String(app.querySelector('h1,h2')?.textContent||'').trim();
     if(!titre||/^(chargement|connexion)[.… ]*$/i.test(titre))return '';
@@ -807,7 +807,7 @@ function capturerEtatPageApplication() {
     const app=document.getElementById('app');if(!app)return null;
     const module=contexteModuleNavigation(app);
     return {html:app.innerHTML,noeuds:[...app.childNodes],scrollX:window.scrollX||0,scrollY:window.scrollY||0,
-        bodyClassName:document.body.className||'',signature:pageNavigationTransitoire(app)?'':module?.cle||obtenirSignaturePageApplication(),transitoire:pageNavigationTransitoire(app),
+        bodyClassName:document.body.className||'',signature:(!profilUtilisateurConnecte||document.body.classList.contains('mode-connexion')||pageNavigationTransitoire(app))?'':module?.cle||obtenirSignaturePageApplication(),transitoire:pageNavigationTransitoire(app),
         proprietaire:String(utilisateurConnecte?.id||''),restaurer:module?.restaurer||null,
         actionLecture:null,
         chargement:[...app.querySelectorAll('[role="status"],.garde-planning-attente,.veh-muted,h1,h2,p')].some(n=>/^(chargement|vérification|lecture des réalisations)/i.test(n.textContent.trim()))};
@@ -1042,10 +1042,10 @@ let minuteurVerificationMiseAJour =
 /*
  * VERSION DU FICHIER APP.JS
  * Cette valeur change à chaque nouvelle version que je te prépare.
- * Elle permet de détecter une nouvelle version même si seul app.js?v=categories-retours-prod-20261031-v1 change.
+ * Elle permet de détecter une nouvelle version même si seul app.js?v=connexion-pc-20261031-v4 change.
  */
 const VERSION_APPLICATION_JS =
-    "2026-10-21-suppression-menage-v79";
+    "2026-10-31-connexion-pc-v4";
 
 async function verifierNouvelleVersionAppJs() {
 
@@ -1053,7 +1053,7 @@ async function verifierNouvelleVersionAppJs() {
 
         const url =
             new URL(
-                "./app.js?v=categories-retours-prod-20261031-v1",
+                "./app.js?v=connexion-pc-20261031-v4",
                 window.location.href
             );
 
@@ -1101,7 +1101,7 @@ async function verifierNouvelleVersionAppJs() {
     } catch (erreur) {
 
         console.warn(
-            "Vérification directe app.js?v=categories-retours-prod-20261031-v1 impossible :",
+            "Vérification directe app.js?v=connexion-pc-20261031-v4 impossible :",
             erreur
         );
 
@@ -1426,9 +1426,9 @@ async function verifierMiseAJourApplication(
     try {
 
         /*
-         * Contrôle direct de app.js?v=categories-retours-prod-20261031-v1 sur le réseau.
+         * Contrôle direct de app.js?v=connexion-pc-20261031-v4 sur le réseau.
          * Contrairement au Service Worker, ceci détecte aussi une mise à jour
-         * lorsque seul app.js?v=categories-retours-prod-20261031-v1 a changé sur GitHub.
+         * lorsque seul app.js?v=connexion-pc-20261031-v4 a changé sur GitHub.
          */
         const nouvelleVersionAppJs =
             await verifierNouvelleVersionAppJs();
@@ -1621,7 +1621,7 @@ async function appliquerMiseAJourApplication() {
     try {
 
         /*
-         * Si seul app.js?v=categories-retours-prod-20261031-v1 a changé, il n'y a pas forcément de nouveau
+         * Si seul app.js?v=connexion-pc-20261031-v4 a changé, il n'y a pas forcément de nouveau
          * Service Worker en attente. On vide alors les caches de l'application
          * et on recharge immédiatement la version publiée sur GitHub.
          */
@@ -1882,10 +1882,10 @@ async function initialiserSystemeMiseAJourApplication() {
     initialiserStyleMiseAJourApplication();
 
     /*
-     * IMPORTANT : la vérification directe de app.js?v=categories-retours-prod-20261031-v1 fonctionne même
+     * IMPORTANT : la vérification directe de app.js?v=connexion-pc-20261031-v4 fonctionne même
      * si le Service Worker n'est pas disponible ou rencontre un problème.
      * C'est ce qui permet d'afficher le bouton de mise à jour après une
-     * simple modification de app.js?v=categories-retours-prod-20261031-v1 sur GitHub.
+     * simple modification de app.js?v=connexion-pc-20261031-v4 sur GitHub.
      */
     async function verifierMaintenant() {
 
@@ -1971,7 +1971,7 @@ async function initialiserSystemeMiseAJourApplication() {
 
     /*
      * Le Service Worker reste un deuxième moyen de détecter une mise à jour,
-     * mais son absence ne bloque plus la vérification directe de app.js?v=categories-retours-prod-20261031-v1.
+     * mais son absence ne bloque plus la vérification directe de app.js?v=connexion-pc-20261031-v4.
      */
     if (!("serviceWorker" in navigator)) {
         return;
@@ -2248,6 +2248,13 @@ function verifierPermissionOuRetourAccueil(
     permission,
     message
 ) {
+
+    // Une ancienne navigation ne doit ni ouvrir une rubrique ni remplacer
+    // le formulaire tant que l'authentification n'est pas terminée.
+    if (!utilisateurConnecte?.id || !profilUtilisateurConnecte ||
+        document.body.classList.contains("mode-connexion")) {
+        return false;
+    }
 
     if (
         utilisateurAPermission(
@@ -3055,6 +3062,13 @@ function initialiserStyleConnexion() {
 }
 
 function afficherConnexion() {
+    // Invalider les retours de l'ancien écran / compte avant la connexion.
+    ++generationRetourNavigation;
+    historiqueNavigationApplication.length=0;
+    etatNavigationCourante=null;
+    actionOuvertureNavigation=null;
+    restaurationNavigationEnCours=false;
+    proprietaireHistoriqueNavigation='';
 
     initialiserStyleConnexion();
 
