@@ -12,10 +12,10 @@ importScripts("./notifications-history.js?v=pharmacie-vsav-prod-20261030-v1");
  * VERSION DU CACHE
  *
  * On passe à V4 pour forcer l'iPhone et l'iPad
- * à récupérer le nouvel app.js?v=sous-coffres-prod-20261031-v1.
+ * à récupérer le nouvel app.js?v=retour-sous-coffres-20261031-v2.
  */
 
-const CACHE_NAME = "cis-principale-sous-coffres-prod-20261031-v1";
+const CACHE_NAME = "cis-principale-retour-sous-coffres-20261031-v2";
 
 
 /*
@@ -32,7 +32,7 @@ const FICHIERS_APPLICATION = ["./maintenance-client.js","./interface-personnelle
     "./vsav-sans-stock.js?v=pharmacie-vsav-prod-20261030-v1",
     "./suivi-vsav.js?v=pharmacie-vsav-prod-20261030-v1",
 
-    "./app.js?v=sous-coffres-prod-20261031-v1",
+    "./app.js?v=retour-sous-coffres-20261031-v2",
     "./pharmacie-categories.js?v=sous-coffres-prod-20261031-v1",
     "./formations-commun.js",
     "./formations.js?v=sous-coffres-prod-20261031-v1",

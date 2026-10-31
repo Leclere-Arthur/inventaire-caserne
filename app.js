@@ -776,8 +776,14 @@ function contexteModuleNavigation(app) {
         let session=null;try{session=vehInventaireSession;}catch(_){}
         const titre=String(app.querySelector('h1,h2')?.textContent||'').trim();
         const vue=app.querySelector('#veh-personnel')?'zones':app.querySelector('#veh-materiels')?'coffre':app.querySelector('#tech-jauge')?'technique':'annexe';
-        return {cle:'inventaire:'+vue+':'+(session?.vehicule?.id||'')+':'+titre+':'+(app.querySelector('[data-veh-zone]')?.dataset.vehZone||''),restaurer:()=>{
+        const zoneId=app.querySelector('[data-veh-zone]')?.dataset.vehZone||'';
+        const revision=session?.revisionControles||0;
+        return {cle:'inventaire:'+vue+':'+(session?.vehicule?.id||'')+':'+titre+':'+zoneId,restaurer:()=>{
             if(!session||vehInventaireSession!==session)return afficherInventaireVehiculeEspaceGarde();
+            // Les anciens nœuds d'historique peuvent précéder un enregistrement.
+            // Recalculer la progression et reprendre les contrôles validés en mémoire.
+            if(vue==='zones')return vehInventaireAfficherZones();
+            if(vue==='coffre'&&zoneId&&(session.revisionControles||0)!==revision)return vehInventaireOuvrirZone(zoneId);
             if(document.querySelector('.veh-photo-miniature'))void vehInventaireChargerPhotos();
         }};
     }
@@ -22667,7 +22673,7 @@ function vehInventaireEnregistrerZone(id){
   if(!Number.isInteger(quantite)||quantite<0){card.classList.add('ouvert');input.focus();alert('Indique une quantité constatée valide pour '+m.nom+'.');return;}
   controles[m.id]={etat:etat||null,observation:card.querySelector('textarea')?.value?.trim()||"",quantite_constatee:quantite};
  }
- session.controles[id]=controles;const z=vehInventaireZones.find(z=>z.id===id);if(z?.parent_id)vehInventaireOuvrirZone(z.parent_id);else vehInventaireAfficherZones();
+ session.controles[id]=controles;session.revisionControles=(session.revisionControles||0)+1;vehInventaireAfficherZones();
 }
 let vehInventaireEnregistrementEnCours=false;
 async function vehInventaireTerminer(){
