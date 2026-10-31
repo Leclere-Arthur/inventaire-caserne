@@ -725,7 +725,7 @@ const DOMAINE_EMAIL_INTERNE =
     "inventaire-caserne.local";
 
 const VERSION_APPLICATION =
-    "2.9.70";
+    "2026-11-01-principale-datamatrix-rotations-v2";
 
 const CLE_PROFIL_UTILISATEUR_CACHE =
     "profil_utilisateur_connecte_v1";
@@ -1045,7 +1045,7 @@ let minuteurVerificationMiseAJour =
  * Elle permet de détecter une nouvelle version même si seul app.js?v=peremptions-20261031-v5 change.
  */
 const VERSION_APPLICATION_JS =
-    "2026-10-31-peremptions-v5";
+    "2026-11-01-principale-datamatrix-rotations-v2";
 
 async function verifierNouvelleVersionAppJs() {
 
@@ -22578,7 +22578,7 @@ async function vehInventaireQuitter(){
 document.addEventListener("click",async function(event){
  if(!vehInventaireSession||vehInventaireNavigationConfirmee)return;
  // Les boutons de la fenêtre de confirmation ne sont pas une navigation.
- if(event.target?.closest?.(".fenetre-cis-overlay, .fenetre-cis, [role=dialog]"))return;
+ if(event.target?.closest?.(".fenetre-cis-overlay, .fenetre-cis"))return;
  const btn=event.target?.closest?.("button,a");if(!btn||btn.closest(".veh-inventaire-contenu"))return;
  if(!document.querySelector(".veh-inventaire-contenu"))return;
  event.preventDefault();event.stopImmediatePropagation();
