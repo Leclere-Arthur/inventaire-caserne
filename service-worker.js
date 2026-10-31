@@ -12,10 +12,10 @@ importScripts("./notifications-history.js?v=pharmacie-vsav-prod-20261030-v1");
  * VERSION DU CACHE
  *
  * On passe à V4 pour forcer l'iPhone et l'iPad
- * à récupérer le nouvel app.js.
+ * à récupérer le nouvel app.js?v=categories-retours-prod-20261031-v1.
  */
 
-const CACHE_NAME = "cis-principale-pharmacie-vsav-20261030-v1";
+const CACHE_NAME = "cis-principale-categories-retours-prod-20261031-v1";
 
 
 /*
@@ -32,14 +32,14 @@ const FICHIERS_APPLICATION = ["./maintenance-client.js","./interface-personnelle
     "./vsav-sans-stock.js?v=pharmacie-vsav-prod-20261030-v1",
     "./suivi-vsav.js?v=pharmacie-vsav-prod-20261030-v1",
 
-    "./app.js?v=pharmacie-vsav-prod-20261030-v1",
-    "./pharmacie-categories.js?v=3",
+    "./app.js?v=categories-retours-prod-20261031-v1",
+    "./pharmacie-categories.js?v=categories-retours-prod-20261031-v1",
     "./formations-commun.js",
-    "./formations.js",
+    "./formations.js?v=categories-retours-prod-20261031-v1",
     "./formations.css",
 
-    "./travail-equipe.js?v=retour-normal-20261028c",
-    "./fiche-garde.js?v=retour-normal-20261028c",
+    "./travail-equipe.js?v=categories-retours-prod-20261031-v1",
+    "./fiche-garde.js?v=categories-retours-prod-20261031-v1",
     "./fiche-garde-pdf.js",
     "./fiche-garde.css",
     "./fiche-fin-garde-modele.pdf",

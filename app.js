@@ -750,154 +750,145 @@ const historiqueNavigationApplication = [];
 let etatNavigationCourante = null;
 let restaurationNavigationEnCours = false;
 let observateurHistoriqueNavigationInstalle = false;
+let generationRetourNavigation = 0;
+let actionOuvertureNavigation = null;
+let proprietaireHistoriqueNavigation = '';
+const SELECTEUR_RETOUR_CIS='.retour-button,.reappro-retour,.notif-retour,.caserne-retour-actualites,.agenda-general-retour,[data-retour-page],#tech-retour,#annexe-retour';
 
+function contexteModuleNavigation(app) {
+    const choix=[['#fiche-garde-page','CISFicheGarde'],['.pharma-cat-page','CISPharmaCategories'],['#formations-principale','CISFormations'],['.travail-page','CISTravail']];
+    for(const [selecteur,nom] of choix){
+        const module=window[nom];
+        if(app.querySelector(selecteur)&&module?.capturerNavigation){
+            const contexte=module.capturerNavigation();
+            return {cle:nom+':'+contexte.cle,restaurer:()=>module.restaurerNavigation(contexte)};
+        }
+    }
+    if(app.querySelector('#notifications-historique-page'))return {cle:'notifications',restaurer:()=>afficherHistoriqueNotifications()};
+    if(app.querySelector('#suivi-vsav-liste'))return {cle:'suivi-vsav',restaurer:()=>ouvrirSuiviVSAVPharma()};
+    if(app.querySelector('.espace-equipe-menu'))return {cle:'espace-equipe',restaurer:()=>afficherEspaceGarde()};
+    if(app.querySelector('#carte-garde-accueil'))return {cle:'portail',restaurer:()=>afficherPortailPrincipal()};
+    const planning=app.querySelector('#garde-planning-calendrier');
+    if(planning){const mois=planning.dataset.mois;return {cle:'planning:'+mois,restaurer:()=>afficherPlanningEspaceGarde(mois)};}
+    if(app.querySelector('#menage-garde-chargement')){let travail=null;try{travail=menageTravailContexte;}catch(_){}return {cle:'menage',restaurer:()=>afficherMenageEspaceGarde(travail)};}
+    if(app.querySelector('.veh-inventaire-liste'))return {cle:'vehicules',restaurer:()=>afficherInventaireVehiculeEspaceGarde()};
+    if(app.querySelector('.veh-inventaire-contenu')){
+        let session=null;try{session=vehInventaireSession;}catch(_){}
+        const titre=String(app.querySelector('h1,h2')?.textContent||'').trim();
+        const vue=app.querySelector('#veh-personnel')?'zones':app.querySelector('#veh-materiels')?'coffre':app.querySelector('#tech-jauge')?'technique':'annexe';
+        return {cle:'inventaire:'+vue+':'+(session?.vehicule?.id||'')+':'+titre,restaurer:()=>{
+            if(!session||vehInventaireSession!==session)return afficherInventaireVehiculeEspaceGarde();
+            if(document.querySelector('.veh-photo-miniature'))void vehInventaireChargerPhotos();
+        }};
+    }
+    const erreurInventaire=app.querySelector('[data-veh-inventaire-erreur]');if(erreurInventaire)return {cle:'vehicule-erreur:'+erreurInventaire.dataset.vehInventaireErreur,restaurer:null};
+    const demarrer=app.querySelector('[onclick^="vehInventaireCommencer("]');
+    if(demarrer)return {cle:'vehicule:'+String(app.querySelector('h1,h2')?.textContent||''),restaurer:null};
+    return null;
+}
+function pageNavigationTransitoire(app=document.getElementById('app')){
+ if(!app)return false;if(app.querySelector('[data-navigation-transitoire]'))return true;
+ const main=app.querySelector('main');return !!main&&!main.querySelector('button,a,input,select,textarea')&&[...main.querySelectorAll('p,[role="status"]')].some(n=>/^Chargement[ ….]/i.test(n.textContent.trim()));
+}
 function obtenirSignaturePageApplication() {
-    const app = document.getElementById("app");
-    if (!app) return "";
-    const principal = app.querySelector("main");
-    const titre = String(app.querySelector("h1,h2")?.textContent || "").trim();
-    const classes = String(principal?.className || "").trim();
-    return `${classes}::${titre}`;
+    const app=document.getElementById('app');if(!app||pageNavigationTransitoire(app))return '';
+    const module=contexteModuleNavigation(app);if(module)return module.cle;
+    const main=app.querySelector('main'),titre=String(app.querySelector('h1,h2')?.textContent||'').trim();
+    if(!titre||/^(chargement|connexion)[.… ]*$/i.test(titre))return '';
+    return String(main?.className||'').trim()+'::'+titre;
 }
-
 function capturerEtatPageApplication() {
-    const app = document.getElementById("app");
-    if (!app) return null;
-    return {
-        html: app.innerHTML,
-        scrollX: window.scrollX || 0,
-        scrollY: window.scrollY || 0,
-        bodyClassName: document.body.className || "",
-        signature: obtenirSignaturePageApplication()
-    };
+    const app=document.getElementById('app');if(!app)return null;
+    const module=contexteModuleNavigation(app);
+    return {html:app.innerHTML,noeuds:[...app.childNodes],scrollX:window.scrollX||0,scrollY:window.scrollY||0,
+        bodyClassName:document.body.className||'',signature:pageNavigationTransitoire(app)?'':module?.cle||obtenirSignaturePageApplication(),transitoire:pageNavigationTransitoire(app),
+        proprietaire:String(utilisateurConnecte?.id||''),restaurer:module?.restaurer||null,
+        actionLecture:null,
+        chargement:[...app.querySelectorAll('[role="status"],.garde-planning-attente,.veh-muted,h1,h2,p')].some(n=>/^(chargement|vérification|lecture des réalisations)/i.test(n.textContent.trim()))};
 }
-
 function memoriserTransitionNavigation() {
-    if (restaurationNavigationEnCours) return;
-    const nouvelEtat = capturerEtatPageApplication();
-    if (!nouvelEtat || !nouvelEtat.signature) return;
-
-    if (!etatNavigationCourante) {
-        etatNavigationCourante = nouvelEtat;
-        return;
-    }
-
-    if (nouvelEtat.signature !== etatNavigationCourante.signature) {
+    if(restaurationNavigationEnCours)return;
+    const nouveau=capturerEtatPageApplication();if(!nouveau?.signature)return;
+    if(proprietaireHistoriqueNavigation!==nouveau.proprietaire){historiqueNavigationApplication.length=0;etatNavigationCourante=null;proprietaireHistoriqueNavigation=nouveau.proprietaire;}
+    if(!etatNavigationCourante){etatNavigationCourante=nouveau;return;}
+    if(nouveau.signature!==etatNavigationCourante.signature){
         historiqueNavigationApplication.push(etatNavigationCourante);
-        if (historiqueNavigationApplication.length > 40) historiqueNavigationApplication.shift();
-        etatNavigationCourante = nouvelEtat;
-    } else {
-        etatNavigationCourante = nouvelEtat;
-    }
+        if(historiqueNavigationApplication.length>40)historiqueNavigationApplication.shift();
+        if(actionOuvertureNavigation&&Date.now()-actionOuvertureNavigation.date<30000)nouveau.actionLecture=actionOuvertureNavigation.executer;
+        actionOuvertureNavigation=null;
+    }else nouveau.actionLecture=etatNavigationCourante.actionLecture;
+    etatNavigationCourante=nouveau;
     nettoyerListesHistoriquesProgressives();
 }
-
-function installerHistoriqueNavigationApplication() {
-    if (observateurHistoriqueNavigationInstalle) return;
-    observateurHistoriqueNavigationInstalle = true;
-    const app = document.getElementById("app");
-    if (!app) return;
-
-    etatNavigationCourante = capturerEtatPageApplication();
-    const obs = new MutationObserver(() => {
-        requestAnimationFrame(memoriserTransitionNavigation);
-    });
-    obs.observe(app, { childList: true, subtree: false });
-
-    document.addEventListener("click", (event) => {
-        const bouton = event.target?.closest?.(".retour-button, .reappro-retour, [data-retour-page]");
-        if (!bouton) return;
-        // Les modules d'équipe gèrent leurs retours et réinitialisent leurs actions.
-        // Ne pas remplacer leur navigation par une restauration de HTML sans écouteurs.
-        if (bouton.classList.contains("veh-retour") || bouton.hasAttribute("data-navigation-equipe") ||
-            bouton.hasAttribute("data-fg-action") || bouton.closest(".travail-page")) return;
-        event.preventDefault();
-        event.stopImmediatePropagation();
-        retourPagePrecedente();
-    }, true);
+function uniformiserRetoursApplication(){
+    const app=document.getElementById('app');if(!app)return;
+    if(!document.getElementById('cis-style-retour-unifie')){
+        const s=document.createElement('style');s.id='cis-style-retour-unifie';s.textContent=`#app .cis-retour-unifie{appearance:none!important;-webkit-appearance:none!important;display:inline-flex!important;align-items:center!important;justify-content:center!important;gap:8px!important;box-sizing:border-box!important;min-height:48px!important;width:auto!important;max-width:100%!important;padding:12px 18px!important;margin:0 0 18px!important;border:1px solid #d9dfe4!important;border-radius:14px!important;background:#fff!important;color:#20272c!important;box-shadow:0 5px 15px #15202b0b!important;font:inherit!important;font-weight:750!important;line-height:1.25!important;text-align:center!important;text-decoration:none!important;white-space:normal!important;cursor:pointer;touch-action:manipulation}#app .cis-retour-unifie:focus-visible{outline:3px solid #1687ff;outline-offset:3px}#app .cis-retour-unifie:disabled{opacity:.5}`;document.head.appendChild(s);
+    }
+    for(const b of app.querySelectorAll('button,a')){
+        if(!b.matches(SELECTEUR_RETOUR_CIS)&&!/^\s*(?:←\s*)?Retour(?:\s|$)/i.test(b.textContent))continue;
+        b.classList.add('retour-button','cis-retour-unifie');
+        if(b.tagName==='BUTTON'&&b.type!=='button')b.type='button';
+        if(b.textContent!=='← Retour')b.textContent='← Retour';
+        if(b.getAttribute('aria-label')!=='Retour à la page précédente')b.setAttribute('aria-label','Retour à la page précédente');
+    }
 }
-
-function retourPagePrecedente() {
-    const precedent = historiqueNavigationApplication.pop();
-    if (!precedent || !precedent.html) {
-        afficherPortailPrincipal();
-        return;
+function installerHistoriqueNavigationApplication(){
+    if(observateurHistoriqueNavigationInstalle)return;
+    const app=document.getElementById('app');if(!app)return;observateurHistoriqueNavigationInstalle=true;
+    uniformiserRetoursApplication();etatNavigationCourante=capturerEtatPageApplication();proprietaireHistoriqueNavigation=String(utilisateurConnecte?.id||'');
+    new MutationObserver(()=>{uniformiserRetoursApplication();memoriserTransitionNavigation();}).observe(app,{childList:true,subtree:true});
+    document.addEventListener('click',event=>{
+        const b=event.target?.closest?.('button,a');if(!b||!app.contains(b))return;
+        if(!restaurationNavigationEnCours)memoriserTransitionNavigation();
+        if(b.matches(SELECTEUR_RETOUR_CIS)||b.classList.contains('cis-retour-unifie')){
+            if(!historiqueNavigationApplication.length)return; // Accès direct : laisser fonctionner le retour de secours du module.
+            event.preventDefault();event.stopImmediatePropagation();void retourPagePrecedente(b);return;
+        }
+        if(restaurationNavigationEnCours){++generationRetourNavigation;restaurationNavigationEnCours=false;memoriserTransitionNavigation();}
+        const code=String(b.getAttribute('onclick')||'').trim();
+        if(typeof b.onclick==='function'&&/^(?:return\s+)?(?:afficher\w*|ouvrir\w*|vehInventaireOuvrir\w*|CIS\w+\.ouvrir\w*)\s*\(/.test(code)){
+            const action=b.onclick;actionOuvertureNavigation={date:Date.now(),executer:()=>action.call(b,new Event('click'))};
+        }else actionOuvertureNavigation=null;
+    },true);
+}
+async function retourPagePrecedente(bouton=null){
+    const retourPendantChargement=pageNavigationTransitoire()&&etatNavigationCourante?.signature?etatNavigationCourante:null;
+    // La fiche conserve sa confirmation habituelle avant de quitter des modifications non enregistrées.
+    if(document.getElementById('fiche-garde-page')&&window.CISFicheGarde?.preparerRetourNavigation){
+        if(!await CISFicheGarde.preparerRetourNavigation())return;
     }
-
-    restaurationNavigationEnCours = true;
-    document.body.className = precedent.bodyClassName || "";
-    const app = document.getElementById("app");
-    if (!app) {
-        restaurationNavigationEnCours = false;
-        afficherPortailPrincipal();
-        return;
+    if(bouton?.getAttribute('onclick')?.includes('vehInventaireQuitter')){
+        if(vehInventaireSession&&!await afficherConfirmationCIS(VEH_INVENTAIRE_AVERTISSEMENT))return;
+        vehInventaireSession=null;
     }
-
-    // Recréer les pages dynamiques : leurs événements ne sont pas stockés dans innerHTML.
-    const pageEquipe = document.createElement("template");
-    pageEquipe.innerHTML = precedent.html;
-    const ficheEquipe = pageEquipe.content.querySelector("#fiche-garde-page[data-fg-semaine]");
-    if (ficheEquipe && window.CISFicheGarde) {
-        restaurationNavigationEnCours = false;
-        void CISFicheGarde.ouvrir(ficheEquipe.dataset.fgSemaine, ficheEquipe.dataset.fgMode || "recap");
-        return;
+    let precedent=retourPendantChargement;
+    if(!precedent)do{precedent=historiqueNavigationApplication.pop();}while(precedent&&(precedent.transitoire||precedent.proprietaire!==String(utilisateurConnecte?.id||'')));
+    if(!precedent){afficherPortailPrincipal();return;}
+    const numero=++generationRetourNavigation,app=document.getElementById('app');if(!app)return;
+    restaurationNavigationEnCours=true;actionOuvertureNavigation=null;etatNavigationCourante=precedent;
+    document.body.className=precedent.bodyClassName||'';
+    try{
+        // Réattacher les vrais nœuds conserve événements, champs, sélections et contrôles déjà chargés.
+        if(precedent.noeuds?.length)app.replaceChildren(...precedent.noeuds);else app.innerHTML=precedent.html;
+        let restaurer=precedent.restaurer||(precedent.chargement?precedent.actionLecture:null);
+        if(!restaurer&&app.querySelector('#fiche-garde-page')&&window.CISFicheGarde){const f=app.querySelector('#fiche-garde-page');restaurer=()=>CISFicheGarde.ouvrir(f.dataset.fgSemaine,f.dataset.fgMode||'recap');}
+        if(restaurer){let timer;try{await Promise.race([Promise.resolve().then(restaurer),new Promise((_,rej)=>timer=setTimeout(()=>rej(Error('La page ne répond pas. Réessaie.')),28000))]);}finally{clearTimeout(timer);}}
+        if(numero!==generationRetourNavigation)return;
+        uniformiserRetoursApplication();
+        void initialiserListesHistoriquesProgressives(app);
+        actualiserInterfaceBureau();synchroniserApparencePWACaserne();
+        await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+        if(numero!==generationRetourNavigation)return;
+        window.scrollTo({left:precedent.scrollX||0,top:precedent.scrollY||0,behavior:'auto'});
+    }catch(e){
+        if(numero!==generationRetourNavigation)return;
+        const zone=document.createElement('section');zone.className='materiel';zone.setAttribute('role','status');
+        const texte=document.createElement('p');texte.textContent=e.message||'Actualisation indisponible.';zone.appendChild(texte);
+        const retry=document.createElement('button');retry.type='button';retry.textContent='Réessayer';retry.onclick=()=>{historiqueNavigationApplication.push(precedent);void retourPagePrecedente();};zone.appendChild(retry);app.querySelector('main')?.appendChild(zone);
+    }finally{
+        if(numero===generationRetourNavigation){uniformiserRetoursApplication();etatNavigationCourante=capturerEtatPageApplication();if(etatNavigationCourante)etatNavigationCourante.actionLecture=precedent.actionLecture;restaurationNavigationEnCours=false;}
     }
-    if (pageEquipe.content.querySelector("#travail-contenu") && window.CISTravail) {
-        restaurationNavigationEnCours = false;
-        CISTravail.retourFiche();
-        return;
-    }
-
-    app.innerHTML = precedent.html;
-    etatNavigationCourante = precedent;
-    void initialiserListesHistoriquesProgressives(app);
-    if (app.querySelector('#garde-planning-calendrier')) {
-        restaurationNavigationEnCours = false;
-        void afficherPlanningEspaceGarde(app.querySelector('#garde-planning-calendrier').dataset.mois);
-        return;
-    }
-    if (app.querySelector('#garde-menage-duree')) {
-        restaurationNavigationEnCours = false;
-        void afficherMenageEspaceGarde();
-        return;
-    }
-    if (app.querySelector('#notifications-historique-page')) {
-        restaurationNavigationEnCours = false;
-        void afficherHistoriqueNotifications();
-        return;
-    }
-    // Une page inventaire restaurée doit retrouver ses données et ses photos.
-    // La restauration HTML seule ne relance pas les chargements asynchrones.
-    if (app.querySelector(".veh-inventaire-liste")) {
-        restaurationNavigationEnCours = false;
-        void afficherInventaireVehiculeEspaceGarde();
-        return;
-    }
-    if (app.querySelector(".veh-inventaire-contenu") && vehInventaireSession) {
-        restaurationNavigationEnCours = false;
-        vehInventaireAfficherZones();
-        return;
-    }
-    if (app.querySelector(".veh-photo-miniature")) void vehInventaireChargerPhotos();
-    actualiserInterfaceBureau();
-    synchroniserApparencePWACaserne();
-
-    // Si le retour restaure le portail principal depuis l'historique HTML,
-    // la carte de garde mémorisée peut être ancienne. On la recharge aussitôt.
-    if (document.getElementById("carte-garde-accueil")) {
-        requestAnimationFrame(() =>
-            requestAnimationFrame(() => void actualiserCarteGardeAccueil())
-        );
-    }
-
-    requestAnimationFrame(() => {
-        window.scrollTo({
-            left: precedent.scrollX || 0,
-            top: precedent.scrollY || 0,
-            behavior: "auto"
-        });
-        setTimeout(() => { restaurationNavigationEnCours = false; }, 0);
-    });
 }
 
 function ouvrirProfilDepuisPageCourante() {
@@ -1045,7 +1036,7 @@ let minuteurVerificationMiseAJour =
 /*
  * VERSION DU FICHIER APP.JS
  * Cette valeur change à chaque nouvelle version que je te prépare.
- * Elle permet de détecter une nouvelle version même si seul app.js change.
+ * Elle permet de détecter une nouvelle version même si seul app.js?v=categories-retours-prod-20261031-v1 change.
  */
 const VERSION_APPLICATION_JS =
     "2026-10-21-suppression-menage-v79";
@@ -1056,7 +1047,7 @@ async function verifierNouvelleVersionAppJs() {
 
         const url =
             new URL(
-                "./app.js",
+                "./app.js?v=categories-retours-prod-20261031-v1",
                 window.location.href
             );
 
@@ -1104,7 +1095,7 @@ async function verifierNouvelleVersionAppJs() {
     } catch (erreur) {
 
         console.warn(
-            "Vérification directe app.js impossible :",
+            "Vérification directe app.js?v=categories-retours-prod-20261031-v1 impossible :",
             erreur
         );
 
@@ -1429,9 +1420,9 @@ async function verifierMiseAJourApplication(
     try {
 
         /*
-         * Contrôle direct de app.js sur le réseau.
+         * Contrôle direct de app.js?v=categories-retours-prod-20261031-v1 sur le réseau.
          * Contrairement au Service Worker, ceci détecte aussi une mise à jour
-         * lorsque seul app.js a changé sur GitHub.
+         * lorsque seul app.js?v=categories-retours-prod-20261031-v1 a changé sur GitHub.
          */
         const nouvelleVersionAppJs =
             await verifierNouvelleVersionAppJs();
@@ -1624,7 +1615,7 @@ async function appliquerMiseAJourApplication() {
     try {
 
         /*
-         * Si seul app.js a changé, il n'y a pas forcément de nouveau
+         * Si seul app.js?v=categories-retours-prod-20261031-v1 a changé, il n'y a pas forcément de nouveau
          * Service Worker en attente. On vide alors les caches de l'application
          * et on recharge immédiatement la version publiée sur GitHub.
          */
@@ -1885,10 +1876,10 @@ async function initialiserSystemeMiseAJourApplication() {
     initialiserStyleMiseAJourApplication();
 
     /*
-     * IMPORTANT : la vérification directe de app.js fonctionne même
+     * IMPORTANT : la vérification directe de app.js?v=categories-retours-prod-20261031-v1 fonctionne même
      * si le Service Worker n'est pas disponible ou rencontre un problème.
      * C'est ce qui permet d'afficher le bouton de mise à jour après une
-     * simple modification de app.js sur GitHub.
+     * simple modification de app.js?v=categories-retours-prod-20261031-v1 sur GitHub.
      */
     async function verifierMaintenant() {
 
@@ -1974,7 +1965,7 @@ async function initialiserSystemeMiseAJourApplication() {
 
     /*
      * Le Service Worker reste un deuxième moyen de détecter une mise à jour,
-     * mais son absence ne bloque plus la vérification directe de app.js.
+     * mais son absence ne bloque plus la vérification directe de app.js?v=categories-retours-prod-20261031-v1.
      */
     if (!("serviceWorker" in navigator)) {
         return;
@@ -6898,7 +6889,7 @@ async function recupererDonneesSupabase() {
 
     await obtenirSessionPrincipaleValide(supabase);
     const resultats = await Promise.all([
-        supabase.from("categories").select("id,nom,parent_id"),
+        supabase.from("categories").select("id,nom,parent_id,ordre"),
         supabase
             .from("materiels")
             .select("id,nom,reference,description,stock,minimum,emplacement,gere_stock_pharmacie,inventaire_vsav_materiel_id"),
@@ -22495,6 +22486,7 @@ let vehInventaireSession = null;
 let vehInventaireCatalogue = [];
 let vehInventaireZones = [];
 let vehInventaireMateriels = [];
+let vehInventaireChargementActif = null;
 const vehInventaireHTML = valeur => echapperHTML(String(valeur ?? ""));
 // Photos configurées dans l'application Admin (bucket Supabase privé).
 const VEH_PHOTO_BUCKET = "cis-photos-inventaire";
@@ -22591,18 +22583,35 @@ async function vehInventaireOuvrirVehicule(id){
 }
 async function vehInventaireCommencer(id){
  const v=vehInventaireCatalogue.find(x=>x.id===id);if(!v)return;
- vehInventaireAfficher(`<h1>${vehInventaireHTML(v.nom)}</h1><p>Chargement des coffres…</p>`);
+ if(vehInventaireChargementActif)vehInventaireChargementActif.abort();
+ const ac=new AbortController(),compte=String(utilisateurConnecte?.id||'');vehInventaireChargementActif=ac;
+ vehInventaireAfficher(`<div data-navigation-transitoire="inventaire-coffres" data-vehicule-id="${vehInventaireHTML(id)}"><button type="button" class="retour-button veh-retour" onclick="vehInventaireOuvrirVehicule('${id}')">← Retour</button><h1>${vehInventaireHTML(v.nom)}</h1><p role="status">Chargement des coffres…</p></div>`);
+ const page=document.querySelector('[data-navigation-transitoire="inventaire-coffres"]');
+ const active=()=>page?.isConnected&&!ac.signal.aborted&&String(utilisateurConnecte?.id||'')===compte;
+ const observation=new MutationObserver(()=>{if(!page?.isConnected)ac.abort();});observation.observe(document.getElementById('app'),{childList:true});
+ let timer,delaiDepasse=false;
  try{
-  const sb=obtenirClientSupabase();
-  const z=await sb.from("cis_vehicule_zones").select("id,vehicule_id,nom,cote,ordre,actif,photo_path").eq("vehicule_id",id).eq("actif",true).order("ordre");if(z.error)throw z.error;
-  const zones=z.data||[];if(!zones.length){vehInventaireAfficher(`<button class="retour-button veh-retour" onclick="vehInventaireOuvrirVehicule('${id}')">← Retour</button><h1>${vehInventaireHTML(v.nom)}</h1><p>Configure d'abord les coffres dans l'application Admin.</p>`);return;}
-  const m=await sb.from("cis_vehicule_materiels").select("id,zone_id,nom,quantite,etat_reference,notes,ordre,photo_path").in("zone_id",zones.map(x=>x.id)).order("ordre");if(m.error)throw m.error;
-  vehInventaireZones=zones;vehInventaireMateriels=m.data||[];
-  const signalements=await sb.rpc("inventaires_anomalies",{p_vehicule:id});if(signalements.error)throw signalements.error;
-  const personnels=listePersonnelAvecAuteur(await chargerUtilisateursEspaceGarde());
-  vehInventaireSession={vehicule:{id:v.id,nom:v.nom,code:v.code},controles:{},anomalies:signalements.data||[],participants:personnesAvecAuteur([]),personnels};
+  const sb=obtenirClientSupabase();if(!sb)throw Error('Connexion Supabase indisponible.');
+  const charger=async()=>{
+   const z=await sb.from('cis_vehicule_zones').select('id,vehicule_id,nom,cote,ordre,actif,photo_path').eq('vehicule_id',id).eq('actif',true).order('ordre').abortSignal(ac.signal);if(z.error)throw z.error;
+   if(!active())return null;const zones=z.data||[];if(!zones.length)return {zones,materiels:[],anomalies:[],personnels:[]};
+   const m=await sb.from('cis_vehicule_materiels').select('id,zone_id,nom,quantite,etat_reference,notes,ordre,photo_path').in('zone_id',zones.map(x=>x.id)).order('ordre').abortSignal(ac.signal);if(m.error)throw m.error;
+   if(!active())return null;
+   const signalements=await sb.rpc('inventaires_anomalies',{p_vehicule:id}).abortSignal(ac.signal);if(signalements.error)throw signalements.error;
+   if(!active())return null;
+   const personnels=listePersonnelAvecAuteur(await chargerUtilisateursEspaceGarde());
+   return {zones,materiels:m.data||[],anomalies:signalements.data||[],personnels};
+  };
+  const resultat=await Promise.race([charger(),new Promise((_,rej)=>{timer=setTimeout(()=>{delaiDepasse=true;ac.abort();rej(Error('Le chargement des coffres prend trop de temps. Vérifie la connexion puis réessaie.'));},15000);})]);
+  if(!resultat||!active())return;
+  if(!resultat.zones.length){vehInventaireAfficher(`<button class="retour-button veh-retour" onclick="vehInventaireOuvrirVehicule('${id}')">← Retour</button><h1>${vehInventaireHTML(v.nom)}</h1><p>Configure d’abord les coffres dans l’application Admin.</p>`);return;}
+  vehInventaireZones=resultat.zones;vehInventaireMateriels=resultat.materiels;
+  vehInventaireSession={vehicule:{id:v.id,nom:v.nom,code:v.code},controles:{},anomalies:resultat.anomalies,participants:personnesAvecAuteur([]),personnels:resultat.personnels};
   vehInventaireAfficherZones();
- }catch(e){vehInventaireAfficher(`<button class="retour-button veh-retour" onclick="vehInventaireOuvrirVehicule('${id}')">← Retour</button><h1>Erreur de chargement</h1><p>${vehInventaireHTML(e.message)}</p>`);}
+ }catch(e){
+  if(!page?.isConnected||String(utilisateurConnecte?.id||'')!==compte)return;
+  vehInventaireAfficher(`<div data-veh-inventaire-erreur="${vehInventaireHTML(id)}"><button class="retour-button veh-retour" onclick="vehInventaireOuvrirVehicule('${id}')">← Retour</button><h1>${vehInventaireHTML(v.nom)}</h1><p role="status">${vehInventaireHTML(delaiDepasse?'Le serveur ne répond pas. Vérifie la connexion puis réessaie.':e.message||'Chargement impossible.')}</p><button type="button" class="veh-action" onclick="vehInventaireCommencer('${id}')">Réessayer</button></div>`);
+ }finally{clearTimeout(timer);observation.disconnect();if(vehInventaireChargementActif===ac)vehInventaireChargementActif=null;}
 }
 function vehInventaireAfficherZones(){
  const session=vehInventaireSession;if(!session)return;initialiserStyleEspaceGardeUtilisateur();initialiserStyleActionsEquipe();
