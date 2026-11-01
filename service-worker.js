@@ -15,7 +15,7 @@ importScripts("./notifications-history.js?v=pharmacie-vsav-prod-20261030-v1");
  * à récupérer le nouvel app.js?v=peremptions-20261031-v5.
  */
 
-const CACHE_NAME = "cis-principale-camera-photo-hd-v13";
+const CACHE_NAME = "cis-principale-camera-interne-v14";
 
 
 /*
@@ -29,8 +29,8 @@ const FICHIERS_APPLICATION = ["./maintenance-client.js","./interface-personnelle
     "./",
 
     "./index.html",
-    "./scan-peremption.js?v=local-dm-v12","./vendor/zxing-reader.js","./vendor/zxing_reader.wasm",
-    "./scan-peremption.js?v=local-dm-v12",
+    "./scan-peremption.js?v=camera-interne-v14","./vendor/zxing-reader.js","./vendor/zxing_reader.wasm",
+    "./scan-peremption.js?v=camera-interne-v14",
     "./vsav-sans-stock.js?v=pharmacie-vsav-prod-20261030-v1",
     "./suivi-vsav.js?v=pharmacie-vsav-prod-20261030-v1",
 
