@@ -20,7 +20,7 @@ let libraryPromise=null;
 async function zxingLibrary(){
  if(window.ZXing)return window.ZXing;
  if(!libraryPromise)libraryPromise=(async()=>{let last;
-  for(const src of ['https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js','https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js']){
+  for(const src of ['https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js','https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js']){
     try{await load(src,'ZXing');if(window.ZXing)return window.ZXing;}catch(e){last=e;}
   }
   throw last||Error('Lecteur Data Matrix indisponible');
@@ -42,19 +42,12 @@ async function decodeDetector(canvas){
  }catch(e){return null;}
 }
 function imageVariants(image){
- const max=2200;
- const base=Math.min(1,max/Math.max(image.naturalWidth,image.naturalHeight));
- return [
-  {angle:0,scale:base,threshold:0},{angle:90,scale:base,threshold:0},
-  {angle:180,scale:base,threshold:0},{angle:270,scale:base,threshold:0},
-  {angle:0,scale:Math.min(2,3200/Math.max(image.naturalWidth,image.naturalHeight)),threshold:0},
-  {angle:90,scale:Math.min(2,3200/Math.max(image.naturalWidth,image.naturalHeight)),threshold:0},
-  {angle:180,scale:Math.min(2,3200/Math.max(image.naturalWidth,image.naturalHeight)),threshold:0},
-  {angle:270,scale:Math.min(2,3200/Math.max(image.naturalWidth,image.naturalHeight)),threshold:0},
-  ...[15,30,45,60,75,105,120,135,150,165,195,210,225,240,255,285,300,315,330,345].map(angle=>({angle,scale:Math.min(base,1200/Math.max(image.naturalWidth,image.naturalHeight)),threshold:0})),
-  {angle:0,scale:base,threshold:145},{angle:90,scale:base,threshold:145},
-  {angle:180,scale:base,threshold:145},{angle:270,scale:base,threshold:145}
- ];
+ const max=Math.max(image.naturalWidth,image.naturalHeight);
+ const base=Math.min(1,2000/max);
+ // Couverture intégrale de 360° : balayage puis affinage.
+ const angles=[...Array.from({length:24},(_,i)=>i*15),
+   ...Array.from({length:120},(_,i)=>i*3).filter(a=>a%15!==0)];
+ return angles.map(angle=>({angle,scale:angle%15===0?base:Math.min(base,1100/max),threshold:0}));
 }
 function drawVariant(canvas,ctx,image,v){
  const w=Math.max(1,Math.round(image.naturalWidth*v.scale));const h=Math.max(1,Math.round(image.naturalHeight*v.scale));
@@ -74,7 +67,7 @@ async function readImage(file){loading(true,'Analyse du Data Matrix et de la dat
   if(!ctx)throw Error('Traitement photo indisponible.');
   let Z=null,lastError=null;
   try{Z=await zxingLibrary();}catch(e){lastError=e;console.warn('ZXing Library indisponible',e);}
-  const variants=imageVariants(image);
+  const variants=Z||window.BarcodeDetector?imageVariants(image):[];
   for(let i=0;i<variants.length;i++){
    message(`Décodage Data Matrix, toutes orientations (${i+1}/${variants.length})…`);
    if(i%3===0)await new Promise(resolve=>setTimeout(resolve,0));drawVariant(canvas,ctx,image,variants[i]);
@@ -83,12 +76,31 @@ async function readImage(file){loading(true,'Analyse du Data Matrix et de la dat
   }
   try{
    message('Seconde lecture Data Matrix (moteur vidéo)…');
-   await load('https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/umd/index.min.js','ZXingBrowser');
+   await load('https://unpkg.com/@zxing/browser@0.1.5/umd/index.min.js','ZXingBrowser');
    const reader=new window.ZXingBrowser.BrowserMultiFormatReader();
    const result=await reader.decodeFromImageUrl(url);
    if(result?.getText?.()&&parse(result.getText()).date)return result.getText();
   }catch(e){console.warn('Seconde lecture Data Matrix',e);}
-  try{message('Code non décodé. Recherche de la date imprimée…');await load('https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js','Tesseract');const result=await Tesseract.recognize(file,'eng');if(result.data.text?.trim())return result.data.text;}catch(e){lastError=e;}
+  // OCR de la date imprimée sur 4 orientations, y compris une photo prise de travers.
+  try{
+   await load('https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js','Tesseract');
+   const worker=await Tesseract.createWorker('eng');
+   try{
+    for(const angle of [...Array.from({length:24},(_,i)=>i*15),...Array.from({length:120},(_,i)=>i*3).filter(a=>a%15!==0)]){
+     message('Lecture de la date imprimée : orientation '+angle+'°…');
+     const rad=angle*Math.PI/180,w=image.naturalWidth,h=image.naturalHeight;
+     const scale=Math.min(1,(angle%15===0?1400:900)/Math.max(w,h));
+     const ww=w*scale,hh=h*scale;
+     canvas.width=Math.ceil(Math.abs(ww*Math.cos(rad))+Math.abs(hh*Math.sin(rad)));
+     canvas.height=Math.ceil(Math.abs(hh*Math.cos(rad))+Math.abs(ww*Math.sin(rad)));
+     ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);
+     ctx.save();ctx.translate(canvas.width/2,canvas.height/2);ctx.rotate(rad);ctx.drawImage(image,-ww/2,-hh/2,ww,hh);ctx.restore();
+     const result=await worker.recognize(canvas);
+     if(parse(result.data?.text||'').date)return result.data.text;
+     await new Promise(resolve=>setTimeout(resolve,0));
+    }
+   }finally{await worker.terminate();}
+  }catch(e){lastError=e;console.warn('OCR toutes orientations',e);}
   throw Error('Aucun Data Matrix ni date détecté. Cadre le code entier avec une marge blanche et une photo nette. '+(lastError?.message||''));
  }finally{loading(false);URL.revokeObjectURL(url);}
 }
