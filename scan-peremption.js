@@ -98,48 +98,30 @@ async function camera(callback){
  if(!navigator.mediaDevices?.getUserMedia){message('Caméra indisponible. Utilise Galerie.');return;}
  const token=++loop;
  try{
-  const video=dialog.querySelector('video');video.hidden=false;video.muted=true;video.playsInline=true;
-  message('Initialisation du lecteur Data Matrix…');
-  // Utilise le lecteur vidéo ZXing Browser, plutôt qu'un décodage ponctuel du canvas.
-  // Ce moteur assure lui-même la capture vidéo et les analyses répétées.
-  try{
-   await load('https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/umd/index.min.js','ZXingBrowser');
-   if(token!==loop||!dialog)return;
-   const reader=new window.ZXingBrowser.BrowserMultiFormatReader();
-   videoControls=await reader.decodeFromConstraints({audio:false,video:{facingMode:{ideal:'environment'},width:{ideal:1920},height:{ideal:1080}}},video,(result,error)=>{
-    if(token!==loop||!dialog)return;
-    if(result?.getText?.()){
-     const parsed=parse(result.getText());
-     if(parsed.date)apply(result.getText(),callback);
-     else message('Code lu, mais sans date de péremption GS1 (17).');
-    }
-   });
-   if(token!==loop){videoControls?.stop();return;}
-   message('Caméra active : rapproche le Data Matrix, assure une bonne mise au point.');
-  }catch(e){
-   console.warn('ZXing caméra indisponible',e);
-   message('Lecteur Data Matrix indisponible : '+e.message+'. Tentative de lecture alternative…');
-   stream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{ideal:'environment'},width:{ideal:1920},height:{ideal:1080}}});
-   if(token!==loop){stream.getTracks().forEach(t=>t.stop());return;}
-   video.srcObject=stream;await video.play();
-   const canvas=document.createElement('canvas'),ctx=canvas.getContext('2d',{willReadFrequently:true});
-   const tick=async()=>{
-    if(token!==loop||!dialog||!stream)return;
-    try{
-     if(video.readyState>=2&&video.videoWidth){
-      canvas.width=video.videoWidth;canvas.height=video.videoHeight;ctx.drawImage(video,0,0);
-      const raw=await decodeDetector(canvas);if(raw&&parse(raw).date){apply(raw,callback);return;}
-      if(!ocrBusy&&Date.now()-lastOCR>7000){ocrBusy=true;lastOCR=Date.now();
-       const shot=document.createElement('canvas');shot.width=canvas.width;shot.height=canvas.height;shot.getContext('2d').drawImage(canvas,0,0);
-       (async()=>{try{await load('https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js','Tesseract');const o=await Tesseract.recognize(shot,'eng');if(token===loop&&dialog&&parse(o.data?.text||'').date)apply(o.data.text,callback);}catch(e){console.warn('OCR caméra',e);}finally{ocrBusy=false;}})();
-      }
-     }
-    }catch(e){console.warn('Analyse vidéo',e);}
-    if(token===loop&&dialog)setTimeout(tick,600);
-   };tick();
-  }
+  stream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{ideal:'environment'},width:{ideal:1920},height:{ideal:1080}}});
+  if(token!==loop||!dialog){stream.getTracks().forEach(t=>t.stop());return;}
+  const video=dialog.querySelector('video');
+  video.hidden=false;video.muted=true;video.playsInline=true;video.srcObject=stream;
+  await video.play();
+  dialog.querySelector('[data-capture]').hidden=false;
+  message('Cadre le code ou la date, puis appuie sur Lancer le scan.');
  }catch(e){message('Impossible de lancer la caméra : '+e.message);}
 }
-function open(callback){stop();dialog=document.createElement('div');dialog.setAttribute('role','dialog');dialog.setAttribute('aria-modal','true');dialog.setAttribute('aria-label','Scanner une péremption');dialog.style.cssText='position:fixed;inset:0;z-index:2147483647;background:#0009;display:flex;align-items:center;justify-content:center;padding:12px';dialog.innerHTML='<style>.cis-scan-card{width:min(100%,640px);max-height:96dvh;overflow:auto;background:#fff;color:#182a40;border:1px solid #8ca5c4;border-radius:14px;box-shadow:0 14px 44px #0004;padding:20px;font:inherit;box-sizing:border-box}.cis-scan-header{display:flex;align-items:center;justify-content:space-between;gap:12px}.cis-scan-header h2{font-size:19px;line-height:1.35;margin:0;font-weight:700}.cis-scan-close{background:#eef2f8;color:#243a55;border:1px solid #cbd6e5;border-radius:8px;font-size:24px;min-width:40px;min-height:40px;cursor:pointer}.cis-scan-subtitle{color:#5c6c7e;margin:10px 0 18px;font-size:14px}.cis-scan-video{display:block;width:100%;height:auto;max-height:65dvh;object-fit:cover;border-radius:9px;background:#182b42}.cis-scan-video[hidden]{display:none}.cis-scan-video{aspect-ratio:3/4;min-height:360px}@keyframes cis-scan-spin{to{transform:rotate(360deg)}}.cis-scan-loading{display:none;align-items:center;gap:10px;background:#eef5ff;border:1px solid #bcd2ec;border-radius:9px;padding:12px;margin:12px 0;color:#17385a;font-size:14px}.cis-scan-loading.active{display:flex}.cis-scan-wheel{width:56px;height:56px;border:3px solid #dce7e1;border-top-color:#217448;border-right-color:#217448;border-radius:50%;animation:cis-scan-spin 1.15s linear infinite;flex:none;display:grid;place-items:center}.cis-scan-wheel img{width:39px;height:39px;object-fit:contain;border-radius:9px;animation:cis-scan-spin 1.15s linear infinite reverse}.cis-scan-status{background:#f3f7fc;border:1px solid #d8e3f0;border-radius:9px;padding:12px;margin:12px 0 16px;font-size:14px}.cis-scan-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px}.cis-scan-actions button{min-height:48px;padding:12px;border-radius:9px;font:inherit;font-weight:700;cursor:pointer}.cis-scan-primary{background:#1766b1;color:white;border:1px solid #11558f}.cis-scan-secondary{background:#eef5ff;color:#14538c;border:1px solid #a7c6e7}.cis-scan-help{color:#65758a;font-size:12px;line-height:1.5;margin:16px 0 0}</style><div class="cis-scan-card"><div class="cis-scan-header"><h2>Scanner une date de péremption</h2><button type="button" data-close aria-label="Fermer" class="cis-scan-close">×</button></div><p class="cis-scan-subtitle">Data Matrix GS1, code-barres ou étiquette EXP</p><video playsinline muted hidden class="cis-scan-video"></video><div class="cis-scan-loading" data-loading role="status"><span class="cis-scan-wheel"><img src="./icon-192.png" alt=""></span><span data-loading-text>Chargement…</span></div><p data-status aria-live="polite" class="cis-scan-status">Choisis une méthode de lecture.</p><div class="cis-scan-actions"><button type="button" data-camera class="cis-scan-primary">Scanner</button><button type="button" data-gallery class="cis-scan-secondary">Galerie</button></div><input type="file" accept="image/*" data-file hidden><p class="cis-scan-help">Présente le code dans n’importe quel sens, ou sélectionne une photo. Vérifie la date avant validation.</p></div>';document.body.appendChild(dialog);dialog.querySelector('[data-close]').onclick=stop;dialog.querySelector('[data-camera]').onclick=()=>camera(callback);dialog.querySelector('[data-gallery]').onclick=()=>dialog.querySelector('[data-file]').click();for(const input of dialog.querySelectorAll('input[type=file]'))input.onchange=async()=>{if(!input.files?.[0])return;message('Lecture de la photo…');try{apply(await readImage(input.files[0]),callback);}catch(e){message(e.message);}input.value='';};}
+async function capture(callback){
+ const video=dialog?.querySelector('video');
+ if(!video||video.hidden||!video.videoWidth){message('Attends que la caméra soit prête.');return;}
+ const canvas=document.createElement('canvas');
+ canvas.width=video.videoWidth;canvas.height=video.videoHeight;
+ canvas.getContext('2d').drawImage(video,0,0);
+ const button=dialog.querySelector('[data-capture]');button.disabled=true;
+ loading(true,'Analyse de la photo…');
+ try{
+  const file=await new Promise((resolve,reject)=>canvas.toBlob(b=>b?resolve(new File([b],'capture-camera.jpg',{type:'image/jpeg'})):reject(Error('Capture impossible.')),'image/jpeg',.95));
+  const raw=await readImage(file);
+  apply(raw,callback);
+ }catch(e){message(e.message||'Analyse impossible.');}
+ finally{loading(false);if(button&&button.isConnected)button.disabled=false;}
+}
+function open(callback){stop();dialog=document.createElement('div');dialog.setAttribute('role','dialog');dialog.setAttribute('aria-modal','true');dialog.setAttribute('aria-label','Scanner une péremption');dialog.style.cssText='position:fixed;inset:0;z-index:2147483647;background:#0009;display:flex;align-items:center;justify-content:center;padding:12px';dialog.innerHTML='<style>.cis-scan-card{width:min(100%,640px);max-height:96dvh;overflow:auto;background:#fff;color:#182a40;border:1px solid #8ca5c4;border-radius:14px;box-shadow:0 14px 44px #0004;padding:20px;font:inherit;box-sizing:border-box}.cis-scan-header{display:flex;align-items:center;justify-content:space-between;gap:12px}.cis-scan-header h2{font-size:19px;line-height:1.35;margin:0;font-weight:700}.cis-scan-close{background:#eef2f8;color:#243a55;border:1px solid #cbd6e5;border-radius:8px;font-size:24px;min-width:40px;min-height:40px;cursor:pointer}.cis-scan-subtitle{color:#5c6c7e;margin:10px 0 18px;font-size:14px}.cis-scan-video{display:block;width:100%;height:auto;max-height:65dvh;object-fit:cover;border-radius:9px;background:#182b42}.cis-scan-video[hidden]{display:none}.cis-scan-video{aspect-ratio:3/4;min-height:360px}@keyframes cis-scan-spin{to{transform:rotate(360deg)}}.cis-scan-loading{display:none;align-items:center;gap:10px;background:#eef5ff;border:1px solid #bcd2ec;border-radius:9px;padding:12px;margin:12px 0;color:#17385a;font-size:14px}.cis-scan-loading.active{display:flex}.cis-scan-wheel{width:56px;height:56px;border:3px solid #dce7e1;border-top-color:#217448;border-right-color:#217448;border-radius:50%;animation:cis-scan-spin 1.15s linear infinite;flex:none;display:grid;place-items:center}.cis-scan-wheel img{width:39px;height:39px;object-fit:contain;border-radius:9px;animation:cis-scan-spin 1.15s linear infinite reverse}.cis-scan-status{background:#f3f7fc;border:1px solid #d8e3f0;border-radius:9px;padding:12px;margin:12px 0 16px;font-size:14px}.cis-scan-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px}.cis-scan-actions button{min-height:48px;padding:12px;border-radius:9px;font:inherit;font-weight:700;cursor:pointer}.cis-scan-primary{background:#1766b1;color:white;border:1px solid #11558f}.cis-scan-secondary{background:#eef5ff;color:#14538c;border:1px solid #a7c6e7}.cis-scan-help{color:#65758a;font-size:12px;line-height:1.5;margin:16px 0 0}</style><div class="cis-scan-card"><div class="cis-scan-header"><h2>Scanner une date de péremption</h2><button type="button" data-close aria-label="Fermer" class="cis-scan-close">×</button></div><p class="cis-scan-subtitle">Data Matrix GS1, code-barres ou étiquette EXP</p><video playsinline muted hidden class="cis-scan-video"></video><div class="cis-scan-loading" data-loading role="status"><span class="cis-scan-wheel"><img src="./icon-192.png" alt=""></span><span data-loading-text>Chargement…</span></div><p data-status aria-live="polite" class="cis-scan-status">Choisis une méthode de lecture.</p><button type="button" data-capture hidden class="cis-scan-primary" style="width:100%;min-height:50px;margin:10px 0">Lancer le scan</button><div class="cis-scan-actions"><button type="button" data-camera class="cis-scan-primary">Scanner</button><button type="button" data-gallery class="cis-scan-secondary">Galerie</button></div><input type="file" accept="image/*" data-file hidden><p class="cis-scan-help">Présente le code dans n’importe quel sens, ou sélectionne une photo. Vérifie la date avant validation.</p></div>';document.body.appendChild(dialog);dialog.querySelector('[data-close]').onclick=stop;dialog.querySelector('[data-capture]').onclick=()=>capture(callback);dialog.querySelector('[data-camera]').onclick=()=>camera(callback);dialog.querySelector('[data-gallery]').onclick=()=>dialog.querySelector('[data-file]').click();for(const input of dialog.querySelectorAll('input[type=file]'))input.onchange=async()=>{if(!input.files?.[0])return;message('Lecture de la photo…');try{apply(await readImage(input.files[0]),callback);}catch(e){message(e.message);}input.value='';};}
 window.CISScanPeremption={open,parse,stop};
 })();
