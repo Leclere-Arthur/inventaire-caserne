@@ -15,7 +15,7 @@ importScripts("./notifications-history.js?v=pharmacie-vsav-prod-20261030-v1");
  * à récupérer le nouvel app.js?v=peremptions-20261031-v5.
  */
 
-const CACHE_NAME = "cis-principale-local-dm-v12";
+const CACHE_NAME = "cis-principale-camera-photo-hd-v13";
 
 
 /*
