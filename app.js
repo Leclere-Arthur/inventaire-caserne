@@ -10330,6 +10330,19 @@ function utilisateurAccesAdministratifCentral() {
     ].some(permission => utilisateurAPermission(permission));
 }
 
+function ouvrirFormationAdminDepuisAdministratif() {
+    if (!(utilisateurEstSPVAdmin() || utilisateurAPermission("acces_admin_formation"))) {
+        alert("Accès non autorisé.");
+        return;
+    }
+    if (!window.CISFormations || typeof CISFormations.ouvrir !== "function") {
+        alert("Le module Formation n'est pas disponible.");
+        return;
+    }
+    CISFormations.ouvrir();
+    CISFormations.vue("admin");
+}
+
 function afficherAdministratifCaserne() {
     rubriqueEquipeOrigine=null;
     if (!utilisateurAccesAdministratifCentral()) {
@@ -10345,7 +10358,7 @@ function afficherAdministratifCaserne() {
         ["🧹", "Ménage Admin", "afficherAdminMenageEquipe()", autorise("acces_admin_menage")],
         ["🚒", "Inventaires Admin", "afficherAdminInventairesEquipe()", autorise("acces_admin_menage")],
         ["⏱️", "Historique des heures", "afficherHistoriqueHeuresEquipe()", autorise("acces_admin_heures")],
-        ["📚", "Formation Admin", "CISFormations.vue('admin')", autorise("acces_admin_formation")],
+        ["📚", "Formation Admin", "ouvrirFormationAdminDepuisAdministratif()", autorise("acces_admin_formation")],
         ["🔔", "Notifications", "afficherNotificationsAdministration()", autorise("acces_notifications")],
     ].filter(carte => carte[3]);
     const app = document.getElementById("app");
