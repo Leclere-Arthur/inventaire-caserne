@@ -11,6 +11,12 @@ function parse(s){s=String(s||'').replace(/^<GS>/i,'').replace(/[\u001d\u241d]/g
  if(!date){let m=s.match(/\b(?:EXP|EXPIRY|PEREMPTION|PÉREMPTION|EXPIRE)\s*[:.\-]?\s*(\d{4})[\/.-](\d{1,2})[\/.-](\d{1,2})/i);if(m){let v=`${m[1]}-${m[2].padStart(2,'0')}-${m[3].padStart(2,'0')}`;if(valid(v))date=v;}}
  if(!date){let m=s.match(/\b(?:EXP|EXPIRY|PEREMPTION|PÉREMPTION|EXPIRE|USE\s*BY|BEST\s*BEFORE)\s*[:.\-]?\s*(\d{1,2})[\/.-](20\d{2}|\d{2})\b/i);if(m){let y=+m[2];if(y<100)y+=2000;let mon=+m[1];if(mon>=1&&mon<=12)date=dateYYMMDD(String(y).slice(2)+String(mon).padStart(2,'0')+'00');}}
  if(!date){let m=s.match(/\b(?:EXP|EXPIRY|PEREMPTION|PÉREMPTION|EXPIRE)\s*[:.\-]?\s*(\d{1,2})\s*[-–—\/.]\s*(20\d{2}|\d{2})\b/i);if(m){let y=+m[2];if(y<100)y+=2000;date=dateYYMMDD(String(y).slice(2)+m[1].padStart(2,'0')+'00');}}
+ // Étiquettes imprimées : « EXP: 07 – 2030 – 021 », avec tirets OCR et espaces variables.
+ if(!date){
+  const cleaned=s.normalize('NFKC').replace(/[–—−‐‑‒]/g,'-').replace(/\s+/g,' ');
+  const exp=cleaned.match(/(?:EXP(?:IR(?:Y|ATION|E))?|P[ÉE]REMPTION|USE\s*BY|DATE\s*LIMITE)\s*[:.;-]?\s*(0?[1-9]|1[0-2])\s*[-/. ]+\s*(20\d{2}|\d{2})(?!\d)/i);
+  if(exp){let year=+exp[2];if(year<100)year+=2000;date=dateYYMMDD(String(year).slice(2)+String(+exp[1]).padStart(2,'0')+'00');}
+ }
  const l=s.match(/\(10\)([^\x1d(]+)/);if(l)lot=l[1];return {date,gtin,lot,raw:s};}
 function stop(){loading(false);loop++;ocrBusy=false;try{videoControls?.stop();}catch(_){}videoControls=null;if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;}if(dialog){dialog.remove();dialog=null;}}
 function loading(active,label='Analyse en cours…'){const e=dialog?.querySelector('[data-loading]');if(e)e.classList.toggle('active',!!active);const t=dialog?.querySelector('[data-loading-text]');if(t)t.textContent=label;}
@@ -80,8 +86,26 @@ async function readImage(file){loading(true,'Lecture du Data Matrix local…');
   message('Recherche de la date imprimée…');
   try{
    await load('https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js','Tesseract');
-   const r=await Tesseract.recognize(file,'eng');
-   if(parse(r.data?.text||'').date)return r.data.text;
+   const image=await createImageBitmap(file);
+   try{
+    // L'étiquette est souvent petite : agrandir la zone centrale aide l'OCR.
+    const areas=[{x:0,y:0,w:image.width,h:image.height},
+      {x:0,y:Math.round(image.height*.22),w:image.width,h:Math.round(image.height*.55)}];
+    for(const a of areas){
+     for(const angle of [0,180,90,270]){
+      const scale=Math.min(2.5,1900/Math.max(a.w,a.h));
+      const w=Math.max(1,Math.round(a.w*scale)),h=Math.max(1,Math.round(a.h*scale));
+      const canvas=document.createElement('canvas');
+      canvas.width=angle%180===0?w:h;canvas.height=angle%180===0?h:w;
+      const ctx=canvas.getContext('2d',{willReadFrequently:true});
+      ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);
+      ctx.translate(canvas.width/2,canvas.height/2);ctx.rotate(angle*Math.PI/180);
+      ctx.drawImage(image,a.x,a.y,a.w,a.h,-w/2,-h/2,w,h);
+      const r=await Tesseract.recognize(canvas,'eng');
+      if(parse(r.data?.text||'').date)return r.data.text;
+     }
+    }
+   }finally{image.close?.();}
   }catch(e){lastError=e;}
   throw Error('Aucune date reconnue. '+(lastError?.message||'Essaie une photo nette et bien cadrée.'));
  }finally{loading(false);}
