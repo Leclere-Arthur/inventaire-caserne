@@ -725,7 +725,7 @@ const DOMAINE_EMAIL_INTERNE =
     "inventaire-caserne.local";
 
 const VERSION_APPLICATION =
-    "2026-11-01-principale-datamatrix-rotations-v2-scan-ui-camera-v3";
+    "2026-11-01-principale-datamatrix-rotations-v2-scan-ui-camera-v3-dm-async-video-v2";
 
 const CLE_PROFIL_UTILISATEUR_CACHE =
     "profil_utilisateur_connecte_v1";
