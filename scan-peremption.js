@@ -10,14 +10,11 @@ function parse(s){s=String(s||'').replace(/^<GS>/i,'').replace(/[\u001d\u241d]/g
  if(!date){let m=s.match(/\b(?:EXP|EXPIRY|PEREMPTION|PÉREMPTION|EXPIRE|DATE\s*LIMITE)\s*[:.\-]?\s*(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})/i);if(m){let y=+m[3];if(y<100)y+=2000;let v=`${y}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;if(valid(v))date=v;}}
  if(!date){let m=s.match(/\b(?:EXP|EXPIRY|PEREMPTION|PÉREMPTION|EXPIRE)\s*[:.\-]?\s*(\d{4})[\/.-](\d{1,2})[\/.-](\d{1,2})/i);if(m){let v=`${m[1]}-${m[2].padStart(2,'0')}-${m[3].padStart(2,'0')}`;if(valid(v))date=v;}}
  if(!date){let m=s.match(/\b(?:EXP|EXPIRY|PEREMPTION|PÉREMPTION|EXPIRE|USE\s*BY|BEST\s*BEFORE)\s*[:.\-]?\s*(\d{1,2})[\/.-](20\d{2}|\d{2})\b/i);if(m){let y=+m[2];if(y<100)y+=2000;let mon=+m[1];if(mon>=1&&mon<=12)date=dateYYMMDD(String(y).slice(2)+String(mon).padStart(2,'0')+'00');}}
+ if(!date){let m=s.match(/\b(?:EXP|EXPIRY|PEREMPTION|PÉREMPTION|EXPIRE)\s*[:.\-]?\s*(\d{1,2})\s*[-–—\/.]\s*(20\d{2}|\d{2})\b/i);if(m){let y=+m[2];if(y<100)y+=2000;date=dateYYMMDD(String(y).slice(2)+m[1].padStart(2,'0')+'00');}}
  const l=s.match(/\(10\)([^\x1d(]+)/);if(l)lot=l[1];return {date,gtin,lot,raw:s};}
 function stop(){loop++;if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;}if(dialog){dialog.remove();dialog=null;}}
 function message(s){const e=dialog?.querySelector('[data-status]');if(e)e.textContent=s;}
 async function load(src,globalName){if(window[globalName])return;await new Promise((res,rej)=>{const s=document.createElement('script');s.src=src;s.onload=res;s.onerror=()=>rej(Error('Bibliothèque de lecture indisponible (connexion requise).'));document.head.appendChild(s);});}
-async function zxingReader(){
- try{await load('https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/umd/index.min.js','ZXingBrowser');return new ZXingBrowser.BrowserMultiFormatReader();}
- catch(e){console.warn('Lecteur navigateur indisponible',e);return null;}
-}
 let libraryPromise=null;
 async function zxingLibrary(){
  if(window.ZXing)return window.ZXing;
@@ -25,15 +22,18 @@ async function zxingLibrary(){
  return libraryPromise;
 }
 function decodeCanvas(canvas,Z){
- const hints=new Map();hints.set(Z.DecodeHintType.POSSIBLE_FORMATS,[Z.BarcodeFormat.DATA_MATRIX,Z.BarcodeFormat.QR_CODE,Z.BarcodeFormat.CODE_128]);
- hints.set(Z.DecodeHintType.TRY_HARDER,true);
- const reader=new Z.MultiFormatReader();reader.setHints(hints);
+ const hints=new Map();hints.set(Z.DecodeHintType.POSSIBLE_FORMATS,[Z.BarcodeFormat.DATA_MATRIX,Z.BarcodeFormat.CODE_128,Z.BarcodeFormat.QR_CODE]);hints.set(Z.DecodeHintType.TRY_HARDER,true);
  try{
-  const source=new Z.HTMLCanvasElementLuminanceSource(canvas);
-  const bitmap=new Z.BinaryBitmap(new Z.HybridBinarizer(source));
-  const result=reader.decode(bitmap);
+  const reader=new Z.BrowserMultiFormatReader(hints);
+  const result=reader.decodeFromCanvas(canvas);
   return result?.getText?.()||null;
- }catch(e){return null;}finally{reader.reset();}
+ }catch(e){return null;}
+}
+async function decodeDetector(canvas){
+ if(!window.BarcodeDetector)return null;
+ try{const formats=await BarcodeDetector.getSupportedFormats();const desired=['data_matrix','code_128','qr_code'].filter(f=>formats.includes(f));if(!desired.length)return null;
+ const hits=await new BarcodeDetector({formats:desired}).detect(canvas);return hits[0]?.rawValue||null;
+ }catch(e){return null;}
 }
 function imageVariants(image){
  const max=2200;
@@ -45,14 +45,15 @@ function imageVariants(image){
   {angle:90,scale:Math.min(2,3200/Math.max(image.naturalWidth,image.naturalHeight)),threshold:0},
   {angle:180,scale:Math.min(2,3200/Math.max(image.naturalWidth,image.naturalHeight)),threshold:0},
   {angle:270,scale:Math.min(2,3200/Math.max(image.naturalWidth,image.naturalHeight)),threshold:0},
+  ...[15,30,45,60,75,105,120,135,150,165,195,210,225,240,255,285,300,315,330,345].map(angle=>({angle,scale:Math.min(base,1200/Math.max(image.naturalWidth,image.naturalHeight)),threshold:0})),
   {angle:0,scale:base,threshold:145},{angle:90,scale:base,threshold:145},
   {angle:180,scale:base,threshold:145},{angle:270,scale:base,threshold:145}
  ];
 }
 function drawVariant(canvas,ctx,image,v){
  const w=Math.max(1,Math.round(image.naturalWidth*v.scale));const h=Math.max(1,Math.round(image.naturalHeight*v.scale));
- const side=v.angle===90||v.angle===270;canvas.width=side?h:w;canvas.height=side?w:h;
- ctx.save();ctx.translate(canvas.width/2,canvas.height/2);ctx.rotate(v.angle*Math.PI/180);
+ const rad=v.angle*Math.PI/180;canvas.width=Math.ceil(Math.abs(w*Math.cos(rad))+Math.abs(h*Math.sin(rad)));canvas.height=Math.ceil(Math.abs(h*Math.cos(rad))+Math.abs(w*Math.sin(rad)));
+ ctx.fillStyle="#fff";ctx.fillRect(0,0,canvas.width,canvas.height);ctx.save();ctx.translate(canvas.width/2,canvas.height/2);ctx.rotate(v.angle*Math.PI/180);
  ctx.drawImage(image,-w/2,-h/2,w,h);ctx.restore();
  if(v.threshold){const data=ctx.getImageData(0,0,canvas.width,canvas.height);
   for(let i=0;i<data.data.length;i+=4){const c=(data.data[i]*299+data.data[i+1]*587+data.data[i+2]*114)/1000;
@@ -65,16 +66,14 @@ async function readImage(file){
   const image=await new Promise((resolve,reject)=>{const img=new Image();img.onload=()=>resolve(img);img.onerror=()=>reject(Error('Photo illisible.'));img.src=url;});
   const canvas=document.createElement('canvas');const ctx=canvas.getContext('2d',{willReadFrequently:true});
   if(!ctx)throw Error('Traitement photo indisponible.');
-  let Z=null,reader=null,lastError=null;
+  let Z=null,lastError=null;
   try{Z=await zxingLibrary();}catch(e){lastError=e;console.warn('ZXing Library indisponible',e);}
-  try{reader=await zxingReader();}catch(e){lastError=e;}
   const variants=imageVariants(image);
   for(let i=0;i<variants.length;i++){
    message(`Décodage Data Matrix, toutes orientations (${i+1}/${variants.length})…`);
    drawVariant(canvas,ctx,image,variants[i]);
-   if(window.BarcodeDetector){try{const detector=new BarcodeDetector({formats:['data_matrix','qr_code','code_128']});const hits=await detector.detect(canvas);if(hits.length)return hits[0].rawValue;}catch(e){lastError=e;}}
-   if(Z){const result=decodeCanvas(canvas,Z);if(result)return result;}
-   if(reader){try{const result=await reader.decodeFromImageUrl(canvas.toDataURL('image/png'));if(result?.getText())return result.getText();}catch(e){lastError=e;}}
+   const native=await decodeDetector(canvas);if(native&&parse(native).date)return native;
+   if(Z){const result=decodeCanvas(canvas,Z);if(result&&parse(result).date)return result;}
   }
   try{message('Code non décodé. Recherche de la date imprimée…');await load('https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js','Tesseract');const result=await Tesseract.recognize(file,'eng');if(result.data.text?.trim())return result.data.text;}catch(e){lastError=e;}
   throw Error('Aucun Data Matrix ni date détecté. Cadre le code entier avec une marge blanche et une photo nette. '+(lastError?.message||''));
@@ -82,25 +81,31 @@ async function readImage(file){
 }
 function apply(raw,callback){const r=parse(raw);if(!r.date){message('Aucune date reconnue. Vérifie la photo ou saisis la date manuellement.');return;}const label=r.date.split('-').reverse().join('/');if(!confirm(`Date détectée : ${label}${r.gtin?'\nGTIN : '+r.gtin:''}${r.lot?'\nLot : '+r.lot:''}\n\nUtiliser cette date ?`))return;callback(r);stop();}
 async function camera(callback){
- if(!navigator.mediaDevices?.getUserMedia){message('Caméra directe non disponible. Utilise « Prendre une photo ».');return;}
+ if(!navigator.mediaDevices?.getUserMedia){message('Caméra directe indisponible. Utilise Galerie.');return;}
+ const token=++loop;
  try{
-  stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}},audio:false});
-  const video=dialog.querySelector('video');video.hidden=false;video.srcObject=stream;await video.play();
-  const token=++loop;
-  let detector=null;
-  if(window.BarcodeDetector){try{detector=new BarcodeDetector({formats:['data_matrix','qr_code','code_128','ean_13','ean_8']});}catch(e){}}
-  if(detector){
-   message('Place le code dans le cadre…');
-   const tick=async()=>{if(token!==loop||!stream)return;try{const results=await detector.detect(video);if(results.length){apply(results[0].rawValue,callback);if(!dialog)return;}}catch(e){}if(token===loop)setTimeout(tick,350);};tick();return;
-  }
-  message('Activation du lecteur compatible iPhone…');
-  stream.getTracks().forEach(t=>t.stop());stream=null;video.srcObject=null;
-  const reader=await zxingReader();if(token!==loop)return;
-  if(!reader){message('Lecteur vidéo indisponible. Utilise « Prendre une photo » ou « Galerie ».');return;}
-  const controls=await reader.decodeFromVideoDevice(undefined,video,(result,error)=>{if(token!==loop)return;if(result?.getText()){apply(result.getText(),callback);if(!dialog)controls.stop();}});
-  const oldStop=dialog?.querySelector('[data-close]')?.onclick;
-  if(dialog){dialog.querySelector('[data-close]').onclick=()=>{controls.stop();oldStop?.();};}
- }catch(e){message('Caméra inaccessible : '+e.message);}
+  if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;}
+  stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1280},height:{ideal:720}},audio:false});
+  if(token!==loop){stream.getTracks().forEach(t=>t.stop());return;}
+  const video=dialog.querySelector('video');video.hidden=false;video.setAttribute('autoplay','');video.muted=true;video.playsInline=true;video.srcObject=stream;
+  await video.play();
+  message('Caméra active. Place le Data Matrix dans le cadre, même incliné.');
+  let Z=null;try{Z=await zxingLibrary();}catch(e){console.warn('Moteur Data Matrix indisponible',e);}
+  if(token!==loop)return;
+  const canvas=document.createElement('canvas');const ctx=canvas.getContext('2d',{willReadFrequently:true});
+  if(!ctx){message('Décodage vidéo indisponible. Utilise Galerie.');return;}
+  const tick=async()=>{
+   if(token!==loop||!stream||!dialog)return;
+   try{
+    if(video.readyState>=2&&video.videoWidth){
+     const scale=Math.min(1,1000/Math.max(video.videoWidth,video.videoHeight));canvas.width=Math.max(1,Math.round(video.videoWidth*scale));canvas.height=Math.max(1,Math.round(video.videoHeight*scale));ctx.drawImage(video,0,0,canvas.width,canvas.height);
+     let raw=await decodeDetector(canvas);if(!raw&&Z)raw=decodeCanvas(canvas,Z);
+     if(raw){apply(raw,callback);if(!dialog||token!==loop)return;}
+    }
+   }catch(e){console.warn('Lecture vidéo',e);}
+   if(token===loop&&stream)setTimeout(tick,400);
+  };tick();
+ }catch(e){message('Impossible de lancer la caméra : '+e.message);}
 }
 function open(callback){stop();dialog=document.createElement('div');dialog.setAttribute('role','dialog');dialog.setAttribute('aria-modal','true');dialog.setAttribute('aria-label','Scanner une péremption');dialog.style.cssText='position:fixed;inset:0;z-index:2147483647;background:#0009;display:flex;align-items:center;justify-content:center;padding:12px';dialog.innerHTML='<style>.cis-scan-card{width:min(100%,460px);max-height:90dvh;overflow:auto;background:#fff;color:#182a40;border:1px solid #8ca5c4;border-radius:14px;box-shadow:0 14px 44px #0004;padding:20px;font:inherit;box-sizing:border-box}.cis-scan-header{display:flex;align-items:center;justify-content:space-between;gap:12px}.cis-scan-header h2{font-size:19px;line-height:1.35;margin:0;font-weight:700}.cis-scan-close{background:#eef2f8;color:#243a55;border:1px solid #cbd6e5;border-radius:8px;font-size:24px;min-width:40px;min-height:40px;cursor:pointer}.cis-scan-subtitle{color:#5c6c7e;margin:10px 0 18px;font-size:14px}.cis-scan-video{display:block;width:100%;max-height:250px;object-fit:contain;border-radius:9px;background:#182b42}.cis-scan-video[hidden]{display:none}.cis-scan-status{background:#f3f7fc;border:1px solid #d8e3f0;border-radius:9px;padding:12px;margin:12px 0 16px;font-size:14px}.cis-scan-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px}.cis-scan-actions button{min-height:48px;padding:12px;border-radius:9px;font:inherit;font-weight:700;cursor:pointer}.cis-scan-primary{background:#1766b1;color:white;border:1px solid #11558f}.cis-scan-secondary{background:#eef5ff;color:#14538c;border:1px solid #a7c6e7}.cis-scan-help{color:#65758a;font-size:12px;line-height:1.5;margin:16px 0 0}</style><div class="cis-scan-card"><div class="cis-scan-header"><h2>Scanner une date de péremption</h2><button type="button" data-close aria-label="Fermer" class="cis-scan-close">×</button></div><p class="cis-scan-subtitle">Data Matrix GS1, code-barres ou étiquette EXP</p><video playsinline muted hidden class="cis-scan-video"></video><p data-status aria-live="polite" class="cis-scan-status">Choisis une méthode de lecture.</p><div class="cis-scan-actions"><button type="button" data-camera class="cis-scan-primary">Scanner</button><button type="button" data-gallery class="cis-scan-secondary">Galerie</button></div><input type="file" accept="image/*" data-file hidden><p class="cis-scan-help">Présente le code dans n’importe quel sens, ou sélectionne une photo. Vérifie la date avant validation.</p></div>';document.body.appendChild(dialog);dialog.querySelector('[data-close]').onclick=stop;dialog.querySelector('[data-camera]').onclick=()=>camera(callback);dialog.querySelector('[data-gallery]').onclick=()=>dialog.querySelector('[data-file]').click();for(const input of dialog.querySelectorAll('input[type=file]'))input.onchange=async()=>{if(!input.files?.[0])return;message('Lecture de la photo…');try{apply(await readImage(input.files[0]),callback);}catch(e){message(e.message);}input.value='';};}
 window.CISScanPeremption={open,parse,stop};

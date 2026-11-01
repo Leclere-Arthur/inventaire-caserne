@@ -725,7 +725,7 @@ const DOMAINE_EMAIL_INTERNE =
     "inventaire-caserne.local";
 
 const VERSION_APPLICATION =
-    "2026-11-01-principale-datamatrix-rotations-v2-scan-ui";
+    "2026-11-01-principale-datamatrix-rotations-v2-scan-ui-camera-v3";
 
 const CLE_PROFIL_UTILISATEUR_CACHE =
     "profil_utilisateur_connecte_v1";
@@ -1045,7 +1045,7 @@ let minuteurVerificationMiseAJour =
  * Elle permet de détecter une nouvelle version même si seul app.js?v=peremptions-20261031-v5 change.
  */
 const VERSION_APPLICATION_JS =
-    "2026-11-01-principale-datamatrix-rotations-v2";
+    "2026-11-01-principale-datamatrix-rotations-v2-camera-v3";
 
 async function verifierNouvelleVersionAppJs() {
 
