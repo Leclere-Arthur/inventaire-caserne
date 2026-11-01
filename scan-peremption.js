@@ -9,7 +9,7 @@ function parse(s){s=String(s||'').replace(/^<GS>/i,'').replace(/[\u001d\u241d]/g
  if(!date){let m=s.match(/(?:^|\x1d|(?<=\d{14}))17(\d{6})/);if(m)date=dateYYMMDD(m[1]);}
  if(!date){let m=s.match(/\b(?:EXP|EXPIRY|PEREMPTION|PÉREMPTION|EXPIRE|DATE\s*LIMITE)\s*[:.\-]?\s*(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})/i);if(m){let y=+m[3];if(y<100)y+=2000;let v=`${y}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;if(valid(v))date=v;}}
  if(!date){let m=s.match(/\b(?:EXP|EXPIRY|PEREMPTION|PÉREMPTION|EXPIRE)\s*[:.\-]?\s*(\d{4})[\/.-](\d{1,2})[\/.-](\d{1,2})/i);if(m){let v=`${m[1]}-${m[2].padStart(2,'0')}-${m[3].padStart(2,'0')}`;if(valid(v))date=v;}}
- if(!date){let m=s.match(/\b(?:EXP|EXPIRY|PEREMPTION|PÉREMPTION|EXPIRE|USE\s*BY|BEST\s*BEFORE)\s*[:.\-]?\s*(\d{1,2})[\/.-](20\d{2}|\d{2})\b/i);if(m){let y=+m[2];if(y<100)y+=2000;let mon=+m[1];if(mon>=1&&mon<=12)date=dateYYMMDD(String(y).slice(2)+String(mon).padStart(2,'0')+'00');}}
+ if(!date){let m=s.match(/\b(?:EXP|EXPIRY|EXPIRATION|PEREMPTION|PÉREMPTION|EXPIRE|USE\s*BY|BEST\s*BEFORE)\s*[:.\-]?\s*(\d{1,2})[\/.-](20\d{2}|\d{2})\b/i);if(m){let y=+m[2];if(y<100)y+=2000;let mon=+m[1];if(mon>=1&&mon<=12)date=dateYYMMDD(String(y).slice(2)+String(mon).padStart(2,'0')+'00');}}
  if(!date){let m=s.match(/\b(?:EXP|EXPIRY|PEREMPTION|PÉREMPTION|EXPIRE)\s*[:.\-]?\s*(\d{1,2})\s*[-–—\/.]\s*(20\d{2}|\d{2})\b/i);if(m){let y=+m[2];if(y<100)y+=2000;date=dateYYMMDD(String(y).slice(2)+m[1].padStart(2,'0')+'00');}}
  const l=s.match(/\(10\)([^\x1d(]+)/);if(l)lot=l[1];return {date,gtin,lot,raw:s};}
 function stop(){loading(false);loop++;ocrBusy=false;try{videoControls?.stop();}catch(_){}videoControls=null;if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;}if(dialog){dialog.remove();dialog=null;}}
@@ -20,7 +20,7 @@ let libraryPromise=null;
 async function zxingLibrary(){
  if(window.ZXing)return window.ZXing;
  if(!libraryPromise)libraryPromise=(async()=>{let last;
-  for(const src of ['https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js','https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js']){
+  for(const src of ['https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js','https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js']){
     try{await load(src,'ZXing');if(window.ZXing)return window.ZXing;}catch(e){last=e;}
   }
   throw last||Error('Lecteur Data Matrix indisponible');
@@ -42,10 +42,19 @@ async function decodeDetector(canvas){
  }catch(e){return null;}
 }
 function imageVariants(image){
- const max=Math.max(image.naturalWidth,image.naturalHeight);
- const scale=Math.min(1,1800/max);
- // Ne pas parcourir 120 orientations : le décodeur détecte lui-même la rotation.
- return [0,90,180,270].map(angle=>({angle,scale,threshold:0}));
+ const max=2200;
+ const base=Math.min(1,max/Math.max(image.naturalWidth,image.naturalHeight));
+ return [
+  {angle:0,scale:base,threshold:0},{angle:90,scale:base,threshold:0},
+  {angle:180,scale:base,threshold:0},{angle:270,scale:base,threshold:0},
+  {angle:0,scale:Math.min(2,3200/Math.max(image.naturalWidth,image.naturalHeight)),threshold:0},
+  {angle:90,scale:Math.min(2,3200/Math.max(image.naturalWidth,image.naturalHeight)),threshold:0},
+  {angle:180,scale:Math.min(2,3200/Math.max(image.naturalWidth,image.naturalHeight)),threshold:0},
+  {angle:270,scale:Math.min(2,3200/Math.max(image.naturalWidth,image.naturalHeight)),threshold:0},
+  ...[15,30,45,60,75,105,120,135,150,165,195,210,225,240,255,285,300,315,330,345].map(angle=>({angle,scale:Math.min(base,1200/Math.max(image.naturalWidth,image.naturalHeight)),threshold:0})),
+  {angle:0,scale:base,threshold:145},{angle:90,scale:base,threshold:145},
+  {angle:180,scale:base,threshold:145},{angle:270,scale:base,threshold:145}
+ ];
 }
 function drawVariant(canvas,ctx,image,v){
  const w=Math.max(1,Math.round(image.naturalWidth*v.scale));const h=Math.max(1,Math.round(image.naturalHeight*v.scale));
@@ -57,50 +66,44 @@ function drawVariant(canvas,ctx,image,v){
    const n=c>=v.threshold?255:0;data.data[i]=data.data[i+1]=data.data[i+2]=n;}
   ctx.putImageData(data,0,0);}
 }
-async function readImage(file){loading(true,'Analyse du Data Matrix et de la date…');
+async function readImage(file){
+ loading(true,'Lecture du code et de la date…');
  const url=URL.createObjectURL(file);
  try{
   const image=await new Promise((resolve,reject)=>{const img=new Image();img.onload=()=>resolve(img);img.onerror=()=>reject(Error('Photo illisible.'));img.src=url;});
   const canvas=document.createElement('canvas');const ctx=canvas.getContext('2d',{willReadFrequently:true});
   if(!ctx)throw Error('Traitement photo indisponible.');
-  let Z=null,lastError=null;
-  try{Z=await zxingLibrary();}catch(e){lastError=e;console.warn('ZXing Library indisponible',e);}
-  const variants=Z||window.BarcodeDetector?imageVariants(image):[];
-  for(let i=0;i<variants.length;i++){
-   message(`Lecture du code (${i+1}/${variants.length})…`);
-   if(i%3===0)await new Promise(resolve=>setTimeout(resolve,0));drawVariant(canvas,ctx,image,variants[i]);
-   const native=await decodeDetector(canvas);if(native&&parse(native).date)return native;
-   if(Z){const result=await decodeCanvas(canvas,Z);if(result&&parse(result).date)return result;}
-  }
-  if(!Z&&!window.BarcodeDetector)message('Lecteur Data Matrix non disponible. Lecture de la date imprimée…');
-  try{
-   message('Seconde lecture Data Matrix (moteur vidéo)…');
-   await load('https://unpkg.com/@zxing/browser@0.1.5/umd/index.min.js','ZXingBrowser');
-   const reader=new window.ZXingBrowser.BrowserMultiFormatReader();
-   const result=await reader.decodeFromImageUrl(url);
-   if(result?.getText?.()&&parse(result.getText()).date)return result.getText();
-  }catch(e){console.warn('Seconde lecture Data Matrix',e);}
-  // OCR de la date imprimée sur 4 orientations, y compris une photo prise de travers.
+  // Lecture native prioritaire : le décodeur repère lui-même l’orientation du code.
+  // Aucune rotation exhaustive, qui bloquait l’iPhone pendant 30 secondes.
+  const scale=Math.min(1,2400/Math.max(image.naturalWidth,image.naturalHeight));
+  canvas.width=Math.round(image.naturalWidth*scale);canvas.height=Math.round(image.naturalHeight*scale);
+  ctx.drawImage(image,0,0,canvas.width,canvas.height);
+  const native=await decodeDetector(canvas);if(native&&parse(native).date)return native;
+  // Le lecteur ZXing est facultatif et ne doit jamais bloquer l'OCR.
+  // On ne charge pas de scripts ZXing inexistants qui provoquaient les échecs précédents.
+  if(window.ZXing){const decoded=await decodeCanvas(canvas,window.ZXing);if(decoded&&parse(decoded).date)return decoded;}
+  message('Recherche de la date imprimée…');
   try{
    await load('https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js','Tesseract');
    const worker=await Tesseract.createWorker('eng');
    try{
-    for(const angle of [0,90,180,270]){
-     message('Lecture rapide de la date : '+angle+'°…');
-     const rad=angle*Math.PI/180,w=image.naturalWidth,h=image.naturalHeight;
-     const scale=Math.min(1,1400/Math.max(w,h));
-     const ww=w*scale,hh=h*scale;
-     canvas.width=Math.ceil(Math.abs(ww*Math.cos(rad))+Math.abs(hh*Math.sin(rad)));
-     canvas.height=Math.ceil(Math.abs(hh*Math.cos(rad))+Math.abs(ww*Math.sin(rad)));
+    // L'OCR est essayé sur les quatre axes, en conservant un nombre borné de passages.
+    // La lecture d'un code GS1 reste indépendante de cette opération.
+    for(const angle of [0,90,270,180]){
+     const rad=angle*Math.PI/180;
+     const w=image.naturalWidth,h=image.naturalHeight;
+     const f=Math.min(1,1700/Math.max(w,h));
+     const ww=Math.round(w*f),hh=Math.round(h*f);
+     canvas.width=angle%180===0?ww:hh;canvas.height=angle%180===0?hh:ww;
      ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);
      ctx.save();ctx.translate(canvas.width/2,canvas.height/2);ctx.rotate(rad);ctx.drawImage(image,-ww/2,-hh/2,ww,hh);ctx.restore();
      const result=await worker.recognize(canvas);
-     if(parse(result.data?.text||'').date)return result.data.text;
-     await new Promise(resolve=>setTimeout(resolve,0));
+     const text=result.data?.text||'';
+     if(parse(text).date)return text;
     }
    }finally{await worker.terminate();}
-  }catch(e){lastError=e;console.warn('OCR toutes orientations',e);}
-  throw Error('Aucun Data Matrix ni date détecté. Cadre le code entier avec une marge blanche et une photo nette. '+(lastError?.message||''));
+  }catch(e){console.warn('OCR non disponible',e);throw Error('Reconnaissance du texte indisponible : '+e.message);}
+  throw Error('Aucune date reconnue. Essaie une photo nette, plus rapprochée, ou un autre cadrage.');
  }finally{loading(false);URL.revokeObjectURL(url);}
 }
 function apply(raw,callback){const r=parse(raw);if(!r.date){message('Aucune date reconnue. Vérifie la photo ou saisis la date manuellement.');return;}const label=r.date.split('-').reverse().join('/');if(!confirm(`Date détectée : ${label}${r.gtin?'\nGTIN : '+r.gtin:''}${r.lot?'\nLot : '+r.lot:''}\n\nUtiliser cette date ?`))return;callback(r);stop();}
@@ -133,6 +136,6 @@ async function capture(callback){
  }catch(e){message(e.message||'Analyse impossible.');}
  finally{loading(false);if(button&&button.isConnected)button.disabled=false;}
 }
-function open(callback){stop();dialog=document.createElement('div');dialog.setAttribute('role','dialog');dialog.setAttribute('aria-modal','true');dialog.setAttribute('aria-label','Scanner une péremption');dialog.style.cssText='position:fixed;inset:0;z-index:2147483647;background:#0009;display:flex;align-items:center;justify-content:center;padding:12px';dialog.innerHTML='<style>.cis-scan-card{width:min(100%,640px);max-height:96dvh;overflow:auto;background:#fff;color:#182a40;border:1px solid #8ca5c4;border-radius:14px;box-shadow:0 14px 44px #0004;padding:20px;font:inherit;box-sizing:border-box}.cis-scan-header{display:flex;align-items:center;justify-content:space-between;gap:12px}.cis-scan-header h2{font-size:19px;line-height:1.35;margin:0;font-weight:700}.cis-scan-close{background:#eef2f8;color:#243a55;border:1px solid #cbd6e5;border-radius:8px;font-size:24px;min-width:40px;min-height:40px;cursor:pointer}.cis-scan-subtitle{color:#5c6c7e;margin:10px 0 18px;font-size:14px}.cis-scan-video{display:block;width:100%;height:auto;max-height:65dvh;object-fit:cover;border-radius:9px;background:#182b42}.cis-scan-video[hidden]{display:none}.cis-scan-video{aspect-ratio:3/4;min-height:360px}@keyframes cis-scan-spin{to{transform:rotate(360deg)}}.cis-scan-loading{display:none;align-items:center;gap:10px;background:#eef5ff;border:1px solid #bcd2ec;border-radius:9px;padding:12px;margin:12px 0;color:#17385a;font-size:14px}.cis-scan-loading.active{display:flex}.cis-scan-wheel{width:56px;height:56px;border:3px solid #dce7e1;border-top-color:#217448;border-right-color:#217448;border-radius:50%;animation:cis-scan-spin 1.15s linear infinite;flex:none;display:grid;place-items:center}.cis-scan-wheel img{width:39px;height:39px;object-fit:contain;border-radius:9px;animation:cis-scan-spin 1.15s linear infinite reverse}.cis-scan-status{background:#f3f7fc;border:1px solid #d8e3f0;border-radius:9px;padding:12px;margin:12px 0 16px;font-size:14px}.cis-scan-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px}.cis-scan-actions button{min-height:48px;padding:12px;border-radius:9px;font:inherit;font-weight:700;cursor:pointer}.cis-scan-primary{background:#1766b1;color:white;border:1px solid #11558f}.cis-scan-secondary{background:#eef5ff;color:#14538c;border:1px solid #a7c6e7}.cis-scan-help{color:#65758a;font-size:12px;line-height:1.5;margin:16px 0 0}</style><div class="cis-scan-card"><div class="cis-scan-header"><h2>Scanner une date de péremption</h2><button type="button" data-close aria-label="Fermer" class="cis-scan-close">×</button></div><p class="cis-scan-subtitle">Data Matrix GS1, code-barres ou étiquette EXP</p><video playsinline muted hidden class="cis-scan-video"></video><div class="cis-scan-loading" data-loading role="status"><span class="cis-scan-wheel"><img src="./icon-192.png" alt=""></span><span data-loading-text>Chargement…</span></div><p data-status aria-live="polite" class="cis-scan-status">Choisis une méthode de lecture.</p><button type="button" data-capture hidden class="cis-scan-primary" style="width:100%;min-height:50px;margin:10px 0">Lancer le scan</button><div class="cis-scan-actions"><button type="button" data-camera class="cis-scan-primary">Scanner</button><button type="button" data-gallery class="cis-scan-secondary">Galerie</button></div><input type="file" accept="image/*" data-file hidden><p class="cis-scan-help">Présente le code ou sélectionne une photo. Vérifie la date avant validation.</p></div>';document.body.appendChild(dialog);dialog.querySelector('[data-close]').onclick=stop;dialog.querySelector('[data-capture]').onclick=()=>capture(callback);dialog.querySelector('[data-camera]').onclick=()=>camera(callback);dialog.querySelector('[data-gallery]').onclick=()=>dialog.querySelector('[data-file]').click();for(const input of dialog.querySelectorAll('input[type=file]'))input.onchange=async()=>{if(!input.files?.[0])return;message('Lecture de la photo…');try{apply(await readImage(input.files[0]),callback);}catch(e){message(e.message);}input.value='';};}
+function open(callback){stop();dialog=document.createElement('div');dialog.setAttribute('role','dialog');dialog.setAttribute('aria-modal','true');dialog.setAttribute('aria-label','Scanner une péremption');dialog.style.cssText='position:fixed;inset:0;z-index:2147483647;background:#0009;display:flex;align-items:center;justify-content:center;padding:12px';dialog.innerHTML='<style>.cis-scan-card{width:min(100%,640px);max-height:96dvh;overflow:auto;background:#fff;color:#182a40;border:1px solid #8ca5c4;border-radius:14px;box-shadow:0 14px 44px #0004;padding:20px;font:inherit;box-sizing:border-box}.cis-scan-header{display:flex;align-items:center;justify-content:space-between;gap:12px}.cis-scan-header h2{font-size:19px;line-height:1.35;margin:0;font-weight:700}.cis-scan-close{background:#eef2f8;color:#243a55;border:1px solid #cbd6e5;border-radius:8px;font-size:24px;min-width:40px;min-height:40px;cursor:pointer}.cis-scan-subtitle{color:#5c6c7e;margin:10px 0 18px;font-size:14px}.cis-scan-video{display:block;width:100%;height:auto;max-height:65dvh;object-fit:cover;border-radius:9px;background:#182b42}.cis-scan-video[hidden]{display:none}.cis-scan-video{aspect-ratio:3/4;min-height:360px}@keyframes cis-scan-spin{to{transform:rotate(360deg)}}.cis-scan-loading{display:none;align-items:center;gap:10px;background:#eef5ff;border:1px solid #bcd2ec;border-radius:9px;padding:12px;margin:12px 0;color:#17385a;font-size:14px}.cis-scan-loading.active{display:flex}.cis-scan-wheel{width:56px;height:56px;border:3px solid #dce7e1;border-top-color:#217448;border-right-color:#217448;border-radius:50%;animation:cis-scan-spin 1.15s linear infinite;flex:none;display:grid;place-items:center}.cis-scan-wheel img{width:39px;height:39px;object-fit:contain;border-radius:9px;animation:cis-scan-spin 1.15s linear infinite reverse}.cis-scan-status{background:#f3f7fc;border:1px solid #d8e3f0;border-radius:9px;padding:12px;margin:12px 0 16px;font-size:14px}.cis-scan-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px}.cis-scan-actions button{min-height:48px;padding:12px;border-radius:9px;font:inherit;font-weight:700;cursor:pointer}.cis-scan-primary{background:#1766b1;color:white;border:1px solid #11558f}.cis-scan-secondary{background:#eef5ff;color:#14538c;border:1px solid #a7c6e7}.cis-scan-help{color:#65758a;font-size:12px;line-height:1.5;margin:16px 0 0}</style><div class="cis-scan-card"><div class="cis-scan-header"><h2>Scanner une date de péremption</h2><button type="button" data-close aria-label="Fermer" class="cis-scan-close">×</button></div><p class="cis-scan-subtitle">Data Matrix GS1, code-barres ou étiquette EXP</p><video playsinline muted hidden class="cis-scan-video"></video><div class="cis-scan-loading" data-loading role="status"><span class="cis-scan-wheel"><img src="./icon-192.png" alt=""></span><span data-loading-text>Chargement…</span></div><p data-status aria-live="polite" class="cis-scan-status">Choisis une méthode de lecture.</p><button type="button" data-capture hidden class="cis-scan-primary" style="width:100%;min-height:50px;margin:10px 0">Lancer le scan</button><div class="cis-scan-actions"><button type="button" data-camera class="cis-scan-primary">Scanner</button><button type="button" data-gallery class="cis-scan-secondary">Galerie</button></div><input type="file" accept="image/*" data-file hidden><p class="cis-scan-help">Présente le code dans n’importe quel sens, ou sélectionne une photo. Vérifie la date avant validation.</p></div>';document.body.appendChild(dialog);dialog.querySelector('[data-close]').onclick=stop;dialog.querySelector('[data-capture]').onclick=()=>capture(callback);dialog.querySelector('[data-camera]').onclick=()=>camera(callback);dialog.querySelector('[data-gallery]').onclick=()=>dialog.querySelector('[data-file]').click();for(const input of dialog.querySelectorAll('input[type=file]'))input.onchange=async()=>{if(!input.files?.[0])return;message('Lecture de la photo…');try{apply(await readImage(input.files[0]),callback);}catch(e){message(e.message);}input.value='';};}
 window.CISScanPeremption={open,parse,stop};
 })();
