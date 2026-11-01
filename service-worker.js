@@ -15,7 +15,7 @@ importScripts("./notifications-history.js?v=pharmacie-vsav-prod-20261030-v1");
  * à récupérer le nouvel app.js?v=peremptions-20261031-v5.
  */
 
-const CACHE_NAME = "cis-principale-datamatrix-rotations-20261101-v2-fix-dialog-scan-ui-camera-v3-dm-async-video-v2";
+const CACHE_NAME = "cis-principale-scan-camera-datamatrix-20261101-v4";
 
 
 /*
@@ -29,6 +29,7 @@ const FICHIERS_APPLICATION = ["./maintenance-client.js","./interface-personnelle
     "./",
 
     "./index.html",
+    "./scan-peremption.js?v=20261101-v4",
     "./vsav-sans-stock.js?v=pharmacie-vsav-prod-20261030-v1",
     "./suivi-vsav.js?v=pharmacie-vsav-prod-20261030-v1",
 
