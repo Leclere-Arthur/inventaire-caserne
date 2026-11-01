@@ -12,7 +12,8 @@ function parse(s){s=String(s||'').replace(/^<GS>/i,'').replace(/[\u001d\u241d]/g
  if(!date){let m=s.match(/\b(?:EXP|EXPIRY|PEREMPTION|PÉREMPTION|EXPIRE|USE\s*BY|BEST\s*BEFORE)\s*[:.\-]?\s*(\d{1,2})[\/.-](20\d{2}|\d{2})\b/i);if(m){let y=+m[2];if(y<100)y+=2000;let mon=+m[1];if(mon>=1&&mon<=12)date=dateYYMMDD(String(y).slice(2)+String(mon).padStart(2,'0')+'00');}}
  if(!date){let m=s.match(/\b(?:EXP|EXPIRY|PEREMPTION|PÉREMPTION|EXPIRE)\s*[:.\-]?\s*(\d{1,2})\s*[-–—\/.]\s*(20\d{2}|\d{2})\b/i);if(m){let y=+m[2];if(y<100)y+=2000;date=dateYYMMDD(String(y).slice(2)+m[1].padStart(2,'0')+'00');}}
  const l=s.match(/\(10\)([^\x1d(]+)/);if(l)lot=l[1];return {date,gtin,lot,raw:s};}
-function stop(){loop++;if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;}if(dialog){dialog.remove();dialog=null;}}
+function stop(){loading(false);loop++;if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;}if(dialog){dialog.remove();dialog=null;}}
+function loading(active,label='Analyse en cours…'){const e=dialog?.querySelector('[data-loading]');if(e)e.classList.toggle('active',!!active);const t=dialog?.querySelector('[data-loading-text]');if(t)t.textContent=label;}
 function message(s){const e=dialog?.querySelector('[data-status]');if(e)e.textContent=s;}
 async function load(src,globalName){if(window[globalName])return;await new Promise((res,rej)=>{const s=document.createElement('script');s.src=src;s.onload=res;s.onerror=()=>rej(Error('Bibliothèque de lecture indisponible (connexion requise).'));document.head.appendChild(s);});}
 let libraryPromise=null;
@@ -21,11 +22,11 @@ async function zxingLibrary(){
  if(!libraryPromise)libraryPromise=load('https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js','ZXing').then(()=>window.ZXing).catch(e=>{libraryPromise=null;throw e;});
  return libraryPromise;
 }
-function decodeCanvas(canvas,Z){
+async function decodeCanvas(canvas,Z){
  const hints=new Map();hints.set(Z.DecodeHintType.POSSIBLE_FORMATS,[Z.BarcodeFormat.DATA_MATRIX,Z.BarcodeFormat.CODE_128,Z.BarcodeFormat.QR_CODE]);hints.set(Z.DecodeHintType.TRY_HARDER,true);
  try{
   const reader=new Z.BrowserMultiFormatReader(hints);
-  const result=reader.decodeFromCanvas(canvas);
+  const result=await reader.decodeFromCanvas(canvas);
   return result?.getText?.()||null;
  }catch(e){return null;}
 }
@@ -60,7 +61,7 @@ function drawVariant(canvas,ctx,image,v){
    const n=c>=v.threshold?255:0;data.data[i]=data.data[i+1]=data.data[i+2]=n;}
   ctx.putImageData(data,0,0);}
 }
-async function readImage(file){
+async function readImage(file){loading(true,'Analyse du Data Matrix et de la date…');
  const url=URL.createObjectURL(file);
  try{
   const image=await new Promise((resolve,reject)=>{const img=new Image();img.onload=()=>resolve(img);img.onerror=()=>reject(Error('Photo illisible.'));img.src=url;});
@@ -71,13 +72,13 @@ async function readImage(file){
   const variants=imageVariants(image);
   for(let i=0;i<variants.length;i++){
    message(`Décodage Data Matrix, toutes orientations (${i+1}/${variants.length})…`);
-   drawVariant(canvas,ctx,image,variants[i]);
+   if(i%3===0)await new Promise(resolve=>setTimeout(resolve,0));drawVariant(canvas,ctx,image,variants[i]);
    const native=await decodeDetector(canvas);if(native&&parse(native).date)return native;
-   if(Z){const result=decodeCanvas(canvas,Z);if(result&&parse(result).date)return result;}
+   if(Z){const result=await decodeCanvas(canvas,Z);if(result&&parse(result).date)return result;}
   }
   try{message('Code non décodé. Recherche de la date imprimée…');await load('https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js','Tesseract');const result=await Tesseract.recognize(file,'eng');if(result.data.text?.trim())return result.data.text;}catch(e){lastError=e;}
   throw Error('Aucun Data Matrix ni date détecté. Cadre le code entier avec une marge blanche et une photo nette. '+(lastError?.message||''));
- }finally{URL.revokeObjectURL(url);}
+ }finally{loading(false);URL.revokeObjectURL(url);}
 }
 function apply(raw,callback){const r=parse(raw);if(!r.date){message('Aucune date reconnue. Vérifie la photo ou saisis la date manuellement.');return;}const label=r.date.split('-').reverse().join('/');if(!confirm(`Date détectée : ${label}${r.gtin?'\nGTIN : '+r.gtin:''}${r.lot?'\nLot : '+r.lot:''}\n\nUtiliser cette date ?`))return;callback(r);stop();}
 async function camera(callback){
@@ -98,15 +99,15 @@ async function camera(callback){
    if(token!==loop||!stream||!dialog)return;
    try{
     if(video.readyState>=2&&video.videoWidth){
-     const scale=Math.min(1,1000/Math.max(video.videoWidth,video.videoHeight));canvas.width=Math.max(1,Math.round(video.videoWidth*scale));canvas.height=Math.max(1,Math.round(video.videoHeight*scale));ctx.drawImage(video,0,0,canvas.width,canvas.height);
-     let raw=await decodeDetector(canvas);if(!raw&&Z)raw=decodeCanvas(canvas,Z);
-     if(raw){apply(raw,callback);if(!dialog||token!==loop)return;}
+     const scale=Math.min(1,1600/Math.max(video.videoWidth,video.videoHeight));canvas.width=Math.max(1,Math.round(video.videoWidth*scale));canvas.height=Math.max(1,Math.round(video.videoHeight*scale));ctx.drawImage(video,0,0,canvas.width,canvas.height);
+     let raw=await decodeDetector(canvas);if(!raw&&Z)raw=await decodeCanvas(canvas,Z);
+     if(raw&&parse(raw).date){apply(raw,callback);if(!dialog||token!==loop)return;}
     }
    }catch(e){console.warn('Lecture vidéo',e);}
    if(token===loop&&stream)setTimeout(tick,400);
   };tick();
- }catch(e){message('Impossible de lancer la caméra : '+e.message);}
+ }catch(e){loading(false);message('Impossible de lancer la caméra : '+e.message);}
 }
-function open(callback){stop();dialog=document.createElement('div');dialog.setAttribute('role','dialog');dialog.setAttribute('aria-modal','true');dialog.setAttribute('aria-label','Scanner une péremption');dialog.style.cssText='position:fixed;inset:0;z-index:2147483647;background:#0009;display:flex;align-items:center;justify-content:center;padding:12px';dialog.innerHTML='<style>.cis-scan-card{width:min(100%,460px);max-height:90dvh;overflow:auto;background:#fff;color:#182a40;border:1px solid #8ca5c4;border-radius:14px;box-shadow:0 14px 44px #0004;padding:20px;font:inherit;box-sizing:border-box}.cis-scan-header{display:flex;align-items:center;justify-content:space-between;gap:12px}.cis-scan-header h2{font-size:19px;line-height:1.35;margin:0;font-weight:700}.cis-scan-close{background:#eef2f8;color:#243a55;border:1px solid #cbd6e5;border-radius:8px;font-size:24px;min-width:40px;min-height:40px;cursor:pointer}.cis-scan-subtitle{color:#5c6c7e;margin:10px 0 18px;font-size:14px}.cis-scan-video{display:block;width:100%;max-height:250px;object-fit:contain;border-radius:9px;background:#182b42}.cis-scan-video[hidden]{display:none}.cis-scan-status{background:#f3f7fc;border:1px solid #d8e3f0;border-radius:9px;padding:12px;margin:12px 0 16px;font-size:14px}.cis-scan-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px}.cis-scan-actions button{min-height:48px;padding:12px;border-radius:9px;font:inherit;font-weight:700;cursor:pointer}.cis-scan-primary{background:#1766b1;color:white;border:1px solid #11558f}.cis-scan-secondary{background:#eef5ff;color:#14538c;border:1px solid #a7c6e7}.cis-scan-help{color:#65758a;font-size:12px;line-height:1.5;margin:16px 0 0}</style><div class="cis-scan-card"><div class="cis-scan-header"><h2>Scanner une date de péremption</h2><button type="button" data-close aria-label="Fermer" class="cis-scan-close">×</button></div><p class="cis-scan-subtitle">Data Matrix GS1, code-barres ou étiquette EXP</p><video playsinline muted hidden class="cis-scan-video"></video><p data-status aria-live="polite" class="cis-scan-status">Choisis une méthode de lecture.</p><div class="cis-scan-actions"><button type="button" data-camera class="cis-scan-primary">Scanner</button><button type="button" data-gallery class="cis-scan-secondary">Galerie</button></div><input type="file" accept="image/*" data-file hidden><p class="cis-scan-help">Présente le code dans n’importe quel sens, ou sélectionne une photo. Vérifie la date avant validation.</p></div>';document.body.appendChild(dialog);dialog.querySelector('[data-close]').onclick=stop;dialog.querySelector('[data-camera]').onclick=()=>camera(callback);dialog.querySelector('[data-gallery]').onclick=()=>dialog.querySelector('[data-file]').click();for(const input of dialog.querySelectorAll('input[type=file]'))input.onchange=async()=>{if(!input.files?.[0])return;message('Lecture de la photo…');try{apply(await readImage(input.files[0]),callback);}catch(e){message(e.message);}input.value='';};}
+function open(callback){stop();dialog=document.createElement('div');dialog.setAttribute('role','dialog');dialog.setAttribute('aria-modal','true');dialog.setAttribute('aria-label','Scanner une péremption');dialog.style.cssText='position:fixed;inset:0;z-index:2147483647;background:#0009;display:flex;align-items:center;justify-content:center;padding:12px';dialog.innerHTML='<style>.cis-scan-card{width:min(100%,460px);max-height:90dvh;overflow:auto;background:#fff;color:#182a40;border:1px solid #8ca5c4;border-radius:14px;box-shadow:0 14px 44px #0004;padding:20px;font:inherit;box-sizing:border-box}.cis-scan-header{display:flex;align-items:center;justify-content:space-between;gap:12px}.cis-scan-header h2{font-size:19px;line-height:1.35;margin:0;font-weight:700}.cis-scan-close{background:#eef2f8;color:#243a55;border:1px solid #cbd6e5;border-radius:8px;font-size:24px;min-width:40px;min-height:40px;cursor:pointer}.cis-scan-subtitle{color:#5c6c7e;margin:10px 0 18px;font-size:14px}.cis-scan-video{display:block;width:100%;height:100%;max-height:none;object-fit:cover;border-radius:9px;background:#182b42}.cis-scan-video[hidden]{display:none}.cis-scan-video{aspect-ratio:4/3}@keyframes cis-scan-spin{to{transform:rotate(360deg)}}.cis-scan-loading{display:none;align-items:center;gap:10px;background:#eef5ff;border:1px solid #bcd2ec;border-radius:9px;padding:12px;margin:12px 0;color:#17385a;font-size:14px}.cis-scan-loading.active{display:flex}.cis-scan-wheel{width:22px;height:22px;border:3px solid #b9d1ed;border-top-color:#1766b1;border-radius:50%;animation:cis-scan-spin .75s linear infinite;flex:none}.cis-scan-status{background:#f3f7fc;border:1px solid #d8e3f0;border-radius:9px;padding:12px;margin:12px 0 16px;font-size:14px}.cis-scan-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px}.cis-scan-actions button{min-height:48px;padding:12px;border-radius:9px;font:inherit;font-weight:700;cursor:pointer}.cis-scan-primary{background:#1766b1;color:white;border:1px solid #11558f}.cis-scan-secondary{background:#eef5ff;color:#14538c;border:1px solid #a7c6e7}.cis-scan-help{color:#65758a;font-size:12px;line-height:1.5;margin:16px 0 0}</style><div class="cis-scan-card"><div class="cis-scan-header"><h2>Scanner une date de péremption</h2><button type="button" data-close aria-label="Fermer" class="cis-scan-close">×</button></div><p class="cis-scan-subtitle">Data Matrix GS1, code-barres ou étiquette EXP</p><video playsinline muted hidden class="cis-scan-video"></video><div class="cis-scan-loading" data-loading role="status"><span class="cis-scan-wheel"></span><span data-loading-text>Chargement…</span></div><p data-status aria-live="polite" class="cis-scan-status">Choisis une méthode de lecture.</p><div class="cis-scan-actions"><button type="button" data-camera class="cis-scan-primary">Scanner</button><button type="button" data-gallery class="cis-scan-secondary">Galerie</button></div><input type="file" accept="image/*" data-file hidden><p class="cis-scan-help">Présente le code dans n’importe quel sens, ou sélectionne une photo. Vérifie la date avant validation.</p></div>';document.body.appendChild(dialog);dialog.querySelector('[data-close]').onclick=stop;dialog.querySelector('[data-camera]').onclick=()=>camera(callback);dialog.querySelector('[data-gallery]').onclick=()=>dialog.querySelector('[data-file]').click();for(const input of dialog.querySelectorAll('input[type=file]'))input.onchange=async()=>{if(!input.files?.[0])return;message('Lecture de la photo…');try{apply(await readImage(input.files[0]),callback);}catch(e){message(e.message);}input.value='';};}
 window.CISScanPeremption={open,parse,stop};
 })();
