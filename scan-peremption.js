@@ -9,7 +9,7 @@ function parse(s){s=String(s||'').replace(/^<GS>/i,'').replace(/[\u001d\u241d]/g
  if(!date){let m=s.match(/(?:^|\x1d|(?<=\d{14}))17(\d{6})/);if(m)date=dateYYMMDD(m[1]);}
  if(!date){let m=s.match(/\b(?:EXP|EXPIRY|PEREMPTION|PÉREMPTION|EXPIRE|DATE\s*LIMITE)\s*[:.\-]?\s*(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})/i);if(m){let y=+m[3];if(y<100)y+=2000;let v=`${y}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;if(valid(v))date=v;}}
  if(!date){let m=s.match(/\b(?:EXP|EXPIRY|PEREMPTION|PÉREMPTION|EXPIRE)\s*[:.\-]?\s*(\d{4})[\/.-](\d{1,2})[\/.-](\d{1,2})/i);if(m){let v=`${m[1]}-${m[2].padStart(2,'0')}-${m[3].padStart(2,'0')}`;if(valid(v))date=v;}}
- if(!date){let m=s.match(/\b(?:EXP|EXPIRY|EXPIRATION|PEREMPTION|PÉREMPTION|EXPIRE|USE\s*BY|BEST\s*BEFORE)\s*[:.\-]?\s*(\d{1,2})[\/.-](20\d{2}|\d{2})\b/i);if(m){let y=+m[2];if(y<100)y+=2000;let mon=+m[1];if(mon>=1&&mon<=12)date=dateYYMMDD(String(y).slice(2)+String(mon).padStart(2,'0')+'00');}}
+ if(!date){let m=s.match(/\b(?:EXP|EXPIRY|PEREMPTION|PÉREMPTION|EXPIRE|USE\s*BY|BEST\s*BEFORE)\s*[:.\-]?\s*(\d{1,2})[\/.-](20\d{2}|\d{2})\b/i);if(m){let y=+m[2];if(y<100)y+=2000;let mon=+m[1];if(mon>=1&&mon<=12)date=dateYYMMDD(String(y).slice(2)+String(mon).padStart(2,'0')+'00');}}
  if(!date){let m=s.match(/\b(?:EXP|EXPIRY|PEREMPTION|PÉREMPTION|EXPIRE)\s*[:.\-]?\s*(\d{1,2})\s*[-–—\/.]\s*(20\d{2}|\d{2})\b/i);if(m){let y=+m[2];if(y<100)y+=2000;date=dateYYMMDD(String(y).slice(2)+m[1].padStart(2,'0')+'00');}}
  const l=s.match(/\(10\)([^\x1d(]+)/);if(l)lot=l[1];return {date,gtin,lot,raw:s};}
 function stop(){loading(false);loop++;ocrBusy=false;try{videoControls?.stop();}catch(_){}videoControls=null;if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;}if(dialog){dialog.remove();dialog=null;}}
@@ -66,45 +66,25 @@ function drawVariant(canvas,ctx,image,v){
    const n=c>=v.threshold?255:0;data.data[i]=data.data[i+1]=data.data[i+2]=n;}
   ctx.putImageData(data,0,0);}
 }
-async function readImage(file){
- loading(true,'Lecture du code et de la date…');
- const url=URL.createObjectURL(file);
+async function localDataMatrix(file){
+ if(!window.ZXingWASM)await load('./vendor/zxing-reader.js','ZXingWASM');
+ const ZX=window.ZXingWASM;
+ ZX.setZXingModuleOverrides({locateFile:path=>path.endsWith('.wasm')?'./vendor/zxing_reader.wasm':path});
+ const hits=await ZX.readBarcodes(file,{formats:['DataMatrix','Code128','QRCode'],tryHarder:true,tryRotate:true,tryInvert:true,tryDownscale:true,maxNumberOfSymbols:8});
+ return hits.map(x=>x.text||'').find(x=>parse(x).date)||null;
+}
+async function readImage(file){loading(true,'Lecture du Data Matrix local…');
  try{
-  const image=await new Promise((resolve,reject)=>{const img=new Image();img.onload=()=>resolve(img);img.onerror=()=>reject(Error('Photo illisible.'));img.src=url;});
-  const canvas=document.createElement('canvas');const ctx=canvas.getContext('2d',{willReadFrequently:true});
-  if(!ctx)throw Error('Traitement photo indisponible.');
-  // Lecture native prioritaire : le décodeur repère lui-même l’orientation du code.
-  // Aucune rotation exhaustive, qui bloquait l’iPhone pendant 30 secondes.
-  const scale=Math.min(1,2400/Math.max(image.naturalWidth,image.naturalHeight));
-  canvas.width=Math.round(image.naturalWidth*scale);canvas.height=Math.round(image.naturalHeight*scale);
-  ctx.drawImage(image,0,0,canvas.width,canvas.height);
-  const native=await decodeDetector(canvas);if(native&&parse(native).date)return native;
-  // Le lecteur ZXing est facultatif et ne doit jamais bloquer l'OCR.
-  // On ne charge pas de scripts ZXing inexistants qui provoquaient les échecs précédents.
-  if(window.ZXing){const decoded=await decodeCanvas(canvas,window.ZXing);if(decoded&&parse(decoded).date)return decoded;}
+  let lastError=null;
+  try{const code=await localDataMatrix(file);if(code)return code;}catch(e){lastError=e;console.warn('Data Matrix local',e);}
   message('Recherche de la date imprimée…');
   try{
    await load('https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js','Tesseract');
-   const worker=await Tesseract.createWorker('eng');
-   try{
-    // L'OCR est essayé sur les quatre axes, en conservant un nombre borné de passages.
-    // La lecture d'un code GS1 reste indépendante de cette opération.
-    for(const angle of [0,90,270,180]){
-     const rad=angle*Math.PI/180;
-     const w=image.naturalWidth,h=image.naturalHeight;
-     const f=Math.min(1,1700/Math.max(w,h));
-     const ww=Math.round(w*f),hh=Math.round(h*f);
-     canvas.width=angle%180===0?ww:hh;canvas.height=angle%180===0?hh:ww;
-     ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);
-     ctx.save();ctx.translate(canvas.width/2,canvas.height/2);ctx.rotate(rad);ctx.drawImage(image,-ww/2,-hh/2,ww,hh);ctx.restore();
-     const result=await worker.recognize(canvas);
-     const text=result.data?.text||'';
-     if(parse(text).date)return text;
-    }
-   }finally{await worker.terminate();}
-  }catch(e){console.warn('OCR non disponible',e);throw Error('Reconnaissance du texte indisponible : '+e.message);}
-  throw Error('Aucune date reconnue. Essaie une photo nette, plus rapprochée, ou un autre cadrage.');
- }finally{loading(false);URL.revokeObjectURL(url);}
+   const r=await Tesseract.recognize(file,'eng');
+   if(parse(r.data?.text||'').date)return r.data.text;
+  }catch(e){lastError=e;}
+  throw Error('Aucune date reconnue. '+(lastError?.message||'Essaie une photo nette et bien cadrée.'));
+ }finally{loading(false);}
 }
 function apply(raw,callback){const r=parse(raw);if(!r.date){message('Aucune date reconnue. Vérifie la photo ou saisis la date manuellement.');return;}const label=r.date.split('-').reverse().join('/');if(!confirm(`Date détectée : ${label}${r.gtin?'\nGTIN : '+r.gtin:''}${r.lot?'\nLot : '+r.lot:''}\n\nUtiliser cette date ?`))return;callback(r);stop();}
 let videoControls=null;
