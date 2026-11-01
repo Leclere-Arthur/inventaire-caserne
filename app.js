@@ -725,7 +725,7 @@ const DOMAINE_EMAIL_INTERNE =
     "inventaire-caserne.local";
 
 const VERSION_APPLICATION =
-    "2026-11-01-principale-datamatrix-rotations-v2-scan-ui-camera-v3-dm-async-video-v2";
+    "2.9.70";
 
 const CLE_PROFIL_UTILISATEUR_CACHE =
     "profil_utilisateur_connecte_v1";
@@ -1045,7 +1045,7 @@ let minuteurVerificationMiseAJour =
  * Elle permet de détecter une nouvelle version même si seul app.js?v=peremptions-20261031-v5 change.
  */
 const VERSION_APPLICATION_JS =
-    "2026-11-01-principale-datamatrix-rotations-v2-camera-v3";
+    "2026-10-31-peremptions-v5";
 
 async function verifierNouvelleVersionAppJs() {
 
@@ -10326,7 +10326,7 @@ function utilisateurAccesAdministratifCentral() {
         "acces_manoeuvre_admin", "acces_casernement_admin", "acces_reunion_admin",
         "acces_amical_admin", "acces_comite_centre_admin",
         "acces_administratif_admin", "acces_entretien_individuel_admin",
-        "acces_notifications", "acces_gestion_utilisateurs"
+        "acces_notifications", "acces_gestion_utilisateurs", "acces_admin_formation"
     ].some(permission => utilisateurAPermission(permission));
 }
 
@@ -10345,6 +10345,7 @@ function afficherAdministratifCaserne() {
         ["🧹", "Ménage Admin", "afficherAdminMenageEquipe()", autorise("acces_admin_menage")],
         ["🚒", "Inventaires Admin", "afficherAdminInventairesEquipe()", autorise("acces_admin_menage")],
         ["⏱️", "Historique des heures", "afficherHistoriqueHeuresEquipe()", autorise("acces_admin_heures")],
+        ["📚", "Formation Admin", "CISFormations.vue('admin')", autorise("acces_admin_formation")],
         ["🔔", "Notifications", "afficherNotificationsAdministration()", autorise("acces_notifications")],
     ].filter(carte => carte[3]);
     const app = document.getElementById("app");
@@ -22578,7 +22579,7 @@ async function vehInventaireQuitter(){
 document.addEventListener("click",async function(event){
  if(!vehInventaireSession||vehInventaireNavigationConfirmee)return;
  // Les boutons de la fenêtre de confirmation ne sont pas une navigation.
- if(event.target?.closest?.(".fenetre-cis-overlay, .fenetre-cis, [role=dialog]"))return;
+ if(event.target?.closest?.(".fenetre-cis-overlay, .fenetre-cis"))return;
  const btn=event.target?.closest?.("button,a");if(!btn||btn.closest(".veh-inventaire-contenu"))return;
  if(!document.querySelector(".veh-inventaire-contenu"))return;
  event.preventDefault();event.stopImmediatePropagation();
@@ -22635,12 +22636,7 @@ async function vehInventaireCommencer(id){
 }
 function vehDatesAControler(m){return (m.dates_peremption||[]).map((date,i)=>({date,unite:i+1})).filter(x=>x.date);}
 function vehDateValide(date){return /^\d{4}-\d{2}-\d{2}$/.test(date)&&Number.isFinite(Date.parse(date+'T00:00:00Z'))&&new Date(date+'T00:00:00Z').toISOString().slice(0,10)===date;}
-function vehPeremptionsHTML(m,valeur){const controles=valeur.peremptions_controle||[];return vehDatesAControler(m).map(x=>{const c=controles.find(c=>c.unite===x.unite),date=c?.date||x.date;return `<fieldset data-peremption-unite="${x.unite}" style="margin:12px 0;padding:12px;border:1px solid #bdc9d3;border-radius:10px"><legend>Péremption — unité ${x.unite}</legend><strong>${vehInventaireHTML(x.date.split('-').reverse().join('/'))}</strong><div style="display:flex;gap:12px;flex-wrap:wrap;margin:10px 0"><label><input type="radio" name="peremption-${m.id}-${x.unite}" value="confirmer" ${c?.action==='confirmer'?'checked':''} onchange="vehPeremptionChoix(this)"> Confirmer</label><label><input type="radio" name="peremption-${m.id}-${x.unite}" value="modifier" ${c?.action==='modifier'?'checked':''} onchange="vehPeremptionChoix(this)"> Modifier</label></div><label data-peremption-nouvelle ${c?.action==='modifier'?'':'hidden'}>Nouvelle date<input type="date" value="${vehInventaireHTML(date)}" data-peremption-date style="display:block;padding:10px;font:inherit;font-size:16px;max-width:100%;box-sizing:border-box"></label><button type="button" style="margin-top:10px;padding:11px 16px;border:1px solid #1c5c9b;border-radius:9px;background:#1766b1;color:#fff;font:inherit;font-weight:700;min-height:44px;cursor:pointer" onclick="vehScannerPeremption(this)">Scanner la date</button><small data-peremption-erreur role="status"></small></fieldset>`}).join('');}
-function vehScannerPeremption(button){
- if(!window.CISScanPeremption)return alert('Scanner indisponible. Recharge la page.');
- const f=button.closest('[data-peremption-unite]');
- CISScanPeremption.open(result=>{const radio=f.querySelector('input[value="modifier"]');radio.checked=true;vehPeremptionChoix(radio);f.querySelector('[data-peremption-date]').value=result.date;});
-}
+function vehPeremptionsHTML(m,valeur){const controles=valeur.peremptions_controle||[];return vehDatesAControler(m).map(x=>{const c=controles.find(c=>c.unite===x.unite),date=c?.date||x.date;return `<fieldset data-peremption-unite="${x.unite}" style="margin:12px 0;padding:12px;border:1px solid #bdc9d3;border-radius:10px"><legend>Péremption — unité ${x.unite}</legend><strong>${vehInventaireHTML(x.date.split('-').reverse().join('/'))}</strong><div style="display:flex;gap:12px;flex-wrap:wrap;margin:10px 0"><label><input type="radio" name="peremption-${m.id}-${x.unite}" value="confirmer" ${c?.action==='confirmer'?'checked':''} onchange="vehPeremptionChoix(this)"> Confirmer</label><label><input type="radio" name="peremption-${m.id}-${x.unite}" value="modifier" ${c?.action==='modifier'?'checked':''} onchange="vehPeremptionChoix(this)"> Modifier</label></div><label data-peremption-nouvelle ${c?.action==='modifier'?'':'hidden'}>Nouvelle date<input type="date" value="${vehInventaireHTML(date)}" data-peremption-date style="display:block;padding:10px;font:inherit;font-size:16px;max-width:100%;box-sizing:border-box"></label><small data-peremption-erreur role="status"></small></fieldset>`}).join('');}
 function vehPeremptionChoix(input){const f=input.closest('[data-peremption-unite]');f.querySelector('[data-peremption-nouvelle]').hidden=input.value!=='modifier';f.querySelector('[data-peremption-erreur]').textContent='';}
 function vehLirePeremptions(m,carte){return vehDatesAControler(m).map(x=>{const f=carte.querySelector(`[data-peremption-unite="${x.unite}"]`),action=f?.querySelector('input[type="radio"]:checked')?.value,date=action==='confirmer'?x.date:f?.querySelector('[data-peremption-date]')?.value;if(!action||!vehDateValide(date||'')){if(f)f.querySelector('[data-peremption-erreur]').textContent='Confirme ou modifie cette date.';throw Error(m.nom+' — unité '+x.unite+' : confirme ou modifie la date de péremption.');}return {unite:x.unite,initiale:x.date,date,action};});}
 function vehPeremptionsCompletes(m,c){return vehDatesAControler(m).every(x=>(c?.peremptions_controle||[]).some(p=>p.unite===x.unite&&p.initiale===x.date&&['confirmer','modifier'].includes(p.action)&&vehDateValide(p.date)));}
