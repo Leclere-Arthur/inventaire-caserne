@@ -10095,6 +10095,13 @@ function agendaGeneralCouleurCaserne(type){
  const palette={sport:["#168c6b","#e2f7ed"],manoeuvre:["#e4a222","#fff6dc"],reunion:["#4879db","#eaf1ff"],amical:["#db6483","#ffedf2"],casernement:["#8659d3","#f1eaff"]};
  return palette[Object.keys(palette).find(k=>String(type).includes(k))]||["#7351d8","#f1edff"];
 }
+function agendaGeneralCarteFormation(item) {
+ const p=item.p;
+ const couleur=(window.CISFormation && window.CISFormation.COULEURS && window.CISFormation.COULEURS[p.type_formation]) || '#64748b';
+ const titre=echapperHTML(p.formation || 'Formation');
+ const lieu=echapperHTML(p.lieu || 'Lieu non précisé');
+ return `<div class="agenda-general-timeline"><div class="agenda-general-heure">Journée</div><button type="button" class="agenda-general-ligne" style="--agenda-couleur:${couleur};--agenda-fond:transparent" onclick="CISFormations.ouvrir()"><strong>${titre}</strong><small>Formation validée · ${lieu}</small></button></div>`;
+}
 function agendaGeneralRenduCaserne(){
  const app=document.getElementById("app");if(!app)return;
  const selection=agendaGeneralDateSelectionneeCaserne;
@@ -10107,9 +10114,9 @@ function agendaGeneralRenduCaserne(){
  const date=new Date(selection+"T12:00:00");
  const duJour=agendaGeneralItemsCaserne.filter(x=>dateISOlocale(x.d)===selection);
  const titreJour=date.toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long"});
- const elements=duJour.map(x=>{const present=(x.p.reponses||[]).some(r=>r.contexte===x.ctx&&String(r.user_id)===String(utilisateurConnecte?.id||"")&&r.reponse==="present");const titre=(x.p.titre||obtenirConfigurationPublicationCaserne(x.p.type_publication).titre)+(x.ctx==="preparation"?" · Préparation":"");const [couleur,fond]=agendaGeneralCouleurCaserne(x.p.type_publication);return `<div class="agenda-general-timeline"><div class="agenda-general-heure">${x.d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})}</div><button type="button" class="agenda-general-ligne ${present?'present':''}" style="--agenda-couleur:${couleur};--agenda-fond:${fond}" onclick="afficherRubriqueCaserne('${x.p.type_publication}')"><strong>${echapperHTML(titre)}</strong><small>${echapperHTML(obtenirLibelleTypeCaserne(x.p.type_publication))}</small>${present?'<small class="agenda-general-present">✓ Présent</small>':''}</button></div>`}).join("");
+ const elements=duJour.map(x=>{if(x.ctx==='formation')return agendaGeneralCarteFormation(x);const present=(x.p.reponses||[]).some(r=>r.contexte===x.ctx&&String(r.user_id)===String(utilisateurConnecte?.id||"")&&r.reponse==="present");const titre=(x.p.titre||obtenirConfigurationPublicationCaserne(x.p.type_publication).titre)+(x.ctx==="preparation"?" · Préparation":"");const [couleur,fond]=agendaGeneralCouleurCaserne(x.p.type_publication);return `<div class="agenda-general-timeline"><div class="agenda-general-heure">${x.d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})}</div><button type="button" class="agenda-general-ligne ${present?'present':''}" style="--agenda-couleur:${couleur};--agenda-fond:${fond}" onclick="afficherRubriqueCaserne('${x.p.type_publication}')"><strong>${echapperHTML(titre)}</strong><small>${echapperHTML(obtenirLibelleTypeCaserne(x.p.type_publication))}</small>${present?'<small class="agenda-general-present">✓ Présent</small>':''}</button></div>`}).join("");
  const joursDuMois=[...new Set(agendaGeneralItemsCaserne.filter(x=>x.d.getMonth()===mo&&x.d.getFullYear()===an).map(x=>dateISOlocale(x.d)))];
- const listeMois=joursDuMois.map(k=>{const d=new Date(k+"T12:00:00");return `<section><h3 class="agenda-general-jour-titre">${echapperHTML(d.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'}))}</h3>${agendaGeneralItemsCaserne.filter(x=>dateISOlocale(x.d)===k).map(x=>{const [c,f]=agendaGeneralCouleurCaserne(x.p.type_publication);const titre=x.p.titre||obtenirConfigurationPublicationCaserne(x.p.type_publication).titre;return `<div class="agenda-general-timeline"><div class="agenda-general-heure">${x.d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})}</div><button class="agenda-general-ligne" style="--agenda-couleur:${c};--agenda-fond:${f}" onclick="afficherRubriqueCaserne('${x.p.type_publication}')"><strong>${echapperHTML(titre)}${x.ctx==='preparation'?' · Préparation':''}</strong><small>${echapperHTML(obtenirLibelleTypeCaserne(x.p.type_publication))}</small></button></div>`}).join('')}</section>`}).join('');
+ const listeMois=joursDuMois.map(k=>{const d=new Date(k+"T12:00:00");return `<section><h3 class="agenda-general-jour-titre">${echapperHTML(d.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'}))}</h3>${agendaGeneralItemsCaserne.filter(x=>dateISOlocale(x.d)===k).map(x=>{if(x.ctx==='formation')return agendaGeneralCarteFormation(x);const [c,f]=agendaGeneralCouleurCaserne(x.p.type_publication);const titre=x.p.titre||obtenirConfigurationPublicationCaserne(x.p.type_publication).titre;return `<div class="agenda-general-timeline"><div class="agenda-general-heure">${x.d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})}</div><button class="agenda-general-ligne" style="--agenda-couleur:${c};--agenda-fond:${f}" onclick="afficherRubriqueCaserne('${x.p.type_publication}')"><strong>${echapperHTML(titre)}${x.ctx==='preparation'?' · Préparation':''}</strong><small>${echapperHTML(obtenirLibelleTypeCaserne(x.p.type_publication))}</small></button></div>`}).join('')}</section>`}).join('');
  app.innerHTML=`<main class="caserne-shell agenda-general-page"><header class="caserne-top caserne-top-simple"><small>ESPACE CASERNE</small><h1>Agenda général</h1></header><button class="caserne-retour-actualites agenda-general-retour" onclick="afficherActualitesCaserne()">← Retour aux actualités</button><div class="agenda-general-panel"><div class="agenda-general-controles"><button onclick="afficherAgendaGeneralCaserne(-1)" aria-label="Mois précédent">‹</button><div class="agenda-general-mois">${echapperHTML(mois)}</div><button onclick="afficherAgendaGeneralCaserne(1)" aria-label="Mois suivant">›</button></div><div class="agenda-general-switch"><button class="${agendaGeneralVueCaserne==='jour'?'actif':''}" onclick="changerVueAgendaGeneralCaserne('jour')">Journée</button><button class="${agendaGeneralVueCaserne==='mois'?'actif':''}" onclick="changerVueAgendaGeneralCaserne('mois')">Mois</button></div><div class="agenda-general-semaine">${['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'].map(j=>`<span>${j}</span>`).join('')}</div><div class="agenda-general-grille">${jours}</div><h2 class="agenda-general-jour-titre">${agendaGeneralVueCaserne==='jour'?echapperHTML(titreJour):'Événements du mois'}</h2>${agendaGeneralVueCaserne==='jour'?(elements||'<div class="agenda-general-vide">Aucune activité pour cette journée.</div>'):(listeMois||'<div class="agenda-general-vide">Aucune activité ce mois-ci.</div>')}</div></main>${navigationCaserne("caserne")}`;
  actualiserInterfaceBureau();
 }
@@ -10125,6 +10132,20 @@ async function afficherAgendaGeneralCaserne(decalage=0){
  const rubriques=new Map(obtenirRubriquesCaserne().map(r=>[r[0],r]));pubs=pubs.filter(p=>{const r=rubriques.get(p.type_publication);return r?utilisateurPeutVoirRubriqueCaserne(r):false});pubs=await chargerDetailsPublicationsCaserne(pubs);
  const debut=new Date(agendaGeneralMoisCaserne.getFullYear(),agendaGeneralMoisCaserne.getMonth(),1),fin=new Date(agendaGeneralMoisCaserne.getFullYear(),agendaGeneralMoisCaserne.getMonth()+1,1);
  const items=[];pubs.forEach(p=>{const d=new Date(p.date_evenement);if(!Number.isNaN(d.getTime())&&d>=debut&&d<fin)items.push({d,p,ctx:'evenement'});if(p.date_preparation){const x=new Date(p.date_preparation);if(!Number.isNaN(x.getTime())&&x>=debut&&x<fin)items.push({d:x,p,ctx:'preparation'})}});
+ // Formations validées : lecture côté serveur limitée à auth.uid().
+ // Un échec de la requête ne bloque pas les événements de la caserne.
+ try {
+  const client=obtenirClientSupabase();
+  if(client){
+   const {data:formations,error:erreurFormations}=await client.rpc('formation_agenda_personnel');
+   if(erreurFormations)console.warn('Agenda : formations non chargées',erreurFormations);
+   else for(const formation of formations||[]){
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(String(formation.date_formation||'')))continue;
+    const d=new Date(formation.date_formation+'T12:00:00');
+    if(!Number.isNaN(d.getTime())&&d>=debut&&d<fin)items.push({d,p:formation,ctx:'formation'});
+   }
+  }
+ }catch(erreur){console.warn('Agenda : chargement des formations impossible',erreur);}
  items.sort((a,b)=>a.d-b.d);agendaGeneralItemsCaserne=items;agendaGeneralRenduCaserne();window.scrollTo({top:0,behavior:'auto'});
 }
 window.afficherAgendaGeneralCaserne=afficherAgendaGeneralCaserne;
