@@ -1,5 +1,5 @@
 (function(g){'use strict';
- const F=g.CISFormation;let mesDemandes=[],demandesAdmin=[],docs=[],sessions=[],years=[],year=new Date().getFullYear(),month=new Date().getMonth(),jour=F.iso(new Date()),vue='calendrier',categorie='',tri='date',lieu='',recherche='',detail='',statut='',generation=0,owner='';
+ const F=g.CISFormation;let mesDemandes=[],demandesAdmin=[],docs=[],sessions=[],years=[],year=new Date().getFullYear(),month=new Date().getMonth(),jour=F.iso(new Date()),vue='calendrier',categorie='',tri='date',lieu='',recherche='',detail='',detailAgenda=null,statut='',generation=0,owner='';
  const uid=()=>typeof utilisateurConnecte!=='undefined'?String(utilisateurConnecte?.id||''):'';
  const cacheKey=()=>`cis-formations-v1:${uid()}:${year}`;
  const bouton=(label,action,actif=false)=>`<button type="button" class="f-btn ${actif?'f-actif':''}" onclick="${action}">${F.esc(label)}</button>`;
@@ -28,23 +28,48 @@
  async function chargerDemandes(){try{const c=obtenirClientSupabase();if(!c)return;const r=await c.rpc('formation_demandes_mes');if(!r.error)mesDemandes=r.data||[];const a=await c.rpc('formation_demandes_admin');demandesAdmin=a.error?[]:a.data||[];if(owner===uid())render();}catch(e){console.warn('Demandes formation',e);}}
  async function demander(id){const s=sessions.find(x=>x.id===id);if(!s)return;const c=obtenirClientSupabase();if(!c)return;const r=await c.rpc('formation_demande_creer',{p_session_id:s.id,p_formation:s.intitule||F.TYPES[s.type],p_type:s.type,p_code:s.code,p_lieu:s.lieu,p_dates:s.dates});if(r.error){alert(r.error.message);return;}await chargerDemandes();alert('Demande de formation enregistrée.');}
  function fiche(){const s=sessions.find(s=>s.id===detail);if(!s){detail='';return'';}return `${bouton('← Retour aux formations','CISFormations.fermerDetail()')}<article class="f-fiche"><h2>${F.esc(F.TYPES[s.type])}</h2><p><strong>${F.esc(s.code)}</strong> · ${F.esc(s.lieu)}</p><p>${F.esc(s.intitule)}</p><h3>Dates de la session</h3><ul>${F.periodes(s.dates).map(p=>`<li>${p.debut===p.fin?F.esc(F.court(p.debut)):`Du ${F.esc(F.court(p.debut))} au ${F.esc(F.court(p.fin))}`}</li>`).join('')}</ul>${s.notes?`<p>${F.esc(s.notes)}</p>`:''}<details><summary>Horaires indiqués sur le planning</summary><p>En semaine : 8 h – 18 h.<br>Séquences vendredi / samedi / dimanche : 18 h – 22 h / 8 h – 18 h / 8 h – 12 h.<br>Week-end : samedi 8 h – 18 h, dimanche 8 h – 12 h.</p><p>Les horaires précis et les conditions de participation restent ceux de la convocation.</p></details><details><summary>Document source</summary><ul>${s.sources.map(n=>`<li>${F.esc(n)}</li>`).join('')}</ul></details>${demandeBouton(s)}</article>`;}
+ function ficheAgenda(){
+  if(!detailAgenda)return '';
+  const d=detailAgenda;
+  const dates=Array.isArray(d.dates)?d.dates:(d.date_formation?[d.date_formation]:[]);
+  return `${bouton('← Retour aux formations','CISFormations.fermerDetail()')}<article class="f-fiche"><h2>${F.esc(d.formation||'Formation')}</h2><p><strong>${F.esc(d.code||'')}</strong> · ${F.esc(d.lieu||'Lieu non précisé')}</p><h3>Dates de la session</h3><ul>${dates.map(date=>`<li>${F.esc(F.court(date))}</li>`).join('')}</ul><p><strong>Statut : Validé</strong></p></article>`;
+ }
  function render(){if(uid()!==owner)return;const host=document.getElementById('formations-principale');if(!host)return;
   if(vue==='admin'){
    host.innerHTML=`<header class="f-entete"><h1>Formation Admin</h1><button type="button" class="f-btn" onclick="CISFormations.actualiserDemandes()">Actualiser</button></header>${demandesAdminHtml()}`;
    return;
   }
-  host.innerHTML=`<header class="f-entete"><h1>Formation</h1>${bouton('Actualiser','CISFormations.actualiser()')}</header><p class="f-statut" role="status">${F.esc(statut)}</p>${detail?fiche():`<div class="f-onglets">${bouton('Calendrier des formations',"CISFormations.vue('calendrier')",vue==='calendrier')}${bouton('Les formations',"CISFormations.vue('formations')",vue==='formations')}${bouton('Mes demandes',"CISFormations.vue('demandes')",vue==='demandes')}</div>${vue==='demandes'?'':`<div class="f-filtres"><label>Année<select id="f-annee">${[...new Set([...years,year])].sort((a,b)=>a-b).map(y=>`<option ${year===y?'selected':''}>${y}</option>`).join('')}</select></label><label>Formation<select id="f-type"><option value="">Toutes les formations</option>${options()}</select></label><label>Rechercher<input id="f-recherche" type="search" value="${F.esc(recherche)}" placeholder="Formation ou lieu"></label></div>`}${vue==='demandes'?mesDemandesHtml():sessions.length?(vue==='calendrier'?calendrier():catalogue()):'<p>Aucun planning publié pour cette année.</p>'}`}`;
+  host.innerHTML=`<header class="f-entete"><h1>Formation</h1>${bouton('Actualiser','CISFormations.actualiser()')}</header><p class="f-statut" role="status">${F.esc(statut)}</p>${detail?fiche():detailAgenda?ficheAgenda():`<div class="f-onglets">${bouton('Calendrier des formations',"CISFormations.vue('calendrier')",vue==='calendrier')}${bouton('Les formations',"CISFormations.vue('formations')",vue==='formations')}${bouton('Mes demandes',"CISFormations.vue('demandes')",vue==='demandes')}</div>${vue==='demandes'?'':`<div class="f-filtres"><label>Année<select id="f-annee">${[...new Set([...years,year])].sort((a,b)=>a-b).map(y=>`<option ${year===y?'selected':''}>${y}</option>`).join('')}</select></label><label>Formation<select id="f-type"><option value="">Toutes les formations</option>${options()}</select></label><label>Rechercher<input id="f-recherche" type="search" value="${F.esc(recherche)}" placeholder="Formation ou lieu"></label></div>`}${vue==='demandes'?mesDemandesHtml():sessions.length?(vue==='calendrier'?calendrier():catalogue()):'<p>Aucun planning publié pour cette année.</p>'}`}`;
   host.querySelector('#f-annee')?.addEventListener('change',e=>{year=+e.target.value;jour=F.iso(new Date(year,month,1,12));detail='';void charger();});host.querySelector('#f-type')?.addEventListener('change',e=>{categorie=e.target.value;render();});host.querySelector('#f-recherche')?.addEventListener('input',e=>{recherche=e.target.value;const start=e.target.selectionStart;render();const input=host.querySelector('#f-recherche');input?.focus();try{input?.setSelectionRange(start,start);}catch(_){}});
  }
  async function charger(){const token=++generation,account=owner;statut='Chargement des formations…';let cached;try{cached=JSON.parse(localStorage.getItem(cacheKey())||'null');}catch(_){}if(cached){docs=cached.docs;years=cached.years;sessions=F.fusionner(docs);statut='Planning enregistré sur cet appareil. Actualisation…';}else{docs=[];sessions=[];}render();
   try{if(!navigator.onLine)throw Error('Hors connexion');const [ds,ys]=await Promise.all([rpc('formations_lister',{p_annee:year,p_admin:false}),rpc('formations_annees',{})]);if(token!==generation||uid()!==account||owner!==account)return;docs=ds||[];years=ys||[];sessions=F.fusionner(docs);statut='';try{localStorage.setItem(cacheKey(),JSON.stringify({docs,years}));}catch(_){}render();}
   catch(e){if(token!==generation||uid()!==account)return;statut=cached?'Planning enregistré sur cet appareil. Actualisation indisponible pour le moment.':navigator.onLine?'Chargement impossible. Réessaie dans quelques instants.':'Hors connexion : ouvre d’abord les formations avec une connexion pour les consulter sur cet appareil.';render();}
  }
- function ouvrir(){owner=uid();if(!owner)return;initialiserStyleEspaceGardeUtilisateur();vue='calendrier';categorie='';recherche='';detail='';lieu='';year=new Date().getFullYear();month=new Date().getMonth();jour=F.iso(new Date());document.getElementById('app').innerHTML=`<main class="garde-section f-page"><button type="button" class="retour-button" data-navigation-equipe onclick="afficherEspaceGarde()">← Retour</button><section id="formations-principale"></section></main>${navigationPrincipale('','accueil')}`;actualiserInterfaceBureau();window.scrollTo({top:0,behavior:'auto'});void charger();void chargerDemandes();}
+ function ouvrir(){owner=uid();if(!owner)return;initialiserStyleEspaceGardeUtilisateur();vue='calendrier';categorie='';recherche='';detail='';detailAgenda=null;lieu='';year=new Date().getFullYear();month=new Date().getMonth();jour=F.iso(new Date());document.getElementById('app').innerHTML=`<main class="garde-section f-page"><button type="button" class="retour-button" data-navigation-equipe onclick="afficherEspaceGarde()">← Retour</button><section id="formations-principale"></section></main>${navigationPrincipale('','accueil')}`;actualiserInterfaceBureau();window.scrollTo({top:0,behavior:'auto'});void charger();void chargerDemandes();}
+ async function ouvrirFicheDepuisAgenda(donnees){
+  if(!donnees||typeof donnees!=='object'){ouvrir();return;}
+  ouvrir();
+  const account=owner;
+  const date=String(donnees.date_formation||(Array.isArray(donnees.dates)?donnees.dates[0]:'')||'');
+  const an=Number(date.slice(0,4));
+  if(Number.isInteger(an)&&an>=2000&&an<=2100&&an!==year){year=an;await charger();}
+  else await charger();
+  if(owner!==account||uid()!==account||!document.getElementById('formations-principale'))return;
+  const match=sessions.find(s=>String(s.id)===String(donnees.session_id||''))
+    ||sessions.find(s=>String(s.code||'')===String(donnees.code||'')&&
+       (!donnees.type_formation||s.type===donnees.type_formation)&&
+       (!date||s.dates.includes(date)))
+    ||sessions.find(s=>F.norm(s.intitule||'')===F.norm(donnees.formation||'')&&
+       (!date||s.dates.includes(date)));
+  if(match){detail=match.id;detailAgenda=null;}
+  else{detail='';detailAgenda=donnees;}
+  vue='formations';render();window.scrollTo({top:0,behavior:'auto'});
+ }
  function ouvrirAdmin(){
   if(!(utilisateurEstSPVAdmin()||utilisateurAPermission('acces_admin_formation'))){alert('Accès non autorisé.');return;}
   ++generation;owner=uid();if(!owner)return;
-  initialiserStyleEspaceGardeUtilisateur();vue='admin';detail='';
+  initialiserStyleEspaceGardeUtilisateur();vue='admin';detail='';detailAgenda=null;
   document.getElementById('app').innerHTML=`<main class="garde-section f-page"><button type="button" class="retour-button" onclick="afficherAdministratifCaserne()">← Administratif</button><section id="formations-principale"></section></main>${navigationPrincipale('','accueil')}`;
   actualiserInterfaceBureau();window.scrollTo({top:0,behavior:'auto'});render();void chargerDemandes();
  }
@@ -60,9 +85,9 @@
   try{const r=await c.rpc('formation_demande_statut',{p_id:id,p_statut:st});if(r.error)throw r.error;await chargerDemandes();}
   catch(err){alert(err.message||'Enregistrement impossible.');menu.querySelectorAll('button').forEach(b=>b.disabled=false);}
  });
- document.addEventListener('click',e=>{const root=e.target.closest('#formations-principale');if(!root)return;const req=e.target.closest('[data-demander]');if(req){void demander(req.dataset.demander);return;}const s=e.target.closest('[data-session]'),d=e.target.closest('[data-jour]'),t=e.target.closest('[data-type]');if(s){detail=s.dataset.session;render();window.scrollTo({top:0,behavior:'auto'});}else if(d){jour=d.dataset.jour;render();}else if(t){categorie=t.dataset.type;tri='date';render();}});
+ document.addEventListener('click',e=>{const root=e.target.closest('#formations-principale');if(!root)return;const req=e.target.closest('[data-demander]');if(req){void demander(req.dataset.demander);return;}const s=e.target.closest('[data-session]'),d=e.target.closest('[data-jour]'),t=e.target.closest('[data-type]');if(s){detail=s.dataset.session;detailAgenda=null;render();window.scrollTo({top:0,behavior:'auto'});}else if(d){jour=d.dataset.jour;const found=visibles().filter(x=>x.dates.includes(jour));if(found.length===1){detail=found[0].id;detailAgenda=null;}render();}else if(t){categorie=t.dataset.type;tri='date';render();}});
  document.addEventListener('change',async e=>{const sel=e.target.closest('#formations-principale [data-demande-statut]');if(!sel)return;const c=obtenirClientSupabase();const r=await c.rpc('formation_demande_statut',{p_id:sel.dataset.demandeStatut,p_statut:sel.value});if(r.error)alert(r.error.message);await chargerDemandes();});
- function capturerNavigation(){return {cle:[vue,categorie,detail].join(':'),docs,sessions,years,year,month,jour,vue,categorie,tri,lieu,recherche,detail,statut};}
- async function restaurerNavigation(n){++generation;owner=uid();({docs,sessions,years,year,month,jour,vue,categorie,tri,lieu,recherche,detail,statut}=n);render();await charger();}
- g.CISFormations={capturerNavigation,restaurerNavigation,ouvrir,ouvrirAdmin,actualiser:charger,actualiserDemandes:chargerDemandes,vue(v){if(v==='admin'){ouvrirAdmin();return;}vue=v;detail='';render();},tri(t){tri=t;render();},fermerDetail(){detail='';render();},mois(delta){const next=new Date(year,month+delta,1,12);const old=year;year=next.getFullYear();month=next.getMonth();jour=F.iso(next);if(year!==old)void charger();else render();}};
+ function capturerNavigation(){return {cle:[vue,categorie,detail].join(':'),docs,sessions,years,year,month,jour,vue,categorie,tri,lieu,recherche,detail,detailAgenda,statut};}
+ async function restaurerNavigation(n){++generation;owner=uid();({docs,sessions,years,year,month,jour,vue,categorie,tri,lieu,recherche,detail,statut}=n);detailAgenda=n.detailAgenda||null;render();await charger();}
+ g.CISFormations={capturerNavigation,restaurerNavigation,ouvrir,ouvrirAdmin,ouvrirFicheDepuisAgenda,actualiser:charger,actualiserDemandes:chargerDemandes,vue(v){if(v==='admin'){ouvrirAdmin();return;}vue=v;detail='';detailAgenda=null;render();},tri(t){tri=t;render();},fermerDetail(){detail='';detailAgenda=null;render();},mois(delta){const next=new Date(year,month+delta,1,12);const old=year;year=next.getFullYear();month=next.getMonth();jour=F.iso(next);if(year!==old)void charger();else render();}};
 })(globalThis);

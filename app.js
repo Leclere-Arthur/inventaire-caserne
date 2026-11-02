@@ -10100,7 +10100,7 @@ function agendaGeneralCarteFormation(item) {
  const couleur=(window.CISFormation && window.CISFormation.COULEURS && window.CISFormation.COULEURS[p.type_formation]) || '#64748b';
  const titre=echapperHTML(p.formation || 'Formation');
  const lieu=echapperHTML(p.lieu || 'Lieu non précisé');
- return `<div class="agenda-general-timeline"><div class="agenda-general-heure">Journée</div><button type="button" class="agenda-general-ligne" style="--agenda-couleur:${couleur};--agenda-fond:transparent" onclick="CISFormations.ouvrir()"><strong>${titre}</strong><small>Formation validée · ${lieu}</small></button></div>`;
+ return `<div class="agenda-general-timeline"><div class="agenda-general-heure">Journée</div><button type="button" class="agenda-general-ligne" style="--agenda-couleur:${couleur};--agenda-fond:transparent" onclick="CISFormations.ouvrirFicheDepuisAgenda(agendaGeneralItemsCaserne[${agendaGeneralItemsCaserne.indexOf(item)}]?.p)"><strong>${titre}</strong><small>Formation validée · ${lieu}</small></button></div>`;
 }
 function agendaGeneralRenduCaserne(){
  const app=document.getElementById("app");if(!app)return;
