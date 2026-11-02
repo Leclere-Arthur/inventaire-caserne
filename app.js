@@ -10360,8 +10360,7 @@ function ouvrirFormationAdminDepuisAdministratif() {
         alert("Le module Formation n'est pas disponible.");
         return;
     }
-    CISFormations.ouvrir();
-    CISFormations.vue("admin");
+    CISFormations.ouvrirAdmin();
 }
 
 function afficherAdministratifCaserne() {
