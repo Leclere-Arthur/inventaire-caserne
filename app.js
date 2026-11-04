@@ -983,26 +983,29 @@ const CISSynchronisationFiable = (() => {
         if (!lignes.some(x => x.id === payload.id)) lignes.push({id: payload.id, payload, utilisateur: id});
         sauver(lignes, id); // Écriture persistante AVANT le réseau.
     }
+    // Ne montrer le plein écran que si l'envoi prend réellement du temps.
+    // Un envoi rapide n'affiche aucune transition inutile.
+    let apparition = null;
     function afficher(message) {
-        if (!affichage) {
+        clearTimeout(apparition);
+        masquer();
+        apparition = setTimeout(() => {
+            if (affichage) return;
             const style = document.createElement('style');
             style.id = 'cis-sync-plein-ecran-style';
             if (!document.getElementById(style.id)) {
-                style.textContent = `#cis-sync-plein-ecran{position:fixed;inset:0;z-index:300100;display:flex;align-items:center;justify-content:center;box-sizing:border-box;padding:28px 24px;background:#f3f4f6;color:#20272b;font-family:Arial,Helvetica,sans-serif;text-align:center}#cis-sync-plein-ecran .cis-sync-contenu{width:100%;max-width:340px}#cis-sync-plein-ecran .cis-sync-symbole{position:relative;width:116px;height:116px;margin:0 auto 27px;display:grid;place-items:center}#cis-sync-plein-ecran .cis-sync-symbole:before{content:"";position:absolute;inset:0;border:3px solid #dce7e1;border-top-color:#217448;border-right-color:#217448;border-radius:50%;animation:cis-sync-tourne 1.15s linear infinite}#cis-sync-plein-ecran img{width:88px;height:88px;border-radius:21px;object-fit:contain}#cis-sync-plein-ecran h1{margin:0 0 13px;font-size:25px;color:#20272b}#cis-sync-plein-ecran p{font-size:15px;line-height:1.6;color:#626d75}#cis-sync-plein-ecran button{margin-top:18px;padding:12px 18px;border:1px solid #bac8bf;border-radius:10px;background:white;color:#195d39;font:inherit;font-weight:700;cursor:pointer}@keyframes cis-sync-tourne{to{transform:rotate(360deg)}}@media(prefers-reduced-motion:reduce){#cis-sync-plein-ecran .cis-sync-symbole:before{animation:none}}`;
+                style.textContent = `#cis-sync-plein-ecran{position:fixed;inset:0;z-index:300100;display:flex;align-items:center;justify-content:center;box-sizing:border-box;padding:28px 24px;background:#f3f4f6;color:#20272b;font-family:Arial,Helvetica,sans-serif;text-align:center}#cis-sync-plein-ecran .cis-sync-contenu{width:100%;max-width:340px}#cis-sync-plein-ecran .cis-sync-symbole{position:relative;width:116px;height:116px;margin:0 auto 27px;display:grid;place-items:center}#cis-sync-plein-ecran .cis-sync-symbole:before{content:"";position:absolute;inset:0;border:3px solid #dce7e1;border-top-color:#217448;border-right-color:#217448;border-radius:50%;animation:cis-sync-tourne 1.15s linear infinite}#cis-sync-plein-ecran img{width:88px;height:88px;border-radius:21px;object-fit:contain}#cis-sync-plein-ecran h1{margin:0 0 13px;font-size:25px;color:#20272b}#cis-sync-plein-ecran p{font-size:15px;line-height:1.6;color:#626d75}@keyframes cis-sync-tourne{to{transform:rotate(360deg)}}@media(prefers-reduced-motion:reduce){#cis-sync-plein-ecran .cis-sync-symbole:before{animation:none}}`;
                 document.head.appendChild(style);
             }
             affichage = document.createElement('div');
             affichage.id = 'cis-sync-plein-ecran';
             affichage.setAttribute('role','status');
-            affichage.innerHTML = '<div class="cis-sync-contenu"><div class="cis-sync-symbole"><img src="./icon-192.png" alt=""></div><h1>CIS Le Chesne</h1><p data-sync-message></p><button type="button" data-sync-continuer hidden>Continuer dans l’application</button></div>';
-            affichage.querySelector('[data-sync-continuer]').onclick = () => masquer();
+            affichage.innerHTML = '<div class="cis-sync-contenu"><div class="cis-sync-symbole"><img src="./icon-192.png" alt=""></div><h1>CIS Le Chesne</h1><p data-sync-message></p></div>';
+            affichage.querySelector('[data-sync-message]').textContent = message || 'Synchronisation des informations enregistrées…';
             document.body.appendChild(affichage);
-            clearTimeout(attente);
-            attente = setTimeout(() => { const b = affichage?.querySelector('[data-sync-continuer]'); if (b) b.hidden = false; }, 9000);
-        }
-        affichage.querySelector('[data-sync-message]').textContent = message || 'Synchronisation des informations enregistrées…';
+        }, 650);
     }
-    function masquer() { clearTimeout(attente); affichage?.remove(); affichage = null; }
+    function masquer() { clearTimeout(apparition); apparition = null; affichage?.remove(); affichage = null; }
     let travailInventaire = null;
     async function synchroniserInventaires() {
         if (travailInventaire) return travailInventaire;
@@ -6703,35 +6706,12 @@ async function synchroniserApresModification() {
 
         }
 
-        // Une fois l'envoi terminé, on relit immédiatement la base centrale.
-        // Cela évite qu'un iPhone/iPad garde une ancienne copie locale.
-        etapeSynchronisationPharmacie="Relecture après envoi confirmé";
-        const donnees =
-            await recupererDonneesSupabase();
-
-        synchronisationSupabaseEnCours = true;
-
-        try {
-
-            await appliquerDonneesSupabaseLocalement(
-                donnees
-            );
-
-        } finally {
-
-            synchronisationSupabaseEnCours = false;
-
-        }
-
+        // Le serveur a confirmé les écritures : ne pas bloquer la validation
+        // par une relecture complète (coûteuse en faible réseau).
+        // Les lectures restent gérées par la synchronisation de navigation.
         synchronisationSupabaseActive = true;
-
-        // Cette actualisation n'a lieu qu'après une validation utilisateur,
-        // jamais pendant la saisie d'un formulaire.
-        rafraichirAffichageApresSynchronisation();
-
-        console.log(
-            "✅ Modification synchronisée avec Supabase."
-        );
+        derniereSynchronisationNavigation = 0;
+        console.log("Modification confirmée par Supabase ; actualisation différée.");
 
         return true;
 
@@ -13103,7 +13083,7 @@ async function validerRetourIntervention() {
     try {
 
         CISSynchronisationFiable.afficher('Synchronisation du retour d’intervention…');
-        const synchronise = await CISSynchronisationFiable.attendre(synchroniserApresModification(), 12000);
+        const synchronise = await synchroniserApresModification();
         CISSynchronisationFiable.masquer();
 
         if (!navigator.onLine) {
@@ -13116,9 +13096,7 @@ async function validerRetourIntervention() {
 
         } else {
 
-            alert(
-                "Retour conservé sur cet appareil. Son envoi au serveur reste en attente." + detailEchecSynchronisationPharmacie()
-            );
+            console.warn("Retour conservé localement ; nouvel essai automatique au retour du réseau." + detailEchecSynchronisationPharmacie());
 
         }
 
@@ -22915,13 +22893,13 @@ async function vehInventaireTerminerInterne(){
    payload.id=genererUUID();
    CISSynchronisationFiable.ajouterInventaire(payload);
    CISSynchronisationFiable.afficher('Synchronisation de l’inventaire véhicule…');
-   const confirme=await CISSynchronisationFiable.attendre(CISSynchronisationFiable.synchroniserInventaires(),12000);
+   const confirme=await CISSynchronisationFiable.synchroniserInventaires();
    CISSynchronisationFiable.masquer();
   // Les notifications sont créées par le trigger Supabase dans la même transaction.
   // Le worker serveur s'occupe des push et des relances ; aucun envoi depuis le téléphone.
   void actualiserPointNotifications();
   vehInventaireSession=null;
-  await animationValidationEnregistrementCIS("Inventaire enregistré", () => afficherEspaceGarde());
+  await animationValidationEnregistrementCIS(confirme ? "Inventaire enregistré" : "Inventaire conservé sur cet appareil — synchronisation automatique", () => afficherEspaceGarde());
  }catch(e){alert("Enregistrement impossible : "+e.message+". Les contrôles sont conservés sur cette page.");if(btn){btn.disabled=false;btn.textContent="Terminer l'enregistrement";}}
 }
 window.vehInventaireOuvrirVehicule=vehInventaireOuvrirVehicule;
