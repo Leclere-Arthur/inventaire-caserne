@@ -22620,13 +22620,33 @@ async function vehInventaireCommencer(id){
    const signalements=await sb.rpc('inventaires_anomalies',{p_vehicule:id}).abortSignal(ac.signal);if(signalements.error)throw signalements.error;
    if(!active())return null;
    const personnels=listePersonnelAvecAuteur(await chargerUtilisateursEspaceGarde());
-   return {zones,materiels:m.data||[],anomalies:signalements.data||[],personnels};
+   const dernier=await sb.from('cis_inventaires_vehicules').select('details').eq('vehicule_id',id).order('created_at',{ascending:false}).limit(1).abortSignal(ac.signal);
+   if(dernier.error)throw dernier.error;
+   return {zones,materiels:m.data||[],anomalies:signalements.data||[],personnels,dernierInventaire:dernier.data?.[0]?.details||[]};
   };
   const resultat=await Promise.race([charger(),new Promise((_,rej)=>{timer=setTimeout(()=>{delaiDepasse=true;ac.abort();rej(Error('Le chargement des coffres prend trop de temps. Vérifie la connexion puis réessaie.'));},15000);})]);
   if(!resultat||!active())return;
   if(!resultat.zones.length){vehInventaireAfficher(`<button class="retour-button veh-retour" onclick="vehInventaireOuvrirVehicule('${id}')">← Retour</button><h1>${vehInventaireHTML(v.nom)}</h1><p>Configure d’abord les coffres dans l’application Admin.</p>`);return;}
   vehInventaireZones=resultat.zones;vehInventaireMateriels=resultat.materiels;
-  vehInventaireSession={vehicule:{id:v.id,nom:v.nom,code:v.code},controles:{},anomalies:resultat.anomalies,participants:personnesAvecAuteur([]),personnels:resultat.personnels};
+  // Retain missing unit identity from the last inventory, without auto-confirming present expiries.
+  const controlesPrecedents={};
+  for(const zone of resultat.dernierInventaire||[]){
+   if(!Array.isArray(zone.materiels))continue;
+   for(const m of zone.materiels){
+    if(!m.materiel_id)continue;
+    const actuel=resultat.materiels.find(x=>String(x.id)===String(m.materiel_id));
+    if(!actuel)continue;
+    const q=Number(m.quantite_constatee);
+    if(!Number.isInteger(q)||q<0)continue;
+    const absentes=(m.peremptions_controle||[]).filter(x=>x.action==='absente').map(x=>({
+     unite:Number(x.unite),initiale:actuel.dates_peremption?.[Number(x.unite)-1],
+     date:actuel.dates_peremption?.[Number(x.unite)-1],action:'absente',identification:'selection_utilisateur'
+    })).filter(x=>x.initiale);
+    if(!controlesPrecedents[actuel.zone_id])controlesPrecedents[actuel.zone_id]={};
+    controlesPrecedents[actuel.zone_id][actuel.id]={quantite_constatee:q,etat:q===0?null:null,peremptions_controle:absentes,observation:''};
+   }
+  }
+  vehInventaireSession={vehicule:{id:v.id,nom:v.nom,code:v.code},controles:controlesPrecedents,anomalies:resultat.anomalies,participants:personnesAvecAuteur([]),personnels:resultat.personnels};
   vehInventaireAfficherZones();
  }catch(e){
   if(!page?.isConnected||String(utilisateurConnecte?.id||'')!==compte)return;
@@ -22652,6 +22672,8 @@ function vehInventaireSynchroniserQuantite(carte){
  const valide=Number.isInteger(quantite)&&quantite>=0;
  const manque=valide?Math.max(0,attendue-quantite):0;
  const lignes=[...carte.querySelectorAll('[data-peremption-unite]')];
+ if(carte.dataset.editionAbsentes===undefined){const coches=carte.querySelectorAll('[data-veh-unite-absente]:checked').length;carte.dataset.editionAbsentes=manque>0&&quantite>0&&coches!==manque?'oui':'non';}
+ const editer=carte.dataset.editionAbsentes==='oui';
  // Avec une quantité nulle, toutes les unités sont automatiquement absentes.
  // Sinon, l'utilisateur choisit précisément les unités absentes selon leur date.
  lignes.forEach(f=>{
@@ -22660,6 +22682,7 @@ function vehInventaireSynchroniserQuantite(carte){
   if(selection){selection.hidden=!(valide&&manque>0&&quantite>0);selection.style.display=selection.hidden?'none':'block';}
   if(choix){choix.checked=valide&&quantite===0?true:(valide&&manque===0?false:choix.checked);choix.disabled=valide&&quantite===0;}
   const absent=valide&&quantite===0||!!choix?.checked;
+  f.hidden=absent&&!editer;
   const controle=f.querySelector('[data-veh-controle-present]');if(controle)controle.hidden=absent;
   f.querySelectorAll('[data-veh-controle-present] input').forEach(el=>{el.disabled=absent;});
   const erreur=f.querySelector('[data-peremption-erreur]');if(erreur)erreur.textContent='';
@@ -22672,6 +22695,17 @@ function vehInventaireSynchroniserQuantite(carte){
  note.textContent=valide&&quantite===0?`Aucun matériel présent : aucune péremption ni aucun statut à confirmer.`:
   manque>0?(lignes.length?`Matériel manquant : ${manque}. Sélectionne exactement ${manque} unité(s) absente(s) selon leur péremption. Sélectionnées : ${cochees}/${manque}.`:`Matériel manquant : ${manque} (déduit automatiquement de la quantité).`):
   quantite>attendue?'Quantité supérieure au prévu : les unités supplémentaires ne possèdent pas encore de date de péremption individuelle.':'';
+ if(lignes.length&&manque>0&&quantite>0){
+  let bouton=carte.querySelector('[data-veh-modifier-absentes]');
+  if(!bouton){bouton=document.createElement('button');bouton.type='button';bouton.setAttribute('data-veh-modifier-absentes','');bouton.style.cssText='display:block;margin:8px 0;padding:9px 12px;border:1px solid #94a3b8;border-radius:8px;background:#fff;color:#155eaa;font:inherit';note.insertAdjacentElement('afterend',bouton);}
+  bouton.hidden=false;
+  bouton.textContent=editer?'Terminer le choix des bouteilles absentes':'Modifier la bouteille absente';
+  bouton.onclick=()=>{
+   if(carte.dataset.editionAbsentes==='oui'&&cochees!==manque){alert('Sélectionne exactement '+manque+' bouteille(s) absente(s).');return;}
+   carte.dataset.editionAbsentes=carte.dataset.editionAbsentes==='oui'?'non':'oui';
+   vehInventaireSynchroniserQuantite(carte);
+  };
+ }else{const bouton=carte.querySelector('[data-veh-modifier-absentes]');if(bouton)bouton.hidden=true;}
 }
 function vehLirePeremptions(m,carte){
  const input=carte.querySelector('input[type="number"]'),quantite=input&&input.value.trim()!==''?Number(input.value):NaN;
@@ -22737,6 +22771,7 @@ function vehInventaireActualiserQuantite(input){
  const attendue=Number(carte.dataset.quantiteAttendue);
  const valeur=input.value.trim()===''?NaN:Number(input.value);
  const erreur=!Number.isInteger(valeur)||valeur<0||valeur!==attendue;
+ if(Number.isInteger(valeur)&&valeur>=0){const selected=carte.querySelectorAll('[data-veh-unite-absente]:checked').length;if(valeur>0&&selected!==Math.max(0,attendue-valeur))carte.dataset.editionAbsentes='oui';}
  vehInventaireSynchroniserQuantite(carte);
  carte.querySelectorAll('.veh-quantite-statut').forEach(e=>{
   e.classList.toggle('veh-quantite-erreur',erreur);
@@ -23834,7 +23869,7 @@ function notificationEstRuptureStock(r){
  const texte=[r.title,r.body].filter(Boolean).join(' ').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
  const cible=String(r.target||'').toLowerCase();
  const stockConcerne=['pharmacie','menage-inventaire'].includes(cible)||/pharma|menage/.test(texte);
- if(r.target==='suivi-vsav')return true;
+ if(r.id?.startsWith('vsav-server:')||r.target==='suivi-vsav'||/inventaire vsav|bouteilles? d.o2|peremption.*unite/i.test(texte))return true;
  return stockConcerne && /\brupture\b/.test(texte);
 }
 function initialiserCentreNotifications(){
@@ -23843,8 +23878,8 @@ function initialiserCentreNotifications(){
  style.textContent=`
  #btn-historique-notifications{position:fixed;top:calc(12px + env(safe-area-inset-top,0px));right:calc(58px + env(safe-area-inset-right,0px));width:38px;height:38px;display:flex;align-items:center;justify-content:center;z-index:99999;border:0;padding:0;margin:0;background:transparent;color:#1687ff;cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
  #btn-historique-notifications .notif-point{position:absolute;top:0;right:0;width:13px;height:13px;border-radius:50%;background:#dc2626;border:2px solid #fff;box-shadow:0 0 0 1px #dc2626;pointer-events:none}#btn-historique-notifications .notif-point[hidden]{display:none}#btn-historique-notifications[hidden]{display:none!important}#btn-historique-notifications svg{width:27px;height:27px}#btn-historique-notifications:focus-visible{outline:2px solid #1687ff;outline-offset:2px;border-radius:50%}
- html:has(#notifications-historique-page),body:has(#notifications-historique-page){background:#f3f4f6!important}.notifications-page{min-height:100vh;min-height:100dvh;max-width:780px;margin:0 auto;padding:64px 16px 125px;box-sizing:border-box}.notifications-page h1{font-size:28px;margin:24px 0}.notif-retour{border:1px solid #dce1e6;background:#fff;color:#222a32;padding:11px 15px;border-radius:12px;font:inherit;font-weight:700;cursor:pointer}.notif-liste{display:grid;gap:10px}.notif-ligne{width:100%;display:flex;align-items:center;gap:18px;padding:18px;text-align:left;border:1px solid #dfe4e9;border-radius:14px;background:#fff;color:#222a32;font:inherit;cursor:pointer;box-sizing:border-box}.notif-ligne.non-lue{background:#1687ff;border-color:#1687ff;color:#fff}.notif-ligne.non-lue .notif-contenu time,.notif-ligne.non-lue svg{color:#fff}.notif-ligne.non-lue.rupture-stock{background:#c62828;border-color:#c62828;color:#fff}.notif-ligne.non-lue.rupture-stock:focus-visible{outline-color:#c62828}.notif-contenu{min-width:0;flex:1}.notif-contenu strong{display:block;font-size:16px;line-height:1.4;overflow-wrap:anywhere}.notif-contenu p{font-size:14px;line-height:1.5;margin:6px 0 10px;overflow-wrap:anywhere}.notif-contenu time{font-size:12px;color:#68717b;display:block}.notif-ligne svg{width:18px;height:18px;flex-shrink:0;color:#79838e}.notif-vide{border:1px solid #dfe4e9;border-radius:14px;background:#fff;color:#68717b;padding:24px;line-height:1.5}.notif-ligne:focus-visible,.notif-retour:focus-visible{outline:2px solid #1687ff;outline-offset:3px}
- @media(min-width:1000px){html:has(#notifications-historique-page),body:has(#notifications-historique-page){background:var(--pc-fond,#0d141b)!important}body:not(.mode-connexion) .notif-ligne,body:not(.mode-connexion) .notif-retour,body:not(.mode-connexion) .notif-vide{background:#151f28;border-color:#34414c;color:#f2f5f7}body:not(.mode-connexion) .notif-ligne.non-lue{background:#1687ff;border-color:#1687ff;color:#fff}body:not(.mode-connexion) .notif-ligne.non-lue.rupture-stock{background:#c62828;border-color:#c62828;color:#fff}body:not(.mode-connexion) .notif-ligne.non-lue .notif-contenu time,body:not(.mode-connexion) .notif-ligne.non-lue svg{color:#fff}.notif-contenu time{color:#8796a6}}
+ html:has(#notifications-historique-page),body:has(#notifications-historique-page){background:#f3f4f6!important}.notifications-page{min-height:100vh;min-height:100dvh;max-width:780px;margin:0 auto;padding:64px 16px 125px;box-sizing:border-box}.notifications-page h1{font-size:28px;margin:24px 0}.notif-retour{border:1px solid #dce1e6;background:#fff;color:#222a32;padding:11px 15px;border-radius:12px;font:inherit;font-weight:700;cursor:pointer}.notif-liste{display:grid;gap:10px}.notif-ligne{width:100%;display:flex;align-items:center;gap:18px;padding:18px;text-align:left;border:1px solid #dfe4e9;border-radius:14px;background:#fff;color:#222a32;font:inherit;cursor:pointer;box-sizing:border-box}.notif-ligne.non-lue{background:#1687ff;border-color:#1687ff;color:#fff}.notif-ligne.non-lue .notif-contenu time,.notif-ligne.non-lue svg{color:#fff}.notif-ligne.rupture-stock{background:#c62828;border-color:#c62828;color:#fff}.notif-ligne.non-lue.rupture-stock:focus-visible{outline-color:#c62828}.notif-contenu{min-width:0;flex:1}.notif-contenu strong{display:block;font-size:16px;line-height:1.4;overflow-wrap:anywhere}.notif-contenu p{font-size:14px;line-height:1.5;margin:6px 0 10px;overflow-wrap:anywhere}.notif-contenu time{font-size:12px;color:#68717b;display:block}.notif-ligne svg{width:18px;height:18px;flex-shrink:0;color:#79838e}.notif-vide{border:1px solid #dfe4e9;border-radius:14px;background:#fff;color:#68717b;padding:24px;line-height:1.5}.notif-ligne:focus-visible,.notif-retour:focus-visible{outline:2px solid #1687ff;outline-offset:3px}
+ @media(min-width:1000px){html:has(#notifications-historique-page),body:has(#notifications-historique-page){background:var(--pc-fond,#0d141b)!important}body:not(.mode-connexion) .notif-ligne,body:not(.mode-connexion) .notif-retour,body:not(.mode-connexion) .notif-vide{background:#151f28;border-color:#34414c;color:#f2f5f7}body:not(.mode-connexion) .notif-ligne.non-lue{background:#1687ff;border-color:#1687ff;color:#fff}body:not(.mode-connexion) .notif-ligne.rupture-stock{background:#c62828;border-color:#c62828;color:#fff}body:not(.mode-connexion) .notif-ligne.non-lue .notif-contenu time,body:not(.mode-connexion) .notif-ligne.non-lue svg{color:#fff}.notif-contenu time{color:#8796a6}}
  `;document.head.appendChild(style);
  const button=document.createElement('button');button.id='btn-historique-notifications';button.type='button';button.hidden=true;button.setAttribute('aria-label','Historique des notifications');button.title='Notifications';
  button.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9Z"/><path d="M10 21h4"/></svg><span class="notif-point" hidden aria-hidden="true"></span>';
@@ -24098,10 +24133,10 @@ async function afficherSuiviVSAVComplementaire(){
   if(error)throw error;
   const esc=vehInventaireHTML;
   zone.innerHTML='<h2>Matériel manquant et péremptions modifiées</h2>'+
-   ((data||[]).length?(data||[]).map(a=>`<article class="veh-card" style="margin:12px 0;padding:16px;border:1px solid #b9c9d7;border-radius:12px"><strong>${esc(a.vehicule_nom)} · ${esc(a.zone_nom||'')} · ${esc(a.nom)}</strong><p><b>${a.nature==='manquant'?'Matériel manquant':'Date de péremption modifiée'}</b></p><p>${esc(a.detail)}</p><small>${new Date(a.date).toLocaleString('fr-FR')}</small>${a.nature==='peremption'?`<p><button type="button" class="equipe-action-button" data-vsav-accuse="${esc(a.id)}">Marquer comme pris en compte</button></p>`:''}</article>`).join(''):'<p>Aucune anomalie complémentaire en attente.</p>');
+   ((data||[]).length?(data||[]).map(a=>`<article class="veh-card" style="margin:12px 0;padding:16px;border:1px solid #b9c9d7;border-radius:12px"><strong>${esc(a.vehicule_nom)} · ${esc(a.zone_nom||'')} · ${esc(a.nom)}</strong><p><b>${a.nature==='manquant'?'Matériel manquant':'Date de péremption modifiée'}</b></p><p>${esc(a.detail)}</p><small>${new Date(a.date).toLocaleString('fr-FR')}</small><p><button type="button" class="equipe-action-button" data-vsav-accuse="${esc(a.id)}">Valider la remise en état</button></p></article>`).join(''):'<p>Aucune anomalie complémentaire en attente.</p>');
   zone.querySelectorAll('[data-vsav-accuse]').forEach(btn=>btn.onclick=async()=>{
    btn.disabled=true;
-   const {error}=await sb.rpc('cis_vsav_accuser_peremption',{p_id:btn.dataset.vsavAccuse});
+   const {error}=await sb.rpc('cis_vsav_valider_remise_en_etat',{p_id:btn.dataset.vsavAccuse});
    if(error){btn.disabled=false;alert(error.message);return;}
    await afficherSuiviVSAVComplementaire();
   });
