@@ -22639,7 +22639,9 @@ function vehPeremptionsHTML(m,valeur){
  const controles=valeur.peremptions_controle||[];
  return vehDatesAControler(m).map(x=>{
   const c=controles.find(c=>c.unite===x.unite),date=c?.date||x.date;
-  return `<fieldset data-peremption-unite="${x.unite}" style="margin:12px 0;padding:12px;border:1px solid #bdc9d3;border-radius:10px"><legend>Péremption — unité ${x.unite}</legend><strong>${vehInventaireHTML(x.date.split('-').reverse().join('/'))}</strong><div style="display:flex;gap:12px;flex-wrap:wrap;margin:10px 0"><label><input type="radio" name="peremption-${m.id}-${x.unite}" value="confirmer" ${c?.action==='confirmer'?'checked':''} onchange="vehPeremptionChoix(this)"> Confirmer</label><label><input type="radio" name="peremption-${m.id}-${x.unite}" value="modifier" ${c?.action==='modifier'?'checked':''} onchange="vehPeremptionChoix(this)"> Modifier</label></div><label data-peremption-nouvelle ${c?.action==='modifier'?'':'hidden'}>Nouvelle date<input type="date" value="${vehInventaireHTML(date)}" data-peremption-date style="display:block;padding:10px;font:inherit;font-size:16px;max-width:100%;box-sizing:border-box"></label><small data-peremption-erreur role="status"></small></fieldset>`;
+  // Ne précocher que les absences choisies explicitement par l'utilisateur.
+  const absent=c?.action==='absente'&&c?.identification==='selection_utilisateur';
+  return `<fieldset data-peremption-unite="${x.unite}" style="margin:12px 0;padding:12px;border:1px solid #bdc9d3;border-radius:10px"><legend>Unité ${x.unite} — péremption ${vehInventaireHTML(x.date.split('-').reverse().join('/'))}</legend><label data-veh-absence-choix hidden style="display:block;margin:8px 0"><input type="checkbox" data-veh-unite-absente ${absent?'checked':''} onchange="vehInventaireSynchroniserQuantite(this.closest('[data-materiel]'))"> Cette unité est absente</label><div data-veh-controle-present><div style="display:flex;gap:12px;flex-wrap:wrap;margin:10px 0"><label><input type="radio" name="peremption-${m.id}-${x.unite}" value="confirmer" ${c?.action==='confirmer'?'checked':''} onchange="vehPeremptionChoix(this)"> Confirmer</label><label><input type="radio" name="peremption-${m.id}-${x.unite}" value="modifier" ${c?.action==='modifier'?'checked':''} onchange="vehPeremptionChoix(this)"> Modifier</label></div><label data-peremption-nouvelle ${c?.action==='modifier'?'':'hidden'}>Nouvelle date<input type="date" value="${vehInventaireHTML(date)}" data-peremption-date style="display:block;padding:10px;font:inherit;font-size:16px;max-width:100%;box-sizing:border-box"></label></div><small data-peremption-erreur role="status"></small></fieldset>`;
  }).join('');
 }
 function vehPeremptionChoix(input){const f=input.closest('[data-peremption-unite]');f.querySelector('[data-peremption-nouvelle]').hidden=input.value!=='modifier';f.querySelector('[data-peremption-erreur]').textContent='';}
@@ -22648,25 +22650,41 @@ function vehInventaireSynchroniserQuantite(carte){
  const input=carte.querySelector('input[type="number"]'),attendue=Number(carte.dataset.quantiteAttendue);
  const quantite=input&&input.value.trim()!==''?Number(input.value):NaN;
  const valide=Number.isInteger(quantite)&&quantite>=0;
- const presents=valide?Math.min(quantite,attendue):attendue;
- carte.querySelectorAll('[data-peremption-unite]').forEach((f,i)=>{
-  const absent=i>=presents;f.hidden=absent;
-  f.querySelectorAll('input').forEach(el=>{el.disabled=absent;});
-  if(absent){f.querySelectorAll('input[type="radio"]').forEach(el=>{el.checked=false;});}
+ const manque=valide?Math.max(0,attendue-quantite):0;
+ const lignes=[...carte.querySelectorAll('[data-peremption-unite]')];
+ // Avec une quantité nulle, toutes les unités sont automatiquement absentes.
+ // Sinon, l'utilisateur choisit précisément les unités absentes selon leur date.
+ lignes.forEach(f=>{
+  const choix=f.querySelector('[data-veh-unite-absente]');
+  const selection=f.querySelector('[data-veh-absence-choix]');
+  if(selection){selection.hidden=!(valide&&manque>0&&quantite>0);selection.style.display=selection.hidden?'none':'block';}
+  if(choix){choix.checked=valide&&quantite===0?true:(valide&&manque===0?false:choix.checked);choix.disabled=valide&&quantite===0;}
+  const absent=valide&&quantite===0||!!choix?.checked;
+  const controle=f.querySelector('[data-veh-controle-present]');if(controle)controle.hidden=absent;
+  f.querySelectorAll('[data-veh-controle-present] input').forEach(el=>{el.disabled=absent;});
+  const erreur=f.querySelector('[data-peremption-erreur]');if(erreur)erreur.textContent='';
  });
  const etats=carte.querySelector('.veh-etat');
  if(etats){etats.hidden=valide&&quantite===0;etats.querySelectorAll('input[type="radio"]').forEach(el=>{el.disabled=valide&&quantite===0;if(valide&&quantite===0)el.checked=false;});}
  let note=carte.querySelector('[data-veh-absence-info]');
  if(!note){note=document.createElement('p');note.setAttribute('data-veh-absence-info','');note.className='veh-muted';(etats||carte).insertAdjacentElement('afterend',note);}
- note.textContent=valide&&quantite<attendue?`${attendue-quantite} manquant(s) automatiquement. Contrôle uniquement des ${quantite} présent(s). L'identité des unités absentes n'est pas déterminée.`:'';
+ const cochees=lignes.filter(f=>f.querySelector('[data-veh-unite-absente]')?.checked).length;
+ note.textContent=valide&&quantite===0?`Aucun matériel présent : aucune péremption ni aucun statut à confirmer.`:
+  manque>0?(lignes.length?`Matériel manquant : ${manque}. Sélectionne exactement ${manque} unité(s) absente(s) selon leur péremption. Sélectionnées : ${cochees}/${manque}.`:`Matériel manquant : ${manque} (déduit automatiquement de la quantité).`):
+  quantite>attendue?'Quantité supérieure au prévu : les unités supplémentaires ne possèdent pas encore de date de péremption individuelle.':'';
 }
 function vehLirePeremptions(m,carte){
  const input=carte.querySelector('input[type="number"]'),quantite=input&&input.value.trim()!==''?Number(input.value):NaN;
  if(!Number.isInteger(quantite)||quantite<0)throw Error(m.nom+' : quantité invalide.');
- const presentes=Math.min(quantite,Number(m.quantite));
- return vehDatesAControler(m).map((x,i)=>{
-  if(i>=presentes)return {unite:x.unite,initiale:x.date,date:x.date,action:'absente',identification:'non_verifiee'};
-  const f=carte.querySelector(`[data-peremption-unite="${x.unite}"]`),action=f?.querySelector('input[type="radio"]:checked')?.value;
+ const dates=vehDatesAControler(m),manque=Math.max(0,Number(m.quantite)-quantite);
+ const selection=dates.filter(x=>carte.querySelector(`[data-peremption-unite="${x.unite}"] [data-veh-unite-absente]`)?.checked);
+ if(quantite>0&&manque>0&&dates.length>0&&dates.length<Number(m.quantite))throw Error(m.nom+' : les dates de toutes les unités prévues doivent être enregistrées pour identifier la bouteille absente.');
+ if(quantite>0&&dates.length>0&&selection.length!==manque)throw Error(m.nom+' : sélectionne exactement '+manque+' unité(s) absente(s) selon leur date de péremption (actuellement '+selection.length+').');
+ return dates.map(x=>{
+  const f=carte.querySelector(`[data-peremption-unite="${x.unite}"]`);
+  const absent=quantite===0||!!f?.querySelector('[data-veh-unite-absente]')?.checked;
+  if(absent)return {unite:x.unite,initiale:x.date,date:x.date,action:'absente',identification:'selection_utilisateur'};
+  const action=f?.querySelector('input[type="radio"]:checked')?.value;
   const date=action==='confirmer'?x.date:f?.querySelector('[data-peremption-date]')?.value;
   if(!['confirmer','modifier'].includes(action)||!vehDateValide(date||'')){
    if(f)f.querySelector('[data-peremption-erreur]').textContent='Confirme ou modifie cette date.';
@@ -22680,8 +22698,13 @@ function vehPeremptionsCompletes(m,c){
  if(!c||!Number.isInteger(quantite)||quantite<0)return false;
  if(quantite>0&&!['bon','a_surveiller','hs'].includes(c.etat))return false;
  if(quantite===0&&c.etat!==null)return false;
- const presentes=Math.min(quantite,attendue),lignes=c.peremptions_controle||[];
- return vehDatesAControler(m).every((x,i)=>lignes.some(p=>p.unite===x.unite&&p.initiale===x.date&&(i>=presentes?p.action==='absente':(['confirmer','modifier'].includes(p.action)&&vehDateValide(p.date)))));
+ const dates=vehDatesAControler(m),lignes=c.peremptions_controle||[],manque=Math.max(0,attendue-quantite);
+ if(quantite>0&&manque>0&&dates.length>0&&dates.length<attendue)return false;
+ if(dates.length>0&&lignes.filter(p=>p.action==='absente').length!==Math.min(manque,dates.length))return false;
+ return dates.every(x=>lignes.some(p=>p.unite===x.unite&&p.initiale===x.date&&(
+  p.action==='absente'&&p.identification==='selection_utilisateur'||
+  ['confirmer','modifier'].includes(p.action)&&vehDateValide(p.date)
+ )));
 }
 function vehInventaireSousZones(id){return vehInventaireZones.filter(z=>z.parent_id===id);}
 function vehInventaireCheminZone(z){const p=vehInventaireZones.find(p=>p.id===z.parent_id);return p?p.nom+' › '+z.nom:z.nom;}
@@ -22726,7 +22749,7 @@ function vehInventaireOuvrirZone(id){
  const session=vehInventaireSession,z=vehInventaireZones.find(x=>x.id===id);if(!session||!z)return;
  const materiels=vehInventaireMateriels.filter(m=>m.zone_id===id);
  const precedent=session.controles[id]||{},enfants=vehInventaireSousZones(id),parent=vehInventaireZones.find(p=>p.id===z.parent_id);
- vehInventaireAfficher(`<div class="veh-inventaire-contenu" data-veh-zone="${z.id}"><button class="retour-button veh-retour" onclick="${parent?`vehInventaireOuvrirZone('${parent.id}')`:'vehInventaireAfficherZones()'}">← Retour</button><h1>${vehInventaireHTML(z.nom)}</h1><p class="veh-muted">${vehInventaireHTML(session.vehicule.nom+' › '+vehInventaireCheminZone(z))}</p>${enfants.length?`<section class="veh-card"><h2>Sous-catégories</h2>${enfants.map(vehInventaireCarteZone).join('')}</section>`:''}${vehPhotoMiniature(z.photo_path,"detail")}<p class="veh-muted">Choisis l'état de chaque matériel. Appuie sur son nom pour ajouter une observation ou modifier la quantité constatée.</p><div id="veh-materiels">${materiels.length?materiels.map(m=>{const alerte=(session.anomalies||[]).find(a=>a.materiel_id===m.id);const valeur=precedent[m.id]||{},q=valeur.quantite_constatee??quantiteVSAVDisponible(m,session),ecart=Number(q)!==Number(m.quantite);return `<div class="veh-materiel-ligne" data-materiel="${m.id}" data-quantite-attendue="${Number(m.quantite)}"><div class="veh-materiel-haut"><button type="button" class="veh-materiel-ouvrir" aria-expanded="false" onclick="vehInventaireBasculerMateriel('${m.id}')"><strong>${vehInventaireHTML(m.nom)}</strong><small>Prévu : <b>${Number(m.quantite)}</b> ${ecart?`· <span class="veh-quantite-erreur">${Number(q)<Number(m.quantite)?'Matériel manquant':'Constaté'} : ${Number(q)}</span>`:''}</small></button><span class="veh-materiel-chevron" aria-hidden="true">⌄</span></div>${alerte?`<p role="note" style="padding:12px;border-radius:9px;background:${alerte.etat==='hs'?'#ffe1e1':'#fff0b3'};color:#442b25;border:2px solid ${alerte.etat==='hs'?'#bc2525':'#bc8d13'}"><strong>${alerte.source==='utilisation_pharmacie'?'Matériel manquant — réarmement en attente'+(alerte.etat==='hs'?' · HS':''):'Dernier signalement : '+(alerte.etat==='hs'?'HS':'À surveiller')}</strong>${alerte.observation?'<br>'+vehInventaireHTML(alerte.observation):''}<br><small>${new Date(alerte.date).toLocaleString('fr-FR')}</small></p>`:''}<div class="veh-etat">${[["bon","Bon"],["a_surveiller","À surveiller"],["hs","HS"]].map(([val,lib])=>`<label><input type="radio" name="etat-${m.id}" value="${val}" ${valeur.etat===val?"checked":""}> ${lib}</label>`).join("")}</div>${vehPeremptionsHTML(m,valeur)}<div class="veh-materiel-details">${vehPhotoMiniature(m.photo_path,"materiel")}<label class="veh-quantite-saisie"><strong>Quantité constatée</strong><input type="number" min="0" step="1" inputmode="numeric" value="${Number(q)}" oninput="vehInventaireActualiserQuantite(this)" aria-label="Quantité constatée de ${vehInventaireHTML(m.nom)}"></label><p class="veh-quantite-statut ${ecart?'veh-quantite-erreur':''}">${ecart?`${Number(q)<Number(m.quantite)?'Matériel manquant':'Écart de quantité'} : ${Number(q)} / ${Number(m.quantite)}`:'Quantité conforme'}</p><label>Observation<textarea class="veh-note" rows="2" placeholder="Observation (facultatif)">${vehInventaireHTML(valeur.observation||"")}</textarea></label></div></div>`}).join(""):(enfants.length?'':'<p>Aucun matériel configuré pour cette zone.</p>')}</div><button class="veh-action" onclick="vehInventaireEnregistrerZone('${id}')">Enregistrer ${parent?'cette sous-catégorie':'cette catégorie'}</button></div>`);
+ vehInventaireAfficher(`<div class="veh-inventaire-contenu" data-veh-zone="${z.id}"><button class="retour-button veh-retour" onclick="${parent?`vehInventaireOuvrirZone('${parent.id}')`:'vehInventaireAfficherZones()'}">← Retour</button><h1>${vehInventaireHTML(z.nom)}</h1><p class="veh-muted">${vehInventaireHTML(session.vehicule.nom+' › '+vehInventaireCheminZone(z))}</p>${enfants.length?`<section class="veh-card"><h2>Sous-catégories</h2>${enfants.map(vehInventaireCarteZone).join('')}</section>`:''}${vehPhotoMiniature(z.photo_path,"detail")}<p class="veh-muted">Choisis l'état du matériel présent. En cas de quantité manquante, sélectionne la bouteille absente uniquement lorsque des dates de péremption sont enregistrées.</p><div id="veh-materiels">${materiels.length?materiels.map(m=>{const alerte=(session.anomalies||[]).find(a=>a.materiel_id===m.id);const valeur=precedent[m.id]||{},q=valeur.quantite_constatee??quantiteVSAVDisponible(m,session),ecart=Number(q)!==Number(m.quantite);return `<div class="veh-materiel-ligne" data-materiel="${m.id}" data-quantite-attendue="${Number(m.quantite)}"><div class="veh-materiel-haut"><button type="button" class="veh-materiel-ouvrir" aria-expanded="false" onclick="vehInventaireBasculerMateriel('${m.id}')"><strong>${vehInventaireHTML(m.nom)}</strong><small>Prévu : <b>${Number(m.quantite)}</b> ${ecart?`· <span class="veh-quantite-erreur">${Number(q)<Number(m.quantite)?'Matériel manquant':'Constaté'} : ${Number(q)}</span>`:''}</small></button><span class="veh-materiel-chevron" aria-hidden="true">⌄</span></div>${alerte?`<p role="note" style="padding:12px;border-radius:9px;background:${alerte.etat==='hs'?'#ffe1e1':'#fff0b3'};color:#442b25;border:2px solid ${alerte.etat==='hs'?'#bc2525':'#bc8d13'}"><strong>${alerte.source==='utilisation_pharmacie'?'Matériel manquant — réarmement en attente'+(alerte.etat==='hs'?' · HS':''):'Dernier signalement : '+(alerte.etat==='hs'?'HS':'À surveiller')}</strong>${alerte.observation?'<br>'+vehInventaireHTML(alerte.observation):''}<br><small>${new Date(alerte.date).toLocaleString('fr-FR')}</small></p>`:''}<div class="veh-etat">${[["bon","Bon"],["a_surveiller","À surveiller"],["hs","HS"]].map(([val,lib])=>`<label><input type="radio" name="etat-${m.id}" value="${val}" ${valeur.etat===val?"checked":""}> ${lib}</label>`).join("")}</div>${vehPeremptionsHTML(m,valeur)}<div class="veh-materiel-details">${vehPhotoMiniature(m.photo_path,"materiel")}<label class="veh-quantite-saisie"><strong>Quantité constatée</strong><input type="number" min="0" step="1" inputmode="numeric" value="${Number(q)}" oninput="vehInventaireActualiserQuantite(this)" aria-label="Quantité constatée de ${vehInventaireHTML(m.nom)}"></label><p class="veh-quantite-statut ${ecart?'veh-quantite-erreur':''}">${ecart?`${Number(q)<Number(m.quantite)?'Matériel manquant':'Écart de quantité'} : ${Number(q)} / ${Number(m.quantite)}`:'Quantité conforme'}</p><label>Observation<textarea class="veh-note" rows="2" placeholder="Observation (facultatif)">${vehInventaireHTML(valeur.observation||"")}</textarea></label></div></div>`}).join(""):(enfants.length?'':'<p>Aucun matériel configuré pour cette zone.</p>')}</div><button class="veh-action" onclick="vehInventaireEnregistrerZone('${id}')">Enregistrer ${parent?'cette sous-catégorie':'cette catégorie'}</button></div>`);
  document.querySelectorAll('[data-materiel]').forEach(vehInventaireSynchroniserQuantite);
 }
 function vehInventaireEnregistrerZone(id){
@@ -22762,7 +22785,7 @@ async function vehInventaireTerminerInterne(){
  if(!(await afficherConfirmationCIS(avertissement)))return;
  const btn=document.querySelector(".veh-inventaire-contenu > .veh-action");if(btn){btn.disabled=true;btn.textContent="Enregistrement…";}
  try{
-  const sb=obtenirClientSupabase();const payload={vehicule_id:session.vehicule.id,vehicule_nom:session.vehicule.nom,controle_par:profilUtilisateurConnecte?.id,personnes_presentes:personnesAvecAuteur(session.participants),details:vehInventaireZones.map(z=>({zone_id:z.id,parent_zone_id:z.parent_id||null,zone_nom_propre:z.nom,zone_nom:vehInventaireCheminZone(z),cote:z.cote,materiels:vehInventaireMateriels.filter(m=>m.zone_id===z.id).map(m=>({controle_peremptions_version:2,unites_manquantes:Math.max(0,Number(m.quantite)-Number(session.controles[z.id]?.[m.id]?.quantite_constatee??quantiteVSAVDisponible(m,session))),dates_peremption_reference:m.dates_peremption||[],peremptions_controle:session.controles[z.id]?.[m.id]?.peremptions_controle||[],materiel_id:m.id,nom:m.nom,quantite:m.quantite,quantite_constatee:session.controles[z.id]?.[m.id]?.quantite_constatee??quantiteVSAVDisponible(m,session),etat_reference:m.etat_reference,etat:session.controles[z.id]?.[m.id]?.etat||null,observation:[session.controles[z.id]?.[m.id]?.observation||"",...(session.controles[z.id]?.[m.id]?.peremptions_controle||[]).filter(p=>p.action!=="absente").map(p=>"Péremption unité "+p.unite+" : "+p.date.split("-").reverse().join("/")+(p.date===p.initiale?" (confirmée)":" (modifiée, avant : "+p.initiale.split("-").reverse().join("/")+")"))].filter(Boolean).join("\n")}))}))};
+  const sb=obtenirClientSupabase();const payload={vehicule_id:session.vehicule.id,vehicule_nom:session.vehicule.nom,controle_par:profilUtilisateurConnecte?.id,personnes_presentes:personnesAvecAuteur(session.participants),details:vehInventaireZones.map(z=>({zone_id:z.id,parent_zone_id:z.parent_id||null,zone_nom_propre:z.nom,zone_nom:vehInventaireCheminZone(z),cote:z.cote,materiels:vehInventaireMateriels.filter(m=>m.zone_id===z.id).map(m=>({controle_peremptions_version:2,unites_manquantes:Math.max(0,Number(m.quantite)-Number(session.controles[z.id]?.[m.id]?.quantite_constatee??quantiteVSAVDisponible(m,session))),dates_peremption_reference:m.dates_peremption||[],peremptions_controle:session.controles[z.id]?.[m.id]?.peremptions_controle||[],materiel_id:m.id,nom:m.nom,quantite:m.quantite,quantite_constatee:session.controles[z.id]?.[m.id]?.quantite_constatee??quantiteVSAVDisponible(m,session),etat_reference:m.etat_reference,etat:session.controles[z.id]?.[m.id]?.etat||null,observation:[session.controles[z.id]?.[m.id]?.observation||"",...(session.controles[z.id]?.[m.id]?.peremptions_controle||[]).filter(p=>p.action==="absente").map(p=>"Unité "+p.unite+" absente — péremption de référence "+p.initiale.split("-").reverse().join("/")+" (non contrôlée)"),...(session.controles[z.id]?.[m.id]?.peremptions_controle||[]).filter(p=>p.action!=="absente").map(p=>"Péremption unité "+p.unite+" : "+p.date.split("-").reverse().join("/")+(p.date===p.initiale?" (confirmée)":" (modifiée, avant : "+p.initiale.split("-").reverse().join("/")+")"))].filter(Boolean).join("\n")}))}))};
   payload.details.push(CISTechnique.zone(session.technique||{}),CISTechnique.zoneAnnexe(session.annexe||{}));
   const {data:inventaireCree,error}=await sb.from("cis_inventaires_vehicules").insert(payload).select("id").single();if(error)throw error;
   // Les notifications sont créées par le trigger Supabase dans la même transaction.
@@ -24055,7 +24078,32 @@ async function envoyerDocumentsEquipeParMail(){
 
 
 
-let suiviVSAVChargement;async function ouvrirSuiviVSAVPharma(){try{if(!window.CISSuiviVSAV){suiviVSAVChargement=suiviVSAVChargement||new Promise((resolve,reject)=>{const s=document.createElement('script');s.src='./suivi-vsav.js?v=pharmacie-vsav-prod-20261030-v1';s.onload=resolve;s.onerror=()=>{suiviVSAVChargement=null;reject(Error('Module Suivi VSAV indisponible.'));};document.head.appendChild(s);});await suiviVSAVChargement;}await CISSuiviVSAV.ouvrir();}catch(e){alert(e.message);}}
+let suiviVSAVChargement;async function ouvrirSuiviVSAVPharma(){try{if(!window.CISSuiviVSAV){suiviVSAVChargement=suiviVSAVChargement||new Promise((resolve,reject)=>{const s=document.createElement('script');s.src='./suivi-vsav.js?v=pharmacie-vsav-prod-20261030-v1';s.onload=resolve;s.onerror=()=>{suiviVSAVChargement=null;reject(Error('Module Suivi VSAV indisponible.'));};document.head.appendChild(s);});await suiviVSAVChargement;}await CISSuiviVSAV.ouvrir();await afficherSuiviVSAVComplementaire();document.querySelector(".suivi-vsav-actualiser")?.addEventListener("click",afficherSuiviVSAVComplementaire);}catch(e){alert(e.message);}}
 
 
 
+
+/* Alertes complémentaires VSAV : quantités manquantes et dates de péremption modifiées.
+   Les états HS/À surveiller continuent d'être gérés par le module Suivi VSAV existant. */
+async function afficherSuiviVSAVComplementaire(){
+ const parent=document.getElementById('suivi-vsav-liste');if(!parent)return;
+ let zone=document.getElementById('suivi-vsav-complementaire');
+ if(!zone){zone=document.createElement('section');zone.id='suivi-vsav-complementaire';parent.insertAdjacentElement('afterend',zone);}
+ zone.innerHTML='<h2>Matériel manquant et péremptions modifiées</h2><p>Chargement…</p>';
+ try{
+  const sb=obtenirClientSupabase();
+  const {data,error}=await sb.from('cis_vsav_suivi_complementaire')
+   .select('id,vehicule_nom,zone_nom,nom,nature,detail,date')
+   .is('resolu_at',null).order('date',{ascending:false}).limit(200);
+  if(error)throw error;
+  const esc=vehInventaireHTML;
+  zone.innerHTML='<h2>Matériel manquant et péremptions modifiées</h2>'+
+   ((data||[]).length?(data||[]).map(a=>`<article class="veh-card" style="margin:12px 0;padding:16px;border:1px solid #b9c9d7;border-radius:12px"><strong>${esc(a.vehicule_nom)} · ${esc(a.zone_nom||'')} · ${esc(a.nom)}</strong><p><b>${a.nature==='manquant'?'Matériel manquant':'Date de péremption modifiée'}</b></p><p>${esc(a.detail)}</p><small>${new Date(a.date).toLocaleString('fr-FR')}</small>${a.nature==='peremption'?`<p><button type="button" class="equipe-action-button" data-vsav-accuse="${esc(a.id)}">Marquer comme pris en compte</button></p>`:''}</article>`).join(''):'<p>Aucune anomalie complémentaire en attente.</p>');
+  zone.querySelectorAll('[data-vsav-accuse]').forEach(btn=>btn.onclick=async()=>{
+   btn.disabled=true;
+   const {error}=await sb.rpc('cis_vsav_accuser_peremption',{p_id:btn.dataset.vsavAccuse});
+   if(error){btn.disabled=false;alert(error.message);return;}
+   await afficherSuiviVSAVComplementaire();
+  });
+ }catch(e){zone.textContent='Suivi complémentaire indisponible : '+(e.message||e);}
+}
