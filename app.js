@@ -961,6 +961,94 @@ function detailEchecSynchronisationPharmacie() {
     return '\n\nDétail : '+d.etape+' — '+d.message+(d.code?' ('+d.code+')':'');
 }
 let validationRetourInterventionEnCours = false;
+/* Synchronisation faible réseau — conservation locale et confirmation serveur. */
+const CISSynchronisationFiable = (() => {
+    let affichage = null, attente = null;
+    const prefixe = 'cis-inventaires-envois-v1:';
+    function utilisateur() { return String(utilisateurConnecte?.id || ''); }
+    function cle(id = utilisateur()) { return prefixe + id; }
+    function lire(id = utilisateur()) {
+        if (!id) return [];
+        try { const v = JSON.parse(localStorage.getItem(cle(id)) || '[]'); return Array.isArray(v) ? v : []; }
+        catch (_) { return []; }
+    }
+    function sauver(lignes, id = utilisateur()) {
+        if (!id) throw new Error('Connexion utilisateur requise pour conserver l’inventaire.');
+        localStorage.setItem(cle(id), JSON.stringify(lignes));
+    }
+    function ajouterInventaire(payload) {
+        const id = utilisateur();
+        if (!id) throw new Error('Utilisateur non connecté.');
+        const lignes = lire(id);
+        if (!lignes.some(x => x.id === payload.id)) lignes.push({id: payload.id, payload, utilisateur: id});
+        sauver(lignes, id); // Écriture persistante AVANT le réseau.
+    }
+    function afficher(message) {
+        if (!affichage) {
+            const style = document.createElement('style');
+            style.id = 'cis-sync-plein-ecran-style';
+            if (!document.getElementById(style.id)) {
+                style.textContent = `#cis-sync-plein-ecran{position:fixed;inset:0;z-index:300100;display:flex;align-items:center;justify-content:center;box-sizing:border-box;padding:28px 24px;background:#f3f4f6;color:#20272b;font-family:Arial,Helvetica,sans-serif;text-align:center}#cis-sync-plein-ecran .cis-sync-contenu{width:100%;max-width:340px}#cis-sync-plein-ecran .cis-sync-symbole{position:relative;width:116px;height:116px;margin:0 auto 27px;display:grid;place-items:center}#cis-sync-plein-ecran .cis-sync-symbole:before{content:"";position:absolute;inset:0;border:3px solid #dce7e1;border-top-color:#217448;border-right-color:#217448;border-radius:50%;animation:cis-sync-tourne 1.15s linear infinite}#cis-sync-plein-ecran img{width:88px;height:88px;border-radius:21px;object-fit:contain}#cis-sync-plein-ecran h1{margin:0 0 13px;font-size:25px;color:#20272b}#cis-sync-plein-ecran p{font-size:15px;line-height:1.6;color:#626d75}#cis-sync-plein-ecran button{margin-top:18px;padding:12px 18px;border:1px solid #bac8bf;border-radius:10px;background:white;color:#195d39;font:inherit;font-weight:700;cursor:pointer}@keyframes cis-sync-tourne{to{transform:rotate(360deg)}}@media(prefers-reduced-motion:reduce){#cis-sync-plein-ecran .cis-sync-symbole:before{animation:none}}`;
+                document.head.appendChild(style);
+            }
+            affichage = document.createElement('div');
+            affichage.id = 'cis-sync-plein-ecran';
+            affichage.setAttribute('role','status');
+            affichage.innerHTML = '<div class="cis-sync-contenu"><div class="cis-sync-symbole"><img src="./icon-192.png" alt=""></div><h1>CIS Le Chesne</h1><p data-sync-message></p><button type="button" data-sync-continuer hidden>Continuer dans l’application</button></div>';
+            affichage.querySelector('[data-sync-continuer]').onclick = () => masquer();
+            document.body.appendChild(affichage);
+            clearTimeout(attente);
+            attente = setTimeout(() => { const b = affichage?.querySelector('[data-sync-continuer]'); if (b) b.hidden = false; }, 9000);
+        }
+        affichage.querySelector('[data-sync-message]').textContent = message || 'Synchronisation des informations enregistrées…';
+    }
+    function masquer() { clearTimeout(attente); affichage?.remove(); affichage = null; }
+    let travailInventaire = null;
+    async function synchroniserInventaires() {
+        if (travailInventaire) return travailInventaire;
+        if (!navigator.onLine || !utilisateur()) return false;
+        travailInventaire = (async () => {
+            const id = utilisateur();
+            const sb = await assurerBibliothequeSupabaseDisponible();
+            if (!sb) return false;
+            try {
+                const session = await obtenirSessionPrincipaleValide(sb);
+                if (String(session.user?.id || '') !== id) return false;
+                for (const ligne of lire(id)) {
+                    if (utilisateur() !== id) return false;
+                    // UUID stable : un second envoi n'insère jamais un second inventaire.
+                    const {error} = await sb.from('cis_inventaires_vehicules')
+                        .upsert(ligne.payload, {onConflict:'id',ignoreDuplicates:true});
+                    if (error) {
+                        // Une réponse perdue peut masquer un enregistrement réussi.
+                        const verification = await sb.from('cis_inventaires_vehicules').select('id').eq('id',ligne.id).maybeSingle();
+                        if (verification.error || !verification.data?.id) throw error;
+                    }
+                    if (utilisateur() !== id) return false;
+                    // Confirmer explicitement que la ligne est bien lisible sur le serveur.
+                    const preuve = await sb.from('cis_inventaires_vehicules').select('id').eq('id',ligne.id).maybeSingle();
+                    if (preuve.error || String(preuve.data?.id || '') !== ligne.id) throw new Error('Confirmation serveur non reçue.');
+                    sauver(lire(id).filter(x => x.id !== ligne.id), id);
+                }
+                return true;
+            } catch (e) { console.warn('Inventaire conservé localement, nouvel essai automatique.',e); return false; }
+        })();
+        try { return await travailInventaire; } finally { travailInventaire = null; }
+    }
+    async function attendre(promise, duree = 12000) {
+        let timer;
+        try { return await Promise.race([promise, new Promise(resolve => {timer=setTimeout(()=>resolve(false),duree);})]); }
+        finally {clearTimeout(timer);}
+    }
+    function reprendre() { if (navigator.onLine && utilisateur() && lire().length) void synchroniserInventaires(); }
+    window.addEventListener('online',reprendre);
+    window.addEventListener('pageshow',reprendre);
+    window.addEventListener('focus',reprendre);
+    document.addEventListener('visibilitychange',()=>{if (!document.hidden) reprendre();});
+    setInterval(reprendre, 5000);
+    return {afficher,masquer,ajouterInventaire,synchroniserInventaires,attendre,reprendre,lire};
+})();
+
 
 
 /* =========================================================
@@ -989,6 +1077,7 @@ document.addEventListener("DOMContentLoaded", async function () {
 
     await initialiserSynchronisationSupabase();
     preparerRepriseHorsConnexion();
+    CISSynchronisationFiable.reprendre();
 
     afficherPortailPrincipal();
     window.__cisNotificationsApplicationPrete=true;
@@ -1045,7 +1134,7 @@ let minuteurVerificationMiseAJour =
  * Elle permet de détecter une nouvelle version même si seul app.js?v=peremptions-20261031-v5 change.
  */
 const VERSION_APPLICATION_JS =
-    "2026-10-31-peremptions-v5";
+    "2026-11-04-sync-reseau-faible-v1";
 
 async function verifierNouvelleVersionAppJs() {
 
@@ -13013,8 +13102,9 @@ async function validerRetourIntervention() {
 
     try {
 
-        const synchronise =
-            await synchroniserApresModification();
+        CISSynchronisationFiable.afficher('Synchronisation du retour d’intervention…');
+        const synchronise = await CISSynchronisationFiable.attendre(synchroniserApresModification(), 12000);
+        CISSynchronisationFiable.masquer();
 
         if (!navigator.onLine) {
 
@@ -22277,7 +22367,7 @@ async function synchroniserMenagesEnAttente(force = false) {
     const proprietaire = String(utilisateurConnecte.id), cle = cleCacheMenage("envois", proprietaire);
     const reprise = reprisesMenageParUtilisateur.get(proprietaire) || {prochaine:0,derniere:0,echecs:0};
     reprisesMenageParUtilisateur.set(proprietaire,reprise);
-    if ((!force && Date.now() < reprise.prochaine) || (reprise.derniere && Date.now()-reprise.derniere<5000)) return false;
+    if ((!force && Date.now() < reprise.prochaine) || (reprise.derniere && Date.now()-reprise.derniere<1500)) return false;
     const demande = (async () => {
         const envois = JSON.parse(localStorage.getItem(cle) || "[]");
         if (!envois.length) return true;
@@ -22306,7 +22396,7 @@ async function synchroniserMenagesEnAttente(force = false) {
             return true;
         } catch (e) {
             reprise.echecs++;
-            reprise.prochaine = Date.now() + Math.min(300000,30000*2**Math.min(reprise.echecs-1,4));
+            reprise.prochaine = Date.now() + Math.min(15000,3000*2**Math.min(reprise.echecs-1,3));
             const restants = JSON.parse(localStorage.getItem(cle) || "[]");
             if (restants.length) { restants[0].erreur = e.message || "Connexion indisponible"; localStorage.setItem(cle, JSON.stringify(restants)); }
             console.warn("Ménage conservé localement ; envoi différé.", e);
@@ -22822,7 +22912,11 @@ async function vehInventaireTerminerInterne(){
  try{
   const sb=obtenirClientSupabase();const payload={vehicule_id:session.vehicule.id,vehicule_nom:session.vehicule.nom,controle_par:profilUtilisateurConnecte?.id,personnes_presentes:personnesAvecAuteur(session.participants),details:vehInventaireZones.map(z=>({zone_id:z.id,parent_zone_id:z.parent_id||null,zone_nom_propre:z.nom,zone_nom:vehInventaireCheminZone(z),cote:z.cote,materiels:vehInventaireMateriels.filter(m=>m.zone_id===z.id).map(m=>({controle_peremptions_version:2,unites_manquantes:Math.max(0,Number(m.quantite)-Number(session.controles[z.id]?.[m.id]?.quantite_constatee??quantiteVSAVDisponible(m,session))),dates_peremption_reference:m.dates_peremption||[],peremptions_controle:session.controles[z.id]?.[m.id]?.peremptions_controle||[],materiel_id:m.id,nom:m.nom,quantite:m.quantite,quantite_constatee:session.controles[z.id]?.[m.id]?.quantite_constatee??quantiteVSAVDisponible(m,session),etat_reference:m.etat_reference,etat:session.controles[z.id]?.[m.id]?.etat||null,observation:[session.controles[z.id]?.[m.id]?.observation||"",...(session.controles[z.id]?.[m.id]?.peremptions_controle||[]).filter(p=>p.action==="absente").map(p=>"Unité "+p.unite+" absente — péremption de référence "+p.initiale.split("-").reverse().join("/")+" (non contrôlée)"),...(session.controles[z.id]?.[m.id]?.peremptions_controle||[]).filter(p=>p.action!=="absente").map(p=>"Péremption unité "+p.unite+" : "+p.date.split("-").reverse().join("/")+(p.date===p.initiale?" (confirmée)":" (modifiée, avant : "+p.initiale.split("-").reverse().join("/")+")"))].filter(Boolean).join("\n")}))}))};
   payload.details.push(CISTechnique.zone(session.technique||{}),CISTechnique.zoneAnnexe(session.annexe||{}));
-  const {data:inventaireCree,error}=await sb.from("cis_inventaires_vehicules").insert(payload).select("id").single();if(error)throw error;
+   payload.id=genererUUID();
+   CISSynchronisationFiable.ajouterInventaire(payload);
+   CISSynchronisationFiable.afficher('Synchronisation de l’inventaire véhicule…');
+   const confirme=await CISSynchronisationFiable.attendre(CISSynchronisationFiable.synchroniserInventaires(),12000);
+   CISSynchronisationFiable.masquer();
   // Les notifications sont créées par le trigger Supabase dans la même transaction.
   // Le worker serveur s'occupe des push et des relances ; aucun envoi depuis le téléphone.
   void actualiserPointNotifications();
@@ -23028,7 +23122,7 @@ async function attendreConfirmationMenage() {
     try {
         return await Promise.race([
             synchroniserMenagesEnAttente(true),
-            new Promise(resolve => { delai=setTimeout(() => resolve(false),3000); })
+            new Promise(resolve => { delai=setTimeout(() => resolve(false),12000); })
         ]);
     } finally { clearTimeout(delai); }
 }
@@ -23074,7 +23168,9 @@ async function enregistrerMenageEquipe(){
         if (!journal.some(l=>l.cle===menageSaisieCle)) journal.push({cle:menageSaisieCle,ligne,produits});
         // Always persist before attempting the network, including a connection lost mid-send.
         localStorage.setItem(cleJournal, JSON.stringify(journal));
+        CISSynchronisationFiable.afficher('Synchronisation du ménage enregistré…');
         const synchronise = await attendreConfirmationMenage();
+        CISSynchronisationFiable.masquer();
         if (String(utilisateurConnecte?.id || "") !== auteur) return;
         menageSaisieCle=null;
         localStorage.removeItem(cleSelectionMenageGarde());
@@ -23083,6 +23179,7 @@ async function enregistrerMenageEquipe(){
         actualiserPlanMenageGarde();
         await animationValidationEnregistrementCIS(synchronise ? "Ménage enregistré" : "Ménage enregistré sur cet appareil — envoi automatique en attente", () => {if(travail){menageTravailContexte=null;CISTravail.retourFiche();}else afficherEspaceGarde();});
     }catch(e){
+        CISSynchronisationFiable.masquer();
         console.error("Enregistrement ménage :",e);
         afficherStatut("Échec de l’enregistrement : "+(e?.message||"erreur inconnue"),false);
     }finally{
