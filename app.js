@@ -1145,7 +1145,7 @@ async function verifierNouvelleVersionAppJs() {
 
         const url =
             new URL(
-                "./app.js?v=peremptions-20261031-v5",
+                "./app.js?v=sync-20261104-v2",
                 window.location.href
             );
 
