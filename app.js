@@ -12498,56 +12498,23 @@ function selectionnerQuantiteRetour(
    MISE A JOUR DU COMPTEUR
    ========================================================= */
 
-function mettreAJourQuantiteRetour(
-    id
-) {
-
-    const cle =
-        String(id);
-
-
-    const element =
-        document.getElementById(
-            "quantite-retour-" +
-            cle
-        );
-
-
-    if (!element) {
-
-        console.error(
-            "Élément quantité introuvable pour :",
-            cle
-        );
-
-        return;
-
-    }
-
-
-    const valeur =
-        String(
-            consommationsEnCours[cle]
-            ||
-            0
-        );
-
-
-    if (
-        element.tagName ===
-        "SELECT"
-    ) {
-
-        element.value =
-            valeur;
-
-    } else {
-
-        element.textContent =
-            valeur;
-
-    }
-
+function mettreAJourQuantiteRetour(id) {
+    const cle = String(id);
+    const valeur = String(consommationsEnCours[cle] || 0);
+    // Un matériel peut avoir une carte masquée dans sa catégorie et une carte
+    // visible dans les résultats de recherche : actualiser les deux compteurs.
+    const elements = document.querySelectorAll('[id^="quantite-retour-"]');
+    let trouve = false;
+    elements.forEach(function(element) {
+        if (element.id !== 'quantite-retour-' + cle) return;
+        trouve = true;
+        if (element.tagName === 'SELECT' || element.tagName === 'INPUT') {
+            element.value = valeur;
+        } else {
+            element.textContent = valeur;
+        }
+    });
+    if (!trouve) console.warn('Compteur de retour non visible pour :', cle);
 }
 
 
