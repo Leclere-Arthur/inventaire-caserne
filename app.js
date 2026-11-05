@@ -6902,6 +6902,21 @@ function genererUUID() {
 
 }
 
+function empreinteMetadonneesMateriel(materiel) {
+    return JSON.stringify({
+        id: String(materiel.id), nom: String(materiel.nom || "Matériel"),
+        reference: String(materiel.reference || ""), description: String(materiel.description || ""),
+        gere_stock_pharmacie: materiel.gere_stock_pharmacie !== false,
+        inventaire_vsav_materiel_id: materiel.inventaire_vsav_materiel_id || null,
+        minimum: Math.max(0, Math.floor(Number(materiel.minimum || 0))),
+        emplacement: String(materiel.emplacement || "")
+    });
+}
+function empreinteCategoriesMateriel(materiel) {
+    return JSON.stringify([...new Set((Array.isArray(materiel.categories) ? materiel.categories : [])
+        .map(nom => String(nom).trim().toLowerCase()).filter(Boolean))].sort());
+}
+
 function lireSnapshotSynchronisation() {
 
     try {
@@ -6923,6 +6938,8 @@ function lireSnapshotSynchronisation() {
 
         return {
             materiels: Array.isArray(valeur.materiels) ? valeur.materiels : [],
+            metadonneesMateriels: valeur.metadonneesMateriels || {},
+            categoriesMateriels: valeur.categoriesMateriels || {},
             categories: Array.isArray(valeur.categories) ? valeur.categories : [],
             interventions: Array.isArray(valeur.interventions) ? valeur.interventions : [],
             archives: Array.isArray(valeur.archives) ? valeur.archives : []
@@ -6945,6 +6962,8 @@ function lireSnapshotSynchronisation() {
 function enregistrerSnapshotSynchronisation() {
 
     const snapshot = {
+        metadonneesMateriels: Object.fromEntries(materiels.map(m => [String(m.id), empreinteMetadonneesMateriel(m)])),
+        categoriesMateriels: Object.fromEntries(materiels.map(m => [String(m.id), empreinteCategoriesMateriel(m)])),
         materiels: materiels.map(function (materiel) {
             return String(materiel.id);
         }),
@@ -7460,10 +7479,11 @@ async function envoyerDonneesLocalesVersSupabase() {
     if (categoriesLocales.length > 0) {
 
         const lignesCategories =
-            categoriesLocales.map(function (nom) {
+            categoriesLocales.filter(nom => !anciennesCategories.has(nom.toLowerCase())).map(function (nom) {
                 return { nom: nom };
             });
 
+        if (lignesCategories.length) {
         const resultatsCategories = await supabase
             .from("categories")
             .upsert(
@@ -7474,6 +7494,7 @@ async function envoyerDonneesLocalesVersSupabase() {
 
         if (resultatsCategories.error) {
             throw resultatsCategories.error;
+        }
         }
 
     }
@@ -7510,7 +7531,7 @@ async function envoyerDonneesLocalesVersSupabase() {
             emplacement: String(materiel.emplacement || ""),
         };
 
-    });
+    }).filter(ligne => ancienSnapshot.metadonneesMateriels?.[ligne.id] !== empreinteMetadonneesMateriel(ligne));
 
     if (lignesMateriels.length > 0) {
         const idsConnus = new Set(ancienSnapshot.materiels.map(String));
@@ -7537,11 +7558,13 @@ async function envoyerDonneesLocalesVersSupabase() {
     for (const materiel of materiels) {
 
         const idMateriel = String(materiel.id);
+        if (ancienSnapshot.categoriesMateriels?.[idMateriel] === empreinteCategoriesMateriel(materiel)) continue;
 
-        await supabase
+        const suppressionRelations = await supabase
             .from("materiel_categories")
             .delete()
             .eq("materiel_id", idMateriel);
+        if (suppressionRelations.error) throw suppressionRelations.error;
 
         const relations =
             Array.isArray(materiel.categories)
