@@ -1137,7 +1137,7 @@ let minuteurVerificationMiseAJour =
  * Elle permet de détecter une nouvelle version même si seul app.js?v=peremptions-20261031-v5 change.
  */
 const VERSION_APPLICATION_JS =
-    "profil-sans-personnalisation";
+    "pharmacie-depassement-vsav";
 
 async function verifierNouvelleVersionAppJs() {
 
@@ -4775,7 +4775,7 @@ async function migrerRetoursVersJournalStock(sb) {
         if (!data) {
             const lignes = lireJournalStock();
             for (const c of retour.consommations || []) {
-                if(c.sansStockPharmacie || materiels.find(m=>String(m.id)===String(c.materielId))?.gere_stock_pharmacie===false) continue;
+                if(c.depassementStock || c.sansStockPharmacie || materiels.find(m=>String(m.id)===String(c.materielId))?.gere_stock_pharmacie===false) continue;
                 const quantite = Number(c.quantite);
                 const origine = String(retour.id) + ":" + String(c.materielId);
                 if (Number.isSafeInteger(quantite) && quantite > 0 && !lignes.some(x => x.origine === origine))
@@ -5574,6 +5574,7 @@ function normaliserMateriel(materiel, index) {
             cats,
 
         gere_stock_pharmacie: m.gere_stock_pharmacie !== false,
+        autoriser_depassement_stock: m.autoriser_depassement_stock === true,
         inventaire_vsav_materiel_id: m.inventaire_vsav_materiel_id || null,
 
         stock:
@@ -6910,6 +6911,7 @@ function empreinteMetadonneesMateriel(materiel) {
         id: String(materiel.id), nom: String(materiel.nom || "Matériel"),
         reference: String(materiel.reference || ""), description: String(materiel.description || ""),
         gere_stock_pharmacie: materiel.gere_stock_pharmacie !== false,
+        autoriser_depassement_stock: materiel.autoriser_depassement_stock === true,
         inventaire_vsav_materiel_id: materiel.inventaire_vsav_materiel_id || null,
         minimum: Math.max(0, Math.floor(Number(materiel.minimum || 0))),
         emplacement: String(materiel.emplacement || "")
@@ -7003,7 +7005,7 @@ async function recupererDonneesSupabase() {
         supabase.from("categories").select("id,nom,parent_id,ordre"),
         supabase
             .from("materiels")
-            .select("id,nom,reference,description,stock,minimum,emplacement,gere_stock_pharmacie,inventaire_vsav_materiel_id"),
+            .select("id,nom,reference,description,stock,minimum,emplacement,gere_stock_pharmacie,autoriser_depassement_stock,inventaire_vsav_materiel_id"),
         supabase
             .from("materiel_categories")
             .select("materiel_id,categorie_id"),
@@ -7012,7 +7014,7 @@ async function recupererDonneesSupabase() {
             .select("id,date,numero,created_by,created_by_prenom,created_by_nom,created_at"),
         supabase
             .from("consommations")
-            .select("id,intervention_id,materiel_id,materiel_nom,quantite,sans_stock_pharmacie")
+            .select("id,intervention_id,materiel_id,materiel_nom,quantite,sans_stock_pharmacie,depassement_stock")
     ]);
 
     resultats.forEach(function (resultat) {
@@ -7134,6 +7136,7 @@ function convertirDonneesSupabaseEnDonneesApplication(donnees) {
             description: String(materiel.description || ""),
             categories: listeCategories,
             gere_stock_pharmacie: materiel.gere_stock_pharmacie !== false,
+        autoriser_depassement_stock: materiel.autoriser_depassement_stock === true,
             inventaire_vsav_materiel_id: materiel.inventaire_vsav_materiel_id || null,
             stock: Math.max(0, Math.floor(Number(materiel.stock || 0))),
             minimum: Math.max(0, Math.floor(Number(materiel.minimum || 0))),
@@ -7161,6 +7164,7 @@ function convertirDonneesSupabaseEnDonneesApplication(donnees) {
         consommationsParIntervention.get(interventionId).push({
             materielId: String(consommation.materiel_id),
             sansStockPharmacie: consommation.sans_stock_pharmacie === true,
+            depassementStock: consommation.depassement_stock === true,
             materiel: String(consommation.materiel_nom || "Matériel"),
             quantite: Math.max(
                 0,
@@ -7529,6 +7533,7 @@ async function envoyerDonneesLocalesVersSupabase() {
             reference: String(materiel.reference || ""),
             description: String(materiel.description || ""),
             gere_stock_pharmacie: materiel.gere_stock_pharmacie !== false,
+        autoriser_depassement_stock: materiel.autoriser_depassement_stock === true,
             inventaire_vsav_materiel_id: materiel.inventaire_vsav_materiel_id || null,
             minimum: Math.max(0, Math.floor(Number(materiel.minimum || 0))),
             emplacement: String(materiel.emplacement || ""),
@@ -7661,6 +7666,8 @@ async function envoyerDonneesLocalesVersSupabase() {
                 materiel_nom: String(
                     consommation.materiel || "Matériel"
                 ),
+                sans_stock_pharmacie: consommation.sansStockPharmacie === true,
+                depassement_stock: consommation.depassementStock === true,
                 quantite: Math.max(
                     1,
                     Math.floor(
@@ -7811,6 +7818,17 @@ async function envoyerDonneesLocalesVersSupabase() {
 
     etapeSynchronisationPharmacie = "Confirmation des mouvements de stock";
     await synchroniserJournalStock(supabase);
+    const idsDepassement = [...new Set(lignesConsommations.filter(c=>c.depassement_stock).map(c=>c.materiel_id))];
+    for (let i=0;i<idsDepassement.length;i+=100) {
+        const {data,error}=await supabase.from("materiels").select("id,stock").in("id",idsDepassement.slice(i,i+100));
+        if(error)throw error;
+        for(const ligne of data||[]){
+            const m=materiels.find(item=>String(item.id)===String(ligne.id));
+            if(m)m.stock=Number(ligne.stock);
+        }
+    }
+    if(idsDepassement.length) sauvegarderToutesLesDonnees();
+
     void envoyerNotificationsStockEnAttente();
 
     // A failed control stays in its own journal; do not resend old stocks solely
@@ -12194,7 +12212,7 @@ function genererCarteRetour(
     ) {
 
         const indisponible =
-            materiel.gere_stock_pharmacie !== false && nombre >
+            materiel.gere_stock_pharmacie !== false && materiel.autoriser_depassement_stock !== true && nombre >
             Number(
                 materiel.stock
             );
@@ -12342,7 +12360,7 @@ function augmenterConsommation(
 
 
     if (
-        materiel.gere_stock_pharmacie !== false && actuelle >=
+        materiel.gere_stock_pharmacie !== false && materiel.autoriser_depassement_stock !== true && actuelle >=
         Number(
             materiel.stock
         )
@@ -12473,7 +12491,7 @@ function selectionnerQuantiteRetour(
 
 
     if (
-        materiel.gere_stock_pharmacie !== false && quantite >
+        materiel.gere_stock_pharmacie !== false && materiel.autoriser_depassement_stock !== true && quantite >
         Number(
             materiel.stock
         )
@@ -12916,7 +12934,7 @@ async function validerRetourIntervention() {
 
 
         if (
-            materiel.gere_stock_pharmacie !== false && quantite >
+            materiel.gere_stock_pharmacie !== false && materiel.autoriser_depassement_stock !== true && quantite >
             Number(
                 materiel.stock
             )
@@ -13002,7 +13020,8 @@ async function validerRetourIntervention() {
                 );
 
 
-            if (materiel.gere_stock_pharmacie !== false) materiel.stock =
+            const depassementStock = materiel.gere_stock_pharmacie !== false && materiel.autoriser_depassement_stock === true;
+            if (materiel.gere_stock_pharmacie !== false && !depassementStock) materiel.stock =
                 Math.max(
                     0,
                     ancienStock -
@@ -13010,13 +13029,10 @@ async function validerRetourIntervention() {
                 );
 
 
-            preparerNotificationStock(
-                materiel,
-                ancienStock
-            );
-
+            if (!depassementStock) preparerNotificationStock(materiel, ancienStock);
 
             consommations.push({
+                depassementStock,
                 sansStockPharmacie: materiel.gere_stock_pharmacie === false,
 
                 materielId:
@@ -18956,7 +18972,9 @@ function afficherFormulaireMateriel(
                 </div>
 
 
-                <label style="display:flex;align-items:center;gap:10px"><input id="gere-stock-pharmacie" type="checkbox" ${materiel?.gere_stock_pharmacie !== false ? 'checked' : ''} style="width:auto"> Géré dans le stock pharmacie</label>
+                <label style="display:flex;align-items:center;gap:10px"><input id="gere-stock-pharmacie" type="checkbox" ${materiel?.gere_stock_pharmacie === false ? 'checked' : ''} style="width:auto"> Matériel sans réserve pharmacie</label>
+                <label style="display:flex;align-items:center;gap:10px"><input id="autoriser-depassement-stock" type="checkbox" ${materiel?.autoriser_depassement_stock === true ? 'checked' : ''} style="width:auto"> Autoriser l’enregistrement sans stock suffisant</label>
+                <p>La réserve est utilisée en premier. Seule la quantité manquante apparaît dans Suivi VSAV.</p>
                 <p>Sans réserve pharmacie : l’utilisation est signalée dans Suivi VSAV jusqu’au réarmement.</p>
                 <div id="vsav-lien-groupe"><label>Matériel correspondant dans l’inventaire VSAV<input type="hidden" id="inventaire-vsav-lien" value="${echapperHTML(materiel?.inventaire_vsav_materiel_id||'')}"></label><div id="vsav-lien-selecteur"></div><p id="vsav-lien-statut" role="status"></p></div>
                 <label>
@@ -19150,8 +19168,9 @@ function afficherApercuPhoto(
 
 function enregistrerMateriel() {
 
-    const gereStock = document.getElementById("gere-stock-pharmacie")?.checked !== false;
-    const lienVSAV = gereStock ? null : document.getElementById("inventaire-vsav-lien")?.value || null;
+    const gereStock = document.getElementById("gere-stock-pharmacie")?.checked !== true;
+    const depassement = gereStock && document.getElementById("autoriser-depassement-stock")?.checked === true;
+    const lienVSAV = gereStock && !depassement ? null : document.getElementById("inventaire-vsav-lien")?.value || null;
     const nom =
         document.getElementById(
             "nom-materiel"
@@ -19302,6 +19321,7 @@ function enregistrerMateriel() {
 
 
         materiel.gere_stock_pharmacie = gereStock;
+        materiel.autoriser_depassement_stock = depassement;
         materiel.inventaire_vsav_materiel_id = lienVSAV;
         materiel.nom =
             nom;
@@ -19393,6 +19413,7 @@ function enregistrerMateriel() {
 
     const nouveauMateriel = {
         gere_stock_pharmacie: gereStock,
+        autoriser_depassement_stock: depassement,
         inventaire_vsav_materiel_id: lienVSAV,
 
         id:
