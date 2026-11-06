@@ -26,3 +26,12 @@
 .cisqr-ledger summary{padding:14px 0;cursor:pointer}
 .cisqr-ledger summary span{margin-left:8px;font-size:.8rem}
 .cisqr-ledger-body{padding:0 0 12px 16px}
+
+.cisqr-desk .cisqr-registre{margin-top:32px;padding:18px 16px;border:1px solid #cbd5dc;border-top:4px solid #102b38;border-radius:16px;background:#fff}
+.cisqr-desk .cisqr-registre h2{margin-top:0}
+.cisqr-registre>p,.cisqr-fiche-repere{font-size:.85rem;color:#526875}
+.cisqr-fiche-repere{margin:0 0 8px;font-weight:750;letter-spacing:.06em}
+.cisqr-registre-liste{margin-top:16px;border-top:1px solid #d7e0e5;padding-top:12px}
+.cisqr-registre-liste>summary{cursor:pointer;font-weight:750}
+.cisqr-desk #cisqr-service-zone:not([hidden]){padding:12px 0;border-bottom:1px solid #d7e0e5}
+.cisqr-desk button.cisqr-service-ligne{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;text-align:left;margin:4px 0}

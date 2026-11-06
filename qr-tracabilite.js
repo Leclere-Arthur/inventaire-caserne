@@ -46,7 +46,12 @@ async function ouvrir(){
    <button type="button" class="cisqr-scan-tile" id="cisqr-scan-unique">${iconeScan}<span>Scanner une étiquette</span><small>Attribuer une étiquette vierge ou ouvrir la fiche</small></button>
    <form class="cisqr-search" id="cisqr-search-form"><label class="cisqr-visually-hidden" for="cisqr-adv-search">QR ou numéro de lot</label><input id="cisqr-adv-search" placeholder="Rechercher un QR ou un lot" enterkeyhint="search"><button type="submit" aria-label="Rechercher"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><circle cx="10" cy="10" r="6"/><path d="m14.5 14.5 5 5"/></svg></button></form>
    <p id="cisqr-adv-status" role="status"></p><div id="cisqr-adv-results"></div><section id="cisqr-adv-detail" aria-label="Fiche QR"></section>
-   <h2>Matériels suivis</h2><div id="cisqr-materiels" class="cisqr-ledger" aria-live="polite">Chargement…</div>
+   <aside class="cisqr-registre" aria-label="Registre général">
+     <h2>Registre général</h2><p>Tous les matériels suivis, indépendamment de la fiche ouverte.</p>
+     <button type="button" id="cisqr-en-service" aria-expanded="false" aria-controls="cisqr-service-zone">Matériel en service</button>
+     <section id="cisqr-service-zone" hidden aria-live="polite"></section>
+     <details class="cisqr-registre-liste"><summary>Matériels suivis</summary><div id="cisqr-materiels" class="cisqr-ledger" aria-live="polite">Chargement…</div></details>
+   </aside>
  </main>${typeof navigationPrincipale==='function'?navigationPrincipale('pharmacie','pharmacie'):''}`;
  document.getElementById('cisqr-scan-unique').onclick=()=>void scanner(async code=>{
   const fiche=await rpc('cis_qr_fiche',{p_code:code});
@@ -55,7 +60,39 @@ async function ouvrir(){
   else await afficherHistorique(code);
  });
  document.getElementById('cisqr-search-form').onsubmit=e=>{e.preventDefault();void rechercherHistorique();};
+ document.getElementById('cisqr-en-service').onclick=basculerMaterielEnService;
  try{await config(true);await afficherProduits();}catch(e){const box=document.getElementById('cisqr-materiels');if(box)box.textContent=erreur(e);}
+}
+async function basculerMaterielEnService(){
+ const zone=document.getElementById('cisqr-service-zone');
+ const bouton=document.getElementById('cisqr-en-service');
+ zone.hidden=!zone.hidden;
+ bouton.setAttribute('aria-expanded',String(!zone.hidden));
+ if(zone.hidden)return;
+ zone.textContent='Chargement…';
+ try {
+  const config=await rpc('cis_qr_config_lire');
+  const groupes={vsav:[],pharmacie:[]};
+  const ids=[...new Set((config||[]).map(item=>String(item.materiel_id)))];
+  for(let i=0;i<ids.length;i+=8){
+   const pages=await Promise.all(ids.slice(i,i+8).map(async id=>({
+    nom:materiel(id)?.nom||'Matériel',
+    unites:await rpc('cis_qr_exemplaires_lire',{p_materiel:id})
+   })));
+   for(const page of pages)for(const u of page.unites||[]){
+    if(u.etat==='attribuee'&&(u.emplacement==='vsav'||u.emplacement==='pharmacie'))
+     groupes[u.emplacement].push({nom:page.nom,code:u.code});
+   }
+  }
+  if(!zone.isConnected||zone.hidden)return;
+  zone.innerHTML=['vsav','pharmacie'].map(lieu=>{
+   const lignes=groupes[lieu].sort((a,b)=>a.nom.localeCompare(b.nom,'fr')||a.code.localeCompare(b.code));
+   return `<h3>${esc(cisqrLieu(lieu))} · ${lignes.length}</h3>`+(lignes.length?lignes.map(x=>
+    `<button class="cisqr-service-ligne" type="button" data-fiche="${esc(x.code)}"><strong>${esc(x.nom)}</strong> <code>${esc(x.code)}</code> ›</button>`
+   ).join(''):'<p>Aucun exemplaire en service.</p>');
+  }).join('');
+  zone.querySelectorAll('[data-fiche]').forEach(b=>b.onclick=()=>void afficherHistorique(b.dataset.fiche));
+ }catch(e){if(zone.isConnected)zone.textContent=erreur(e);}
 }
 async function afficherProduits(){
  const el=document.getElementById('cisqr-materiels');if(!el)return;
@@ -64,10 +101,10 @@ async function afficherProduits(){
  const liste=(typeof materiels!=='undefined'?materiels:[]).filter(m=>estSuivi(m.id));
  el.innerHTML=liste.length?liste.map(m=>{
   const manque=Number((manquants||[]).find(q=>String(q.materiel_id)===String(m.id))?.manquant)||0;
-  return `<details data-cisqr-produit="${esc(m.id)}"><summary><strong>${esc(m.nom)}</strong><span class="${manque?'cisqr-error':''}">${manque?manque+' manquant(s)':''}</span></summary><div class="cisqr-ledger-body"><div id="cisqr-sub-${esc(m.id)}"></div><button type="button" data-assign-id="${esc(m.id)}">Attribuer une étiquette</button></div></details>`;
+  return `<details data-cisqr-produit="${esc(m.id)}"><summary><strong>${esc(m.nom)}</strong><span class="${manque?'cisqr-error':''}">${manque?manque+' manquant(s)':''}</span></summary><div class="cisqr-ledger-body"><div id="cisqr-sub-${esc(m.id)}"></div></div></details>`;
  }).join(''):'Active le suivi QR d’un produit dans Gestion du matériel pour le voir ici.';
  el.querySelectorAll('details').forEach(d=>d.ontoggle=()=>{if(d.open)void afficherExemplaires(d.dataset.cisqrProduit);});
- el.querySelectorAll('[data-assign-id]').forEach(b=>b.onclick=()=>void attribuerMateriel(b.dataset.assignId));
+
 }
 async function afficherExemplaires(id){const box=document.getElementById('cisqr-sub-'+id);if(!box)return;box.textContent='Chargement…';try{const data=await rpc('cis_qr_exemplaires_lire',{p_materiel:id});box.innerHTML=(data||[]).map(x=>`<p class="cisqr-card-detail"><code>${esc(x.code)}</code> — ${esc(x.emplacement||x.etat)} — Péremption : ${esc(x.peremption||'non renseignée')} — Lot : ${esc(x.lot||'—')}</p>`).join('')||'Aucun exemplaire attribué.';}catch(e){box.textContent=erreur(e);}}
 async function attribuerMateriel(id){if(!isAdmin())return;try{await config();if(!estSuivi(id))throw Error('Active d’abord le suivi QR pour ce produit.');await scanner(async code=>{const f=await rpc('cis_qr_fiche',{p_code:code});if(!f||f.etat!=='vierge')throw Error('Étiquette inconnue ou déjà attribuée');await formulaireAttribution(code,id);});}catch(e){alert(erreur(e));}}
@@ -111,7 +148,7 @@ async function afficherHistorique(code){try{
  const h=await rpc('cis_qr_historique',{p_code:code}),f=h.fiche,host=document.getElementById('cisqr-adv-detail');if(!host)return;
  const etat=String(f.etat||'').toLowerCase();const statut=etat==='utilisee'?'Utilisé':etat==='attribuee'?'En service':etat==='vierge'?'Vierge':cisqrLieu(etat);
  const events=Array.isArray(h.evenements)?h.evenements:[];
- host.innerHTML=`<div class="cisqr-fiche-head"><div><h2>${esc(f.materiel||'Matériel')}</h2><p>Fiche individuelle ${f.unite?'— '+esc(f.unite):''}</p></div><span class="cisqr-etat ${etat==='utilisee'?'cisqr-etat-sorti':etat==='attribuee'?'cisqr-etat-actif':''}">${esc(statut)}</span></div>
+ host.innerHTML=`<p class="cisqr-fiche-repere">FICHE INDIVIDUELLE</p><div class="cisqr-fiche-head"><div><h2>${esc(f.materiel||'Matériel')}</h2><p>Fiche individuelle ${f.unite?'— '+esc(f.unite):''}</p></div><span class="cisqr-etat ${etat==='utilisee'?'cisqr-etat-sorti':etat==='attribuee'?'cisqr-etat-actif':''}">${esc(statut)}</span></div>
  <div class="cisqr-fiche-grid"><div><small>Emplacement</small><strong>${esc(cisqrLieu(f.emplacement))}</strong></div><div><small>Péremption</small><strong>${esc(cisqrJour(f.date_peremption))}</strong></div><div><small>Numéro de lot</small><strong>${esc(f.numero_lot||'Non renseigné')}</strong></div></div>
  <div class="cisqr-ref"><div><small>Référence QR</small><strong>${esc(f.code)}</strong></div><button type="button" id="cisqr-copy-ref">Copier</button></div>
  ${etat==='attribuee'?'<button type="button" id="cisqr-move-unit">Déplacer cet exemplaire</button>':''}
@@ -122,7 +159,9 @@ async function afficherHistorique(code){try{
   const lieu=f.emplacement==='vsav'?'pharmacie':'vsav';
   if(!confirm('Déplacer cet exemplaire vers '+cisqrLieu(lieu)+' ?'))return;
   deplacer.disabled=true;
-  try{await rpc('cis_qr_deplacer',{p_code:f.code,p_emplacement:lieu});await afficherHistorique(f.code);await afficherProduits();}
+  try{await rpc('cis_qr_deplacer',{p_code:f.code,p_emplacement:lieu});await afficherHistorique(f.code);await afficherProduits();
+   const zone=document.getElementById('cisqr-service-zone');
+   if(zone&&!zone.hidden){zone.hidden=true;await basculerMaterielEnService();}}
   catch(e){alert(erreur(e));}
   finally{deplacer.disabled=false;}
  };
