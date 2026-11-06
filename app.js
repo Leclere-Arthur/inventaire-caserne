@@ -1137,7 +1137,7 @@ let minuteurVerificationMiseAJour =
  * Elle permet de détecter une nouvelle version même si seul app.js?v=peremptions-20261031-v5 change.
  */
 const VERSION_APPLICATION_JS =
-    "pharmacie-depassement-vsav";
+    "rearmement-qr-bandeau";
 
 async function verifierNouvelleVersionAppJs() {
 
@@ -1359,6 +1359,13 @@ function afficherBandeauMiseAJourApplication() {
         bandeau
     );
 
+}
+
+
+function masquerBandeauMiseAJourApplication() {
+    miseAJourApplicationDisponible = false;
+    document.getElementById("bandeau-mise-a-jour-application")?.remove();
+    mettreAJourEtatBoutonMiseAJourProfil("L’application est déjà à jour.");
 }
 
 
@@ -1653,10 +1660,9 @@ async function verifierMiseAJourApplication(
             }
         }
 
+        masquerBandeauMiseAJourApplication();
+
         if (!silencieux) {
-            mettreAJourEtatBoutonMiseAJourProfil(
-                "L'application est déjà à jour."
-            );
 
             alert(
                 "L'application est déjà à jour."
@@ -1779,6 +1785,12 @@ async function appliquerMiseAJourApplication() {
                 return;
             }
 
+            if (!inscription.waiting && await verifierNouvelleVersionAppJs()) {
+                const url = new URL(window.location.href);
+                url.searchParams.set("_maj", Date.now());
+                window.location.replace(url.toString());
+                return;
+            }
         }
 
 
@@ -2071,7 +2083,7 @@ async function initialiserSystemeMiseAJourApplication() {
 
     navigator.serviceWorker.addEventListener(
         "controllerchange",
-        function () {
+        async function () {
 
             if (rechargementApresMiseAJourEnCours) {
 
@@ -2090,6 +2102,13 @@ async function initialiserSystemeMiseAJourApplication() {
                 window.location.replace(
                     url.toString()
                 );
+                return;
+            }
+
+            if (miseAJourApplicationDisponible &&
+                !await verifierNouvelleVersionAppJs() &&
+                !inscriptionServiceWorkerApplication?.waiting) {
+                masquerBandeauMiseAJourApplication();
             }
 
         }
