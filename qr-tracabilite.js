@@ -42,7 +42,7 @@ async function ouvrir(){
  if(!isAdmin())return alert('Fonction réservée aux administrateurs pharmacie.');
  const app=document.getElementById('app');
  app.innerHTML=`<main class="cisqr-page cisqr-desk">
-   <header class="cisqr-desk-head"><button type="button" class="cisqr-back" aria-label="Retour à l’administration" onclick="afficherMenuAdministration()">←</button><h1>Traçabilité QR</h1></header>
+   <header class="cisqr-desk-head"><button type="button" class="retour-button" aria-label="Retour à l’administration" onclick="afficherMenuAdministration()">← Retour</button><h1>Traçabilité QR</h1></header>
    <button type="button" class="cisqr-scan-tile" id="cisqr-scan-unique">${iconeScan}<span>Scanner une étiquette</span><small>Attribuer une étiquette vierge ou ouvrir la fiche</small></button>
    <form class="cisqr-search" id="cisqr-search-form"><label class="cisqr-visually-hidden" for="cisqr-adv-search">QR ou numéro de lot</label><input id="cisqr-adv-search" placeholder="Rechercher un QR ou un lot" enterkeyhint="search"><button type="submit" aria-label="Rechercher"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><circle cx="10" cy="10" r="6"/><path d="m14.5 14.5 5 5"/></svg></button></form>
    <p id="cisqr-adv-status" role="status"></p><div id="cisqr-adv-results"></div><section id="cisqr-adv-detail" aria-label="Fiche QR"></section>
