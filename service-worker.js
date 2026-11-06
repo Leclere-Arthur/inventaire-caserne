@@ -2,16 +2,16 @@
 importScripts("./notifications-history.js?v=pharmacie-vsav-prod-20261030-v1");
 
 // Nouvelle version : force le renouvellement du cache applicatif sans effacer les données locales.
-const CACHE_NAME = "cis-garde-priorite-v1";
+const CACHE_NAME = "cis-travail-droits-v1";
 const FICHIERS_APPLICATION = [
  "./qr-tracabilite.js?v=prod-v6","./qr-tracabilite.css?v=prod-v6",
  "./maintenance-client.js","./interface-personnelle.js","./equipe-evolution.js",
  "./peremptions-controle.js?v=1","./inventaire-technique.js?v=sous-coffres-prod-20261031-v1","./inventaire-technique.css",
  "./","./index.html","./scan-peremption.js?v=auto-datamatrix-v16","./vendor/zxing-reader.js","./vendor/zxing_reader.wasm",
  "./vsav-sans-stock.js?v=pharmacie-vsav-prod-20261030-v1","./suivi-vsav.js?v=pharmacie-vsav-prod-20261030-v1",
- "./app.js?v=cis-garde-priorite-v1","./pharmacie-categories.js?v=cis-qr-prod-v6",
+ "./app.js?v=cis-travail-droits-v1","./pharmacie-categories.js?v=cis-qr-prod-v6",
  "./formations-commun.js","./formations.js?v=sous-coffres-prod-20261031-v1","./formations.css",
- "./travail-equipe.js?v=sous-coffres-prod-20261031-v1","./fiche-garde.js?v=sous-coffres-prod-20261031-v1","./fiche-garde-pdf.js","./fiche-garde.css","./fiche-fin-garde-modele.pdf",
+ "./travail-equipe.js?v=travail-droits-v1","./fiche-garde.js?v=sous-coffres-prod-20261031-v1","./fiche-garde-pdf.js","./fiche-garde.css","./fiche-fin-garde-modele.pdf",
  "./pilotage-suivi.js","./pilotage-mesures.js","./messages-application.js","./nettoyage-sync.js","./notifications-history.js",
  "./style.css","./manifest.json","./supabase-config.js","./icon-192.png","./icon-512.png","./apple-touch-icon.png",
  "./profil-logo-admin.png","./profil-logo-pilotage.svg","./fond-connexion.png","./fond-connexion-pc.png","./logo-version-pc.png","./plan-caserne.png"
