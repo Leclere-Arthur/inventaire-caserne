@@ -1137,7 +1137,7 @@ let minuteurVerificationMiseAJour =
  * Elle permet de détecter une nouvelle version même si seul app.js?v=peremptions-20261031-v5 change.
  */
 const VERSION_APPLICATION_JS =
-    "rearmement-qr-bandeau";
+    "recherche-materiel-sans-accents";
 
 async function verifierNouvelleVersionAppJs() {
 
@@ -11211,61 +11211,15 @@ function afficherResultatsInventaire() {
     }
 
 
-    const recherche =
-        (
-            document.getElementById(
-                "recherche-inventaire"
-            )?.value ||
-            ""
-        )
-            .trim()
-            .toLowerCase();
-
+    const recherche = normaliserRechercheMateriel(
+        document.getElementById("recherche-inventaire")?.value
+    );
 
     if (recherche) {
-
-        const resultats =
-            materiels.filter(
-                function (materiel) {
-
-                    return (
-
-                        materiel.nom
-                            .toLowerCase()
-                            .includes(
-                                recherche
-                            )
-
-                        ||
-
-                        materiel.reference
-                            .toLowerCase()
-                            .includes(
-                                recherche
-                            )
-
-                        ||
-
-                        materiel.emplacement
-                            .toLowerCase()
-                            .includes(
-                                recherche
-                            )
-
-                        ||
-
-                        materiel.categories
-                            .join(" ")
-                            .toLowerCase()
-                            .includes(
-                                recherche
-                            )
-
-                    );
-
-                }
-            );
-
+        const resultats = materiels.filter(materiel =>
+            [materiel.nom, materiel.reference, materiel.emplacement, materiel.categories.join(" ")]
+                .some(valeur => normaliserRechercheMateriel(valeur).includes(recherche))
+        );
 
         conteneur.innerHTML = `
 
@@ -12585,6 +12539,15 @@ function mettreAJourQuantiteRetour(id) {
    RECHERCHE RETOUR
    ========================================================= */
 
+function normaliserRechercheMateriel(valeur) {
+    return String(valeur ?? "")
+        .normalize("NFD")
+        .toLowerCase()
+        .replace(/œ/g, "oe")
+        .replace(/æ/g, "ae")
+        .replace(/[\p{M}\p{P}\s]/gu, "");
+}
+
 function rechercherMaterielRetour() {
 
     const champ =
@@ -12617,9 +12580,7 @@ function rechercherMaterielRetour() {
 
 
     const texte =
-        champ.value
-            .trim()
-            .toLowerCase();
+        normaliserRechercheMateriel(champ.value);
 
 
     if (!texte) {
@@ -12643,25 +12604,22 @@ function rechercherMaterielRetour() {
 
                 return (
 
-                    materiel.nom
-                        .toLowerCase()
+                    normaliserRechercheMateriel(materiel.nom)
                         .includes(
                             texte
                         )
 
                     ||
 
-                    materiel.reference
-                        .toLowerCase()
+                    normaliserRechercheMateriel(materiel.reference)
                         .includes(
                             texte
                         )
 
                     ||
 
-                    materiel.categories
-                        .join(" ")
-                        .toLowerCase()
+                    normaliserRechercheMateriel(materiel.categories
+                        .join(" "))
                         .includes(
                             texte
                         )
@@ -16684,7 +16642,7 @@ function rechercherMaterielEditionRetour() {
     if (!recherche || !champId || !resultats) return;
 
     champId.value = "";
-    const terme = String(recherche.value || "").trim().toLocaleLowerCase();
+    const terme = normaliserRechercheMateriel(recherche.value);
     if (!terme) {
         resultats.innerHTML = "";
         resultats.classList.remove("ouvert");
@@ -16699,8 +16657,8 @@ function rechercherMaterielEditionRetour() {
     const correspondances = [...materiels]
         .filter(m => !dejaPresents.has(String(m.id)))
         .filter(m => {
-            const nom = String(m.nom || "").toLocaleLowerCase();
-            const reference = String(m.reference || "").toLocaleLowerCase();
+            const nom = normaliserRechercheMateriel(m.nom);
+            const reference = normaliserRechercheMateriel(m.reference);
             return nom.includes(terme) || reference.includes(terme);
         })
         .sort((a,b) => String(a.nom || "").localeCompare(String(b.nom || ""), "fr", { sensitivity:"base" }))
