@@ -22169,7 +22169,7 @@ async function actualiserCarteGardeAccueil() {
         if(!garde.equipe){
             htmlCarte=`<div class="garde-accueil-carte sans-garde" role="button" tabindex="0" onclick="afficherEspaceGarde()"><small>GARDE</small><strong>Aucune équipe programmée cette semaine</strong><span>${echapperHTML(libelleSemaineGarde(garde.date_debut))}</span></div>`;
         }else{
-            htmlCarte=`<div class="garde-accueil-carte ${garde.estMembre?"ma-garde":"pas-garde"}" role="button" tabindex="0" onclick="afficherEspaceGarde()" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();afficherEspaceGarde();}"><small>ÉQUIPE · ${echapperHTML(garde.equipe.nom || "Équipe")}</small><strong>${garde.estMembre?"TU ES DE GARDE CETTE SEMAINE":"TU N’ES PAS DE GARDE CETTE SEMAINE"}</strong><span>${echapperHTML(libelleSemaineGarde(garde.date_debut))}</span></div>`;
+            htmlCarte=`<div class="garde-accueil-carte ${garde.estMembre?"ma-garde":"pas-garde"}" role="button" tabindex="0" onclick="afficherEspaceGarde()" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();afficherEspaceGarde();}"><small>ÉQUIPE · ${echapperHTML(garde.equipe.nom || "Équipe")}</small><strong>${garde.estMembre?"Ton équipe est prioritaire cette semaine.":"Ton équipe n’est pas prioritaire cette semaine."}</strong><span>${echapperHTML(libelleSemaineGarde(garde.date_debut))}</span></div>`;
         }
         cacheCarteGardeAccueilHTML=memoriserCarteEquipeAccueil(htmlCarte);
         const zoneActuelle=document.getElementById("carte-garde-accueil");
