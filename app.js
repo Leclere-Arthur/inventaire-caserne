@@ -16868,35 +16868,15 @@ function verifierCodeAdmin() {
    MENU ADMINISTRATION
    ========================================================= */
 
-function afficherMenuAdministration() {
-
-    if (!verifierPermissionOuRetourAccueil(
-        "acces_administration"
-    )) {
-        return;
-    }
-
-    document.getElementById(
-        "app"
-    ).innerHTML = `
-
+const permissionsRubriqueMateriel = ["acces_ajout_materiel", "acces_gestion_materiel", "acces_gestion_categories"];
+function afficherRubriqueMateriel() {
+    if (!verifierPermissionOuRetourAccueil("acces_administration") ||
+        !permissionsRubriqueMateriel.some(p => utilisateurAPermission(p))) return;
+    document.getElementById("app").innerHTML = `
         <main class="page navigation-fixe-page">
-
-            <button
-                class="retour-button"
-                onclick="afficherAccueil()"
-            >
-                ← Retour
-            </button>
-
-            <h2>Administration</h2>
-
+            <button class="retour-button" onclick="afficherMenuAdministration()">← Retour</button>
+            <h2>Matériel</h2>
             <div class="menu-administration">
-                <button class="menu-button" onclick="afficherArchivesControlesPharmacie()">
-                    <span class="menu-icon">📄</span>
-                    <span><strong>Traçabilité Meducore / VSAV</strong><small>Consulter et exporter les feuilles de contrôle</small></span>
-                </button>
-
                 ${
                     utilisateurAPermission("acces_ajout_materiel")
                         ? `
@@ -16939,6 +16919,44 @@ function afficherMenuAdministration() {
                         : ""
                 }
 
+
+            </div>
+        </main>${navigationPrincipale("pharmacie", "pharmacie")}
+    `;
+    initialiserStylesReapprovisionnementArchive();
+}
+
+function afficherMenuAdministration() {
+
+    if (!verifierPermissionOuRetourAccueil(
+        "acces_administration"
+    )) {
+        return;
+    }
+
+    document.getElementById(
+        "app"
+    ).innerHTML = `
+
+        <main class="page navigation-fixe-page">
+
+            <button
+                class="retour-button"
+                onclick="afficherAccueil()"
+            >
+                ← Retour
+            </button>
+
+            <h2>Administration</h2>
+
+            <div class="menu-administration">
+                <button class="menu-button" onclick="afficherArchivesControlesPharmacie()">
+                    <span class="menu-icon">📄</span>
+                    <span><strong>Traçabilité Meducore / VSAV</strong><small>Consulter et exporter les feuilles de contrôle</small></span>
+                </button>
+
+                ${permissionsRubriqueMateriel.some(p => utilisateurAPermission(p)) ? '<button class="menu-button" onclick="afficherRubriqueMateriel()"><span class="menu-icon">📦</span><span><strong>Matériel</strong><small>Ajouter, gérer et classer le matériel</small></span></button>' : ''}
+
                 ${
                     utilisateurAPermission("acces_reapprovisionnement")
                         ? `
@@ -16978,6 +16996,7 @@ function afficherMenuAdministration() {
 
     `;
 
+    window.CISQR?.injectAdmin();
     initialiserStylesReapprovisionnementArchive();
 
 }
@@ -19035,6 +19054,8 @@ function afficherFormulaireMateriel(
         );
 
     }
+
+    window.CISQR?.injectFormulaire(materiel);
 
 }
 
