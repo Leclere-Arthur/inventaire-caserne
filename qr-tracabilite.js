@@ -18,7 +18,7 @@ async function config(force=false){if(state.loaded&&!force)return state.config;c
 function estSuivi(id){return state.config.has(String(id));}
 function newID(){return crypto.randomUUID?crypto.randomUUID():'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,c=>{const r=crypto.getRandomValues(new Uint8Array(1))[0]%16;return(c==='x'?r:(r&3|8)).toString(16)});}
 const scripts=new Map();function load(url,test){if(test())return Promise.resolve();if(scripts.has(url))return scripts.get(url);const p=new Promise((resolve,reject)=>{const s=document.createElement('script');s.src=url;s.onload=()=>test()?resolve():reject(Error('Bibliothèque chargée mais indisponible'));s.onerror=()=>reject(Error('Impossible de télécharger la bibliothèque. Vérifie la connexion Internet.'));document.head.appendChild(s)});scripts.set(url,p);return p;}
-async function scanner(callback){
+async function scanner(callback, cameraObligatoire=false){
  if(state.scanModal)return;
  const backdrop=document.createElement('div');backdrop.className='cisqr-scan-dialog';backdrop.innerHTML=`<div class="cisqr-scan-card" role="dialog" aria-modal="true" aria-label="Scanner une étiquette QR"><h2>Scanner le QR code</h2><p>Place le QR code dans le cadre. Le scan est automatique.</p><div class="cisqr-reader" id="cisqr-camera"></div><p id="cisqr-camera-status" class="cisqr-small">Activation de la caméra…</p><div class="cisqr-row"><input id="cisqr-manuel" placeholder="Code manuel de secours" autocomplete="off" aria-label="Identifiant QR"><button type="button" id="cisqr-manuel-go">Valider le code</button></div><button type="button" id="cisqr-fermer">Fermer</button></div>`;
  document.body.appendChild(backdrop);state.scanModal=backdrop;let done=false;
@@ -26,6 +26,7 @@ async function scanner(callback){
  const found=async(code)=>{if(done)return;done=true;await cleanup();try{await callback(String(code).trim().toUpperCase());}catch(e){alert(erreur(e));}};
  backdrop.querySelector('#cisqr-fermer').onclick=()=>{done=true;void cleanup();};
  backdrop.querySelector('#cisqr-manuel-go').onclick=()=>{const c=backdrop.querySelector('#cisqr-manuel').value.trim();if(c)void found(c)};
+ if(cameraObligatoire) backdrop.querySelector('#cisqr-manuel').parentElement.remove();
  try{
   await load('https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js',()=>typeof g.Html5Qrcode==='function');
   if(done)return;
@@ -33,7 +34,7 @@ async function scanner(callback){
   const reader=new g.Html5Qrcode('cisqr-camera',{verbose:false});state.scanner=reader;
   await reader.start({facingMode:'environment'},options,code=>void found(code),()=>{});
   if(backdrop.isConnected)backdrop.querySelector('#cisqr-camera-status').textContent='Caméra activée — lecture automatique.';
- }catch(e){if(!done&&backdrop.isConnected){backdrop.querySelector('#cisqr-camera-status').textContent='Caméra indisponible : '+erreur(e)+'. Saisie manuelle possible.';}}
+ }catch(e){if(!done&&backdrop.isConnected){backdrop.querySelector('#cisqr-camera-status').textContent='Caméra indisponible : '+erreur(e)+(cameraObligatoire?'':'. Saisie manuelle possible.');}}
 }
 function shell(titre,inside){document.getElementById('app').innerHTML=`<main class="cisqr-page"><button type="button" onclick="afficherMenuAdministration()">← Retour administration</button><h1>${titre}</h1>${inside}</main>${typeof navigationPrincipale==='function'?navigationPrincipale('pharmacie','pharmacie'):''}`;}
 function labelPosition(code){return esc(String(code).slice(0,14))+'…';}
@@ -42,7 +43,7 @@ async function ouvrir(){
  if(!isAdmin())return alert('Fonction réservée aux administrateurs pharmacie.');
  const app=document.getElementById('app');
  app.innerHTML=`<main class="cisqr-page cisqr-desk">
-   <header class="cisqr-desk-head"><button type="button" class="retour-button" aria-label="Retour à l’administration" onclick="afficherMenuAdministration()">← Retour</button><h1>Traçabilité QR</h1></header>
+   <header class="cisqr-desk-head"><button type="button" class="cisqr-back" aria-label="Retour à l’administration" onclick="afficherMenuAdministration()">←</button><h1>Traçabilité QR</h1></header>
    <button type="button" class="cisqr-scan-tile" id="cisqr-scan-unique">${iconeScan}<span>Scanner une étiquette</span><small>Attribuer une étiquette vierge ou ouvrir la fiche</small></button>
    <form class="cisqr-search" id="cisqr-search-form"><label class="cisqr-visually-hidden" for="cisqr-adv-search">QR ou numéro de lot</label><input id="cisqr-adv-search" placeholder="Rechercher un QR ou un lot" enterkeyhint="search"><button type="submit" aria-label="Rechercher"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><circle cx="10" cy="10" r="6"/><path d="m14.5 14.5 5 5"/></svg></button></form>
    <p id="cisqr-adv-status" role="status"></p><div id="cisqr-adv-results"></div><section id="cisqr-adv-detail" aria-label="Fiche QR"></section>
@@ -168,7 +169,7 @@ async function afficherHistorique(code){try{
  host.querySelector('#cisqr-copy-ref').onclick=async()=>{try{await navigator.clipboard.writeText(f.code);const b=host.querySelector('#cisqr-copy-ref');if(b)b.textContent='Copié';}catch(_){alert('Référence : '+f.code);}};
  host.scrollIntoView({behavior:'smooth',block:'start'});
  }catch(e){setStatut('cisqr-adv-status',erreur(e),true);}}
-async function collecterUnitesQR(id, quantite) {
+async function collecterUnitesQR(id, quantite, rearmement=false) {
  const nom = materiel(id)?.nom || 'Matériel';
  if (quantite > 200) throw Error('Limite de 200 unités QR par matériel et par réapprovisionnement.');
  return new Promise(resolve => {
@@ -180,7 +181,7 @@ async function collecterUnitesQR(id, quantite) {
     <label>Lot fabricant (facultatif) <input data-lot maxlength="120"></label>
     <p data-etat role="status"></p>
     <button type="button" data-scan>Scanner le QR de cette unité</button>
-    <button type="button" data-annuler>Annuler le réapprovisionnement</button>
+    <button type="button" data-annuler>Annuler</button>
   </div>`;
   const unites = [];
   const progression = dialog.querySelector('[data-progression]');
@@ -193,11 +194,19 @@ async function collecterUnitesQR(id, quantite) {
    const date = dialog.querySelector('[data-date]').value;
    if (!date) { statut.textContent = 'Indique la date de péremption.'; return; }
    const lot = dialog.querySelector('[data-lot]').value.trim();
-   await scanner(code => {
+   await scanner(async code => {
     if (!dialog.isConnected) return;
     if (unites.some(u => u.code === code)) {
      statut.textContent = 'Ce QR a déjà été saisi.';
      return;
+    }
+    if (rearmement) {
+     const fiche = await rpc('cis_qr_fiche',{p_code:code});
+     if (!dialog.isConnected) return;
+     if (fiche?.etat !== 'vierge') {
+      statut.textContent = 'Scanne une étiquette QR vierge.';
+      return;
+     }
     }
     unites.push({code,date,lot});
     if (unites.length === quantite) fin(unites);
@@ -205,7 +214,7 @@ async function collecterUnitesQR(id, quantite) {
      statut.textContent = 'QR saisi : ' + code;
      progression.textContent = `Unité ${unites.length + 1} sur ${quantite}`;
     }
-   });
+   },rearmement);
   };
   document.body.appendChild(dialog);
  });
@@ -255,5 +264,5 @@ async function traiterReapprovisionnement(ajouts) {
  return true;
 }
 
-g.CISQR={ouvrir,ouvrirAvance,injectAdmin,injectFormulaire,traiterReapprovisionnement};
+g.CISQR={collecterRearmement:async(id,quantite)=>{await config(true);return estSuivi(id)?collecterUnitesQR(id,quantite,true):[];},ouvrir,ouvrirAvance,injectAdmin,injectFormulaire,traiterReapprovisionnement};
 })(window);

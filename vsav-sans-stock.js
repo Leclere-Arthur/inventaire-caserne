@@ -50,15 +50,34 @@ async function importerAlertes(){const uid=String(utilisateurConnecte?.id||'');i
 function lireCles(){const texte=localStorage.getItem('cis-vsav-rearmements-pending-v1');if(!texte)return {};const x=JSON.parse(texte);if(!x||typeof x!=='object'||Array.isArray(x))throw Error('Journal local de réarmement illisible.');return x;}
 function cleOperation(signature){const x=lireCles();if(!x[signature]){x[signature]=crypto.randomUUID();localStorage.setItem('cis-vsav-rearmements-pending-v1',JSON.stringify(x));}return x[signature];}
 function oublierOperation(signature){const x=lireCles();delete x[signature];localStorage.setItem('cis-vsav-rearmements-pending-v1',JSON.stringify(x));}
-function carte(r){const classe=r.reception_le?'recu':r.commande_le?'commande':'commander';const etat=r.reception_le?'Reçu — à remettre dans le VSAV':r.commande_le?'Commande passée — en attente de réception':'À commander — VSAV à réarmer';return `<article class="vsav-attente" style="margin:14px 0;padding:18px;border:2px solid #bd252b;border-radius:14px;background:#ffe8e8;color:#302626"><h3>${esc(r.nom)}</h3><div class="vsav-statut vsav-statut-${classe}" role="status">${esc(etat)}</div><p>Intervention ${esc(r.numero)} · ${esc(r.date_intervention)}</p><p>Utilisé : ${r.quantite} · Déjà remis : ${r.remis}<br><strong>Reste à remettre : ${r.restant}</strong></p><p>Déclaré par ${esc(r.auteur_nom)}</p><div class="vsav-attente-actions" style="display:flex;flex-wrap:wrap;gap:10px">${!r.commande_le?`<button type="button" class="equipe-action-button" data-vsav-action="commander" data-vsav-id="${esc(r.id)}">Commande passée</button>`:''}${!r.reception_le?`<button type="button" class="equipe-action-button" data-vsav-action="receptionner" data-vsav-id="${esc(r.id)}">Commande reçue</button>`:''}</div><label style="display:block;margin-top:14px">Quantité remise dans le VSAV <input type="number" data-vsav-quantite min="1" max="${r.restant}" step="1" value="${r.restant}" style="font-size:16px;width:100px;padding:10px"></label><button type="button" class="equipe-action-button" data-vsav-action="rearmer" data-vsav-id="${esc(r.id)}">Réarmement effectué</button><p role="status" data-vsav-resultat></p></article>`;}
+function carte(r){const classe=r.reception_le?'recu':r.commande_le?'commande':'commander';const etat=r.reception_le?'Reçu — à remettre dans le VSAV':r.commande_le?'Commande passée — en attente de réception':'À commander — VSAV à réarmer';return `<article data-materiel-id="${esc(r.materiel_id)}" class="vsav-attente" style="margin:14px 0;padding:18px;border:2px solid #bd252b;border-radius:14px;background:#ffe8e8;color:#302626"><h3>${esc(r.nom)}</h3><div class="vsav-statut vsav-statut-${classe}" role="status">${esc(etat)}</div><p>Intervention ${esc(r.numero)} · ${esc(r.date_intervention)}</p><p>Utilisé : ${r.quantite} · Déjà remis : ${r.remis}<br><strong>Reste à remettre : ${r.restant}</strong></p><p>Déclaré par ${esc(r.auteur_nom)}</p><div class="vsav-attente-actions" style="display:flex;flex-wrap:wrap;gap:10px">${!r.commande_le?`<button type="button" class="equipe-action-button" data-vsav-action="commander" data-vsav-id="${esc(r.id)}">Commande passée</button>`:''}${!r.reception_le?`<button type="button" class="equipe-action-button" data-vsav-action="receptionner" data-vsav-id="${esc(r.id)}">Commande reçue</button>`:''}</div><label style="display:block;margin-top:14px">Quantité remise dans le VSAV <input type="number" data-vsav-quantite min="1" max="${r.restant}" step="1" value="${r.restant}" style="font-size:16px;width:100px;padding:10px"></label><button type="button" class="equipe-action-button" data-vsav-action="rearmer" data-vsav-id="${esc(r.id)}">Réarmement effectué</button><p role="status" data-vsav-resultat></p></article>`;}
 async function chargerSuivi(box){stylesVSAV();if(!box?.isConnected)return;const owner=String(utilisateurConnecte?.id||''),generation=(suiviGenerations.get(box)||0)+1;suiviGenerations.set(box,generation);box.textContent='Chargement du réarmement…';try{const rows=await rpc('vsav_sans_stock_lire');if(!box.isConnected||suiviGenerations.get(box)!==generation||String(utilisateurConnecte?.id||'')!==owner)return;box.innerHTML='<h2>Matériel à réarmer — réserve insuffisante ou absente</h2>'+((rows||[]).map(carte).join('')||'<p>Aucun réarmement en attente.</p>');}catch(e){if(box.isConnected&&suiviGenerations.get(box)===generation&&String(utilisateurConnecte?.id||'')===owner)box.textContent='Réarmement indisponible : '+(e.message||'réessaie.');}}
 document.addEventListener('click',async e=>{const b=e.target.closest('[data-vsav-action]');if(!b||b.disabled)return;const card=b.closest('.vsav-attente'),status=card.querySelector('[data-vsav-resultat]'),id=b.dataset.vsavId,action=b.dataset.vsavAction;
  const quantite=action==='rearmer'?Number(card.querySelector('[data-vsav-quantite]').value):0;
  if(action==='rearmer'&&(!Number.isSafeInteger(quantite)||quantite<1)){status.textContent='Indique une quantité entière positive.';return;}
  if(!await afficherConfirmationCIS(action==='rearmer'?`Confirmer que ${quantite} unité(s) ont réellement été remises dans le VSAV ?`:'Confirmer cette étape ?'))return;
  const signature=[String(utilisateurConnecte?.id||''),id,action,quantite].join(':');card.querySelectorAll('button,input').forEach(x=>x.disabled=true);
- try{const cle=cleOperation(signature);await rpc('vsav_sans_stock_traiter',{p_cle:cle,p_ligne:id,p_action:action,p_quantite:quantite});oublierOperation(signature);if(card.isConnected)await chargerSuivi(card.closest('#suivi-vsav-attente'));}
- catch(error){if(status.isConnected)status.textContent=(error.message||'Réponse non reçue.')+' Réessaie avec la même quantité ; aucun double réarmement ne sera appliqué.';card.querySelectorAll('button,input').forEach(x=>x.disabled=false);}
+ try{
+  const params={p_ligne:id,p_action:action,p_quantite:quantite,p_cle:cleOperation(signature)};
+  const cleScans='cis-vsav-scans:'+params.p_cle;
+  if(action==='rearmer'){
+   const scansEnAttente=localStorage.getItem(cleScans);
+   const unites=scansEnAttente?JSON.parse(scansEnAttente):await g.CISQR.collecterRearmement(card.dataset.materielId,quantite);
+   if(unites===null||!card.isConnected||String(utilisateurConnecte?.id||'')!==signature.split(':')[0])return;
+   if(unites.length){
+    params.p_unites=unites;
+    localStorage.setItem(cleScans,JSON.stringify(unites));
+   }
+  }
+  try{await rpc('vsav_sans_stock_traiter',params);}
+  catch(error){
+   if(/QR inconnu|nombre d’étiquettes|suivi QR de ce matériel a changé/.test(error.message))localStorage.removeItem(cleScans);
+   throw error;
+  }
+  localStorage.removeItem(cleScans);
+  oublierOperation(signature);if(card.isConnected)await chargerSuivi(card.closest('#suivi-vsav-attente'));}
+ catch(error){if(status.isConnected)status.textContent=(error.message||'Réponse non reçue.')+' Réessaie avec la même quantité ; aucun double réarmement ne sera appliqué.';}
+ finally{card.querySelectorAll('button,input').forEach(x=>x.disabled=false);}
 });
 setInterval(()=>{if(!document.hidden&&utilisateurConnecte?.id)void importerAlertes().then(()=>actualiserPointNotifications());},45000);
 g.CISVSAVSansStock={configurerFormulaire,importerAlertes,chargerSuivi};
