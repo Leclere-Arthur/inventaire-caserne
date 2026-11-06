@@ -12,7 +12,7 @@ function erreur(e) { const t=String(e?.message||e); return /Could not find the f
 async function rpc(name,args={}){
  if(!navigator.onLine)throw Error('Connexion requise pour confirmer les mouvements QR. Aucune modification effectuée.');
  const s=client();if(!s)throw Error('Supabase indisponible.');
- const {data,error}=await s.rpc(name,args);if(error)throw Error(error.message||String(error));return data;
+ const {data,error}=await s.rpc(name,args);if(error)throw Object.assign(Error(error.message||String(error)),{code:error.code});return data;
 }
 async function config(force=false){if(state.loaded&&!force)return state.config;const rows=await rpc('cis_qr_config_lire');state.config=new Set((rows||[]).filter(x=>x.actif).map(x=>String(x.materiel_id)));state.loaded=true;return state.config;}
 function estSuivi(id){return state.config.has(String(id));}
@@ -39,7 +39,8 @@ function shell(titre,inside){document.getElementById('app').innerHTML=`<main cla
 function labelPosition(code){return esc(String(code).slice(0,14))+'…';}
 async function ouvrir(){
  if(!isAdmin())return alert('Fonction réservée aux administrateurs pharmacie.');
- shell('Traçabilité QR code',`<section class="cisqr-panel"><h2>Attribuer ou déplacer une étiquette</h2><div class="cisqr-row"><button id="cisqr-assigner" class="cisqr-main">Scanner une étiquette vierge</button><button id="cisqr-deplacer">Déplacer un exemplaire (stock / VSAV)</button></div></section><section class="cisqr-panel"><h2>Matériels suivis et manquants</h2><div id="cisqr-materiels">Chargement…</div></section>`);
+ shell('Traçabilité QR code',`<section class="cisqr-panel"><button type="button" id="cisqr-avance">Traçabilité avancée</button><h2>Attribuer ou déplacer une étiquette</h2><div class="cisqr-row"><button id="cisqr-assigner" class="cisqr-main">Scanner une étiquette vierge</button><button id="cisqr-deplacer">Déplacer un exemplaire (stock / VSAV)</button></div></section><section class="cisqr-panel"><h2>Matériels suivis et manquants</h2><div id="cisqr-materiels">Chargement…</div></section>`);
+ document.getElementById('cisqr-avance').onclick=()=>void ouvrirAvance();
  document.getElementById('cisqr-assigner').onclick=()=>void scanner(async code=>{const m=await rpc('cis_qr_fiche',{p_code:code});if(!m||m.etat!=='vierge')throw Error('Étiquette inconnue ou déjà attribuée');await formulaireAttribution(code);});
  document.getElementById('cisqr-deplacer').onclick=()=>void scanner(async code=>{const f=await rpc('cis_qr_fiche',{p_code:code});if(!f||f.etat!=='attribuee')throw Error('QR non attribué');const lieu=f.emplacement==='vsav'?'pharmacie':'vsav';if(!confirm('Déplacer '+f.nom+' ('+code+') vers '+lieu.toUpperCase()+' ?'))return;await rpc('cis_qr_deplacer',{p_code:code,p_emplacement:lieu});alert('Déplacement enregistré.');await afficherProduits();});
  try{await config(true);await afficherProduits();}catch(e){const box=document.getElementById("cisqr-materiels");if(box)box.textContent=erreur(e);}
@@ -58,5 +59,134 @@ function injectFormulaire(m){if(!m?.id||!isAdmin())return;const formulaire=docum
  c.querySelector('#cisqr-assign-direct').onclick=()=>void attribuerMateriel(m.id);c.querySelector('#cisqr-open-admin').onclick=ouvrir;
  void config(true).then(()=>{if(check.isConnected){check.checked=estSuivi(m.id);check.disabled=false;}}).catch(e=>setStatut('cisqr-form-status',erreur(e),true));
 }
-g.CISQR={ouvrir,injectAdmin,injectFormulaire};
+async function ouvrirAvance(){
+ if(!isAdmin())return;
+ shell('Traçabilité avancée',`<section class="cisqr-panel"><button id="cisqr-adv-retour">Retour à la traçabilité QR</button><h2>Rechercher un QR code ou un lot</h2><div class="cisqr-row"><input id="cisqr-adv-search" placeholder="Code QR ou numéro de lot"><button id="cisqr-adv-go">Rechercher</button><button id="cisqr-adv-scan" class="cisqr-main">Scanner un QR code</button></div><p id="cisqr-adv-status" class="cisqr-status"></p><div id="cisqr-adv-results"></div></section><section class="cisqr-panel" id="cisqr-adv-detail"><h2>Fiche et historique détaillé</h2><p>Sélectionne une unité ou scanne son QR code.</p></section>`);
+ document.getElementById('cisqr-adv-retour').onclick=()=>void ouvrir();
+ document.getElementById('cisqr-adv-scan').onclick=()=>void scanner(code=>afficherHistorique(code));
+ document.getElementById('cisqr-adv-go').onclick=()=>void rechercherHistorique();
+ document.getElementById('cisqr-adv-search').onkeydown=e=>{if(e.key==='Enter')void rechercherHistorique();};
+ await rechercherHistorique();
+}
+async function rechercherHistorique(){try{const q=document.getElementById('cisqr-adv-search')?.value||'';const rows=await rpc('cis_qr_historique_rechercher',{p_recherche:q});const host=document.getElementById('cisqr-adv-results');if(!host)return;host.innerHTML=rows.length?rows.map(x=>`<div class="cisqr-label"><strong>${esc(x.materiel||'Matériel')}</strong><p><code>${esc(x.code)}</code> · ${esc(x.etat)} · ${esc(x.emplacement||'—')}</p><button data-cisqr-hist="${esc(x.code)}">Voir la fiche complète</button></div>`).join(''):'Aucun résultat.';host.querySelectorAll('[data-cisqr-hist]').forEach(b=>b.onclick=()=>void afficherHistorique(b.dataset.cisqrHist));}catch(e){setStatut('cisqr-adv-status',erreur(e),true);}}
+function cisqrDate(d){if(!d)return '—';const x=new Date(d);return Number.isNaN(x.getTime())?'—':x.toLocaleString('fr-FR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});}
+function cisqrJour(d){if(!d)return '—';const x=new Date(d);return Number.isNaN(x.getTime())?'—':x.toLocaleDateString('fr-FR');}
+function cisqrLieu(v){return ({vsav:'VSAV',pharmacie:'Réserve pharmacie',sorti:'Sorti du VSAV',utilise:'Utilisé',attribuee:'Attribué',vierge:'Vierge',utilisee:'Utilisé'})[v]||v||'Non renseigné';}
+function cisqrNomUtilisateur(id){
+ if(!id)return 'Utilisateur non renseigné';
+ const pools=[typeof utilisateurs!=='undefined'?utilisateurs:null,typeof listeUtilisateurs!=='undefined'?listeUtilisateurs:null];
+ for(const pool of pools){if(!Array.isArray(pool))continue;const u=pool.find(x=>String(x.id)===String(id)||String(x.user_id)===String(id));if(u){const n=[u.prenom,u.nom].filter(Boolean).join(' ').trim();if(n)return n;if(u.nom_complet)return u.nom_complet;}}
+ if(String(uid())===String(id)&&typeof utilisateurConnecte!=='undefined'){const u=utilisateurConnecte;const n=[u.prenom,u.nom].filter(Boolean).join(' ').trim();if(n)return n;}
+ return 'Utilisateur non identifié';
+}
+function cisqrNature(n){return ({attribution:['QR code attribué','tag','attribution'],utilisation:['Matériel utilisé','check','utilisation'],deplacement:['Matériel déplacé','move','deplacement'],reapprovisionnement:['Matériel réapprovisionné','plus','reapprovisionnement'],rearmement:['Matériel réarmé','plus','reapprovisionnement'],modification:['Fiche modifiée','edit','modification']})[n]||[String(n||'Mouvement').replaceAll('_',' '),'info','modification'];}
+function cisqrDetailMouvement(e){
+ const avant=e.ancien&&typeof e.ancien==='object'?e.ancien:{};const apres=e.nouveau&&typeof e.nouveau==='object'?e.nouveau:{};
+ const parts=[];
+ if(avant.emplacement!==apres.emplacement&&apres.emplacement)parts.push((avant.emplacement?cisqrLieu(avant.emplacement)+' → ':'')+cisqrLieu(apres.emplacement));
+ if(apres.numero_lot&&avant.numero_lot!==apres.numero_lot)parts.push('Lot : '+apres.numero_lot);
+ if(apres.date_peremption&&avant.date_peremption!==apres.date_peremption)parts.push('Péremption : '+cisqrJour(apres.date_peremption));
+ if(apres.commentaire)parts.push('Commentaire : '+apres.commentaire);
+ return parts;
+}
+async function afficherHistorique(code){try{
+ const h=await rpc('cis_qr_historique',{p_code:code}),f=h.fiche,host=document.getElementById('cisqr-adv-detail');if(!host)return;
+ const etat=String(f.etat||'').toLowerCase();const statut=etat==='utilisee'?'Utilisé':etat==='attribuee'?'En service':etat==='vierge'?'Vierge':cisqrLieu(etat);
+ const events=Array.isArray(h.evenements)?h.evenements:[];
+ host.innerHTML=`<div class="cisqr-fiche-head"><div><h2>${esc(f.materiel||'Matériel')}</h2><p>Fiche individuelle ${f.unite?'— '+esc(f.unite):''}</p></div><span class="cisqr-etat ${etat==='utilisee'?'cisqr-etat-sorti':etat==='attribuee'?'cisqr-etat-actif':''}">${esc(statut)}</span></div>
+ <div class="cisqr-fiche-grid"><div><small>Emplacement</small><strong>${esc(cisqrLieu(f.emplacement))}</strong></div><div><small>Péremption</small><strong>${esc(cisqrJour(f.date_peremption))}</strong></div><div><small>Numéro de lot</small><strong>${esc(f.numero_lot||'Non renseigné')}</strong></div></div>
+ <div class="cisqr-ref"><div><small>Référence QR</small><strong>${esc(f.code)}</strong></div><button type="button" id="cisqr-copy-ref">Copier</button></div>
+ <h3 class="cisqr-historique-titre">Historique du matériel <span>(${events.length})</span></h3>
+ <div class="cisqr-timeline">${events.map(e=>{const [titre,icone,classe]=cisqrNature(e.nature),details=cisqrDetailMouvement(e);return `<article class="cisqr-event cisqr-event-${classe}"><div class="cisqr-event-icon">${esc(icone==='check'?'✓':icone==='tag'?'#':icone==='move'?'↔':icone==='plus'?'+':'i')}</div><div class="cisqr-event-body"><div class="cisqr-event-title"><strong>${esc(titre)}</strong><time>${esc(cisqrDate(e.date))}</time></div>${e.numero_intervention?`<p><b>Intervention n° ${esc(e.numero_intervention)}</b></p>`:''}${details.map(d=>`<p>${esc(d)}</p>`).join('')}<small>Par ${esc(e.acteur_nom||cisqrNomUtilisateur(e.acteur_id))}</small></div></article>`;}).join('')||'<p>Aucun mouvement enregistré.</p>'}</div>`;
+ host.querySelector('#cisqr-copy-ref').onclick=async()=>{try{await navigator.clipboard.writeText(f.code);const b=host.querySelector('#cisqr-copy-ref');if(b)b.textContent='Copié';}catch(_){alert('Référence : '+f.code);}};
+ host.scrollIntoView({behavior:'smooth',block:'start'});
+ }catch(e){setStatut('cisqr-adv-status',erreur(e),true);}}
+async function collecterUnitesQR(id, quantite) {
+ const nom = materiel(id)?.nom || 'Matériel';
+ if (quantite > 200) throw Error('Limite de 200 unités QR par matériel et par réapprovisionnement.');
+ return new Promise(resolve => {
+  const dialog = document.createElement('div');
+  dialog.className = 'cisqr-scan-dialog';
+  dialog.innerHTML = `<div class="cisqr-scan-card" role="dialog" aria-modal="true" aria-label="Réapprovisionnement QR">
+    <h2>${esc(nom)}</h2><p data-progression></p>
+    <label>Date de péremption <input type="date" data-date></label>
+    <label>Lot fabricant (facultatif) <input data-lot maxlength="120"></label>
+    <p data-etat role="status"></p>
+    <button type="button" data-scan>Scanner le QR de cette unité</button>
+    <button type="button" data-annuler>Annuler le réapprovisionnement</button>
+  </div>`;
+  const unites = [];
+  const progression = dialog.querySelector('[data-progression]');
+  const statut = dialog.querySelector('[data-etat]');
+  const bouton = dialog.querySelector('[data-scan]');
+  const fin = valeur => { dialog.remove(); resolve(valeur); };
+  progression.textContent = `Unité 1 sur ${quantite}`;
+  dialog.querySelector('[data-annuler]').onclick = () => fin(null);
+  bouton.onclick = async () => {
+   const date = dialog.querySelector('[data-date]').value;
+   if (!date) { statut.textContent = 'Indique la date de péremption.'; return; }
+   const lot = dialog.querySelector('[data-lot]').value.trim();
+   await scanner(code => {
+    if (!dialog.isConnected) return;
+    if (unites.some(u => u.code === code)) {
+     statut.textContent = 'Ce QR a déjà été saisi.';
+     return;
+    }
+    unites.push({code,date,lot});
+    if (unites.length === quantite) fin(unites);
+    else {
+     statut.textContent = 'QR saisi : ' + code;
+     progression.textContent = `Unité ${unites.length + 1} sur ${quantite}`;
+    }
+   });
+  };
+  document.body.appendChild(dialog);
+ });
+}
+
+// Returns false for an ordinary restock, and true when the QR flow handled it.
+async function traiterReapprovisionnement(ajouts) {
+ const compte = uid();
+ if (!compte) throw Error('Reconnecte-toi pour enregistrer le réapprovisionnement.');
+ const cle = 'cis-qr-reappro-attente:' + compte;
+ let demande = JSON.parse(localStorage.getItem(cle) || 'null');
+ if (demande) {
+  if (!await afficherConfirmationCIS('Un réapprovisionnement QR est en attente. Reprendre cette saisie sans ajouter de doublon ?')) return true;
+ } else {
+  await config(true);
+  if (![...ajouts.keys()].some(estSuivi)) return false;
+  const lignes = [];
+  for (const [id, quantite] of ajouts) {
+   const unites = estSuivi(id) ? await collecterUnitesQR(id, quantite) : [];
+   if (!unites) return true;
+   lignes.push({id,quantite,unites});
+  }
+  if (!await afficherConfirmationCIS('Confirmer le réapprovisionnement et l’attribution des QR scannés ?')) return true;
+  if (uid() !== compte) throw Error('Le compte a changé pendant la saisie.');
+  demande = {p_operation:newID(),p_lignes:lignes};
+  localStorage.setItem(cle,JSON.stringify(demande));
+ }
+ if (uid() !== compte) throw Error('Le compte a changé pendant la saisie.');
+ let mouvements;
+ try {
+  mouvements = await rpc('cis_qr_reappro_lot',demande);
+ } catch(e) {
+  if (/^(P0001|22\w{3}|23\w{3})$/.test(e.code || '')) localStorage.removeItem(cle);
+  throw e;
+ }
+ if (uid() !== compte) throw Error('Le compte a changé après l’enregistrement.');
+ localStorage.removeItem(cle);
+ for (const mouvement of mouvements) {
+  if (mouvement.alerte) mettreNotificationStockEnAttente({
+   id:mouvement.id,operationId:mouvement.id,utilisateurId:compte,creeLe:new Date().toISOString()
+  });
+ }
+ derniereSynchronisationNavigation = 0;
+ await synchroniserAvantNavigation();
+ void envoyerNotificationsStockEnAttente();
+ alert('Réapprovisionnement confirmé. Les QR ont été attribués au stock pharmacie.');
+ return true;
+}
+
+g.CISQR={ouvrir,ouvrirAvance,injectAdmin,injectFormulaire,traiterReapprovisionnement};
 })(window);

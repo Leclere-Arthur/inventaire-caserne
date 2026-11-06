@@ -14833,6 +14833,17 @@ async function validerReapprovisionnementAdministration() {
         return;
     }
 
+    try {
+        if (!window.CISQR) throw Error("Module QR indisponible. Actualise l’application.");
+        if (await window.CISQR.traiterReapprovisionnement(ajouts)) {
+            afficherReapprovisionnementAdministration();
+            return;
+        }
+    } catch (e) {
+        alert(e.message || "Réapprovisionnement non confirmé.");
+        return;
+    }
+
     const lignesConfirmation =
         Array.from(ajouts.entries())
             .map(
@@ -15441,6 +15452,17 @@ async function validerReapprovisionnementArchive(
         return;
     }
 
+
+    try {
+        if (!window.CISQR) throw Error("Module QR indisponible. Actualise l’application.");
+        if (await window.CISQR.traiterReapprovisionnement(ajouts)) {
+            afficherDetailCommandeArchive(archiveId);
+            return;
+        }
+    } catch (e) {
+        alert(e.message || "Réapprovisionnement non confirmé.");
+        return;
+    }
 
     const lignesConfirmation =
         Array.from(
