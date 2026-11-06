@@ -3,3 +3,26 @@
 
 /* Fiche QR simplifiée, mobile d'abord */
 .cisqr-fiche-head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:18px}.cisqr-fiche-head h2{font-size:21px;margin:0 0 4px;overflow-wrap:anywhere}.cisqr-fiche-head p{font-size:13px;color:#63737d;margin:0}.cisqr-etat{flex-shrink:0;border-radius:30px;padding:7px 11px;background:#e8edf1;color:#253846;font-weight:700;font-size:12px}.cisqr-etat-actif{background:#e1f4e9;color:#176344}.cisqr-etat-sorti{background:#fde9e8;color:#a52c2c}.cisqr-fiche-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.cisqr-fiche-grid>div{min-width:0;padding:13px 11px;background:#f3f6f8;border-radius:10px}.cisqr-fiche-grid small,.cisqr-ref small{display:block;color:#5a6973;font-size:12px;margin-bottom:5px}.cisqr-fiche-grid strong{display:block;font-size:15px;overflow-wrap:anywhere}.cisqr-ref{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:14px 0 20px;padding:5px 0}.cisqr-ref>div{min-width:0}.cisqr-ref strong{display:block;font-size:12px;overflow-wrap:anywhere;word-break:break-all}.cisqr-ref button{flex-shrink:0}.cisqr-historique-titre{font-size:19px!important;margin:16px 0!important}.cisqr-historique-titre span{color:#687983;font-weight:400}.cisqr-timeline{display:grid;gap:0}.cisqr-event{display:flex;gap:12px;padding:13px 0;border-bottom:1px solid #e2e7ea;min-width:0}.cisqr-event:last-child{border-bottom:0}.cisqr-event-icon{width:35px;height:35px;flex:0 0 35px;display:flex;align-items:center;justify-content:center;background:#eaf1f5;color:#215e83;border-radius:50%;font-size:18px;font-weight:800}.cisqr-event-utilisation .cisqr-event-icon{background:#fbe8e7;color:#ad3531}.cisqr-event-attribution .cisqr-event-icon,.cisqr-event-reapprovisionnement .cisqr-event-icon{background:#e2f4e9;color:#1d754e}.cisqr-event-body{flex:1;min-width:0}.cisqr-event-title{display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:4px 10px}.cisqr-event-title strong{font-size:15px}.cisqr-event-title time{font-size:12px;color:#60717c;white-space:nowrap}.cisqr-event-body p{font-size:14px;margin:5px 0;overflow-wrap:anywhere}.cisqr-event-body small{font-size:12px;color:#5d6d77;display:block;margin-top:6px}@media(max-width:530px){.cisqr-fiche-head{flex-wrap:wrap}.cisqr-event-title{display:block}.cisqr-event-title time{display:block;margin-top:4px}.cisqr-fiche-grid strong{font-size:14px}}
+
+/* Écran QR : un point d’entrée caméra, puis un registre à déplier. */
+.cisqr-page.cisqr-desk{max-width:760px;margin:auto;padding:20px 16px 96px;color:#172631}
+.cisqr-desk .cisqr-desk-head{display:flex;align-items:center;gap:12px;margin:0 0 18px}
+.cisqr-desk .cisqr-desk-head h1{margin:0;font-size:1.6rem}
+.cisqr-desk .cisqr-back{width:42px;height:42px;padding:0;border:1px solid #cbd5dc;border-radius:50%;background:#fff;color:#172631;font-size:1.35rem}
+.cisqr-desk button.cisqr-scan-tile{width:100%;min-height:180px;display:grid;place-items:center;align-content:center;gap:8px;background:#102b38;color:#fff;border:0;border-radius:24px;padding:24px 14px;text-align:center}
+.cisqr-scan-tile svg{width:52px;height:52px;color:#91e3d0}
+.cisqr-scan-tile span{font-size:1.25rem;font-weight:800}
+.cisqr-scan-tile small{font-size:.88rem;color:#d0e5eb}
+.cisqr-desk .cisqr-search{display:flex;align-items:center;border:1px solid #cbd5dc;background:#fff;border-radius:14px;margin:16px 0 0;overflow:hidden}
+.cisqr-desk .cisqr-search input{border:0;border-radius:0;flex:1;min-width:0;padding:12px;color:#172631;background:#fff;font-size:16px}
+.cisqr-desk .cisqr-search button{border:0;padding:8px 12px;background:#fff;color:#102b38}
+.cisqr-search svg{display:block;width:23px;height:23px}
+.cisqr-visually-hidden{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
+.cisqr-desk :focus-visible{outline:2px solid #087c6c;outline-offset:2px}
+.cisqr-desk #cisqr-adv-detail:not(:empty){padding:16px;background:#f1f6f7;border-radius:16px;margin-top:12px}
+.cisqr-desk #cisqr-adv-status:empty{display:none}
+.cisqr-desk h2{font-size:1.12rem;margin:22px 0 10px}
+.cisqr-ledger details{border-bottom:1px solid #d7e0e5}
+.cisqr-ledger summary{padding:14px 0;cursor:pointer}
+.cisqr-ledger summary span{margin-left:8px;font-size:.8rem}
+.cisqr-ledger-body{padding:0 0 12px 16px}
