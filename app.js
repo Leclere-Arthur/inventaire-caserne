@@ -1137,7 +1137,7 @@ let minuteurVerificationMiseAJour =
  * Elle permet de détecter une nouvelle version même si seul app.js?v=peremptions-20261031-v5 change.
  */
 const VERSION_APPLICATION_JS =
-    "recherche-materiel-sans-accents";
+    "multi-rattachements-vsav";
 
 async function verifierNouvelleVersionAppJs() {
 
@@ -5595,6 +5595,7 @@ function normaliserMateriel(materiel, index) {
         gere_stock_pharmacie: m.gere_stock_pharmacie !== false,
         autoriser_depassement_stock: m.autoriser_depassement_stock === true,
         inventaire_vsav_materiel_id: m.inventaire_vsav_materiel_id || null,
+        autres_inventaire_vsav_materiel_ids: Array.isArray(m.autres_inventaire_vsav_materiel_ids) ? m.autres_inventaire_vsav_materiel_ids : [],
 
         stock:
             Math.max(
@@ -6932,6 +6933,7 @@ function empreinteMetadonneesMateriel(materiel) {
         gere_stock_pharmacie: materiel.gere_stock_pharmacie !== false,
         autoriser_depassement_stock: materiel.autoriser_depassement_stock === true,
         inventaire_vsav_materiel_id: materiel.inventaire_vsav_materiel_id || null,
+        autres_inventaire_vsav_materiel_ids: Array.isArray(materiel.autres_inventaire_vsav_materiel_ids) ? materiel.autres_inventaire_vsav_materiel_ids : [],
         minimum: Math.max(0, Math.floor(Number(materiel.minimum || 0))),
         emplacement: String(materiel.emplacement || "")
     });
@@ -7024,7 +7026,7 @@ async function recupererDonneesSupabase() {
         supabase.from("categories").select("id,nom,parent_id,ordre"),
         supabase
             .from("materiels")
-            .select("id,nom,reference,description,stock,minimum,emplacement,gere_stock_pharmacie,autoriser_depassement_stock,inventaire_vsav_materiel_id"),
+            .select("id,nom,reference,description,stock,minimum,emplacement,gere_stock_pharmacie,autoriser_depassement_stock,inventaire_vsav_materiel_id,autres_inventaire_vsav_materiel_ids"),
         supabase
             .from("materiel_categories")
             .select("materiel_id,categorie_id"),
@@ -7157,6 +7159,7 @@ function convertirDonneesSupabaseEnDonneesApplication(donnees) {
             gere_stock_pharmacie: materiel.gere_stock_pharmacie !== false,
         autoriser_depassement_stock: materiel.autoriser_depassement_stock === true,
             inventaire_vsav_materiel_id: materiel.inventaire_vsav_materiel_id || null,
+        autres_inventaire_vsav_materiel_ids: Array.isArray(materiel.autres_inventaire_vsav_materiel_ids) ? materiel.autres_inventaire_vsav_materiel_ids : [],
             stock: Math.max(0, Math.floor(Number(materiel.stock || 0))),
             minimum: Math.max(0, Math.floor(Number(materiel.minimum || 0))),
             emplacement: String(materiel.emplacement || ""),
@@ -7554,6 +7557,7 @@ async function envoyerDonneesLocalesVersSupabase() {
             gere_stock_pharmacie: materiel.gere_stock_pharmacie !== false,
         autoriser_depassement_stock: materiel.autoriser_depassement_stock === true,
             inventaire_vsav_materiel_id: materiel.inventaire_vsav_materiel_id || null,
+        autres_inventaire_vsav_materiel_ids: Array.isArray(materiel.autres_inventaire_vsav_materiel_ids) ? materiel.autres_inventaire_vsav_materiel_ids : [],
             minimum: Math.max(0, Math.floor(Number(materiel.minimum || 0))),
             emplacement: String(materiel.emplacement || ""),
         };
@@ -18953,7 +18957,7 @@ function afficherFormulaireMateriel(
                 <label style="display:flex;align-items:center;gap:10px"><input id="autoriser-depassement-stock" type="checkbox" ${materiel?.autoriser_depassement_stock === true ? 'checked' : ''} style="width:auto"> Autoriser l’enregistrement sans stock suffisant</label>
                 <p>La réserve est utilisée en premier. Seule la quantité manquante apparaît dans Suivi VSAV.</p>
                 <p>Sans réserve pharmacie : l’utilisation est signalée dans Suivi VSAV jusqu’au réarmement.</p>
-                <div id="vsav-lien-groupe"><label>Matériel correspondant dans l’inventaire VSAV<input type="hidden" id="inventaire-vsav-lien" value="${echapperHTML(materiel?.inventaire_vsav_materiel_id||'')}"></label><div id="vsav-lien-selecteur"></div><p id="vsav-lien-statut" role="status"></p></div>
+                <div id="vsav-lien-groupe"><label>Matériels correspondants dans l’inventaire VSAV<input type="hidden" id="inventaire-vsav-lien" value="${echapperHTML(materiel?.inventaire_vsav_materiel_id||'')}"></label><div id="vsav-lien-selecteur"></div><p id="vsav-lien-statut" role="status"></p></div>
                 <label>
                     Quantité en stock
                 </label>
@@ -19147,7 +19151,10 @@ function enregistrerMateriel() {
 
     const gereStock = document.getElementById("gere-stock-pharmacie")?.checked !== true;
     const depassement = gereStock && document.getElementById("autoriser-depassement-stock")?.checked === true;
-    const lienVSAV = gereStock && !depassement ? null : document.getElementById("inventaire-vsav-lien")?.value || null;
+    const liensVSAV = [...new Set(JSON.parse(
+        document.getElementById("inventaire-vsav-lien")?.dataset.liens || "[]"
+    ))];
+    const lienVSAV = liensVSAV[0] || null;
     const nom =
         document.getElementById(
             "nom-materiel"
@@ -19300,6 +19307,7 @@ function enregistrerMateriel() {
         materiel.gere_stock_pharmacie = gereStock;
         materiel.autoriser_depassement_stock = depassement;
         materiel.inventaire_vsav_materiel_id = lienVSAV;
+        materiel.autres_inventaire_vsav_materiel_ids = liensVSAV.slice(1);
         materiel.nom =
             nom;
 
@@ -19392,6 +19400,7 @@ function enregistrerMateriel() {
         gere_stock_pharmacie: gereStock,
         autoriser_depassement_stock: depassement,
         inventaire_vsav_materiel_id: lienVSAV,
+        autres_inventaire_vsav_materiel_ids: liensVSAV.slice(1),
 
         id:
             genererUUID(),

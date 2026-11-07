@@ -21,18 +21,23 @@ async function initialiserLien(m){
  stylesVSAV();
  const select=document.getElementById('inventaire-vsav-lien'),groupe=document.getElementById('vsav-lien-groupe'),c=document.getElementById('gere-stock-pharmacie'),statut=document.getElementById('vsav-lien-statut'),box=document.getElementById('vsav-lien-selecteur');if(!select||!c||!box)return;
  const depassement=document.getElementById('autoriser-depassement-stock');
- const visibilite=()=>{if(depassement)depassement.disabled=c.checked;groupe.hidden=!c.checked&&!depassement?.checked;};
+ const visibilite=()=>{if(depassement)depassement.disabled=c.checked;groupe.hidden=false;};
  c.addEventListener('change',visibilite);depassement?.addEventListener('change',visibilite);visibilite();
  const owner=String(utilisateurConnecte?.id||''),key='cis-vsav-correspondances:'+owner;
+ const liens=new Set([m?.inventaire_vsav_materiel_id,...(m?.autres_inventaire_vsav_materiel_ids||[])].filter(Boolean).map(String));
+ const synchroniser=()=>{select.value=[...liens][0]||'';select.dataset.liens=JSON.stringify([...liens]);};
+ synchroniser();
  let rows=[],vehicle=null,zone=null,terme='';
  const normaliser=x=>String(x||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLocaleLowerCase('fr');
  box.innerHTML='<div data-vsav-selection aria-live="polite"></div><label for="vsav-recherche-lien">Rechercher un matériel</label><input class="vsav-recherche" id="vsav-recherche-lien" type="search" placeholder="Nom du matériel ou du coffre" autocomplete="off"><div data-vsav-parcours></div>';
  const choix=box.querySelector('[data-vsav-parcours]'),selection=box.querySelector('[data-vsav-selection]');
  const bouton=(label,action,valeur,detail='',choisi=false)=>`<button type="button" class="vsav-choix" data-lien-action="${action}" data-lien-valeur="${esc(valeur)}" ${action==='choisir'?`aria-pressed="${choisi}"`:''}><strong>${esc(label)}</strong>${detail?`<small>${esc(detail)}</small>`:''}</button>`;
  function render(){
- const courant=rows.find(r=>String(r.id)===select.value);
- selection.innerHTML=select.value?`<div class="vsav-selection"><strong>${esc(courant?.nom||'Correspondance enregistrée')}</strong><small>${courant?esc(courant.vehicule+' › '+courant.zone+' · '+courant.quantite+' prévu(s)'):'Chargement de son emplacement…'}</small><button type="button" class="vsav-choix" data-lien-action="effacer">Retirer le lien</button></div>`:'<p>Aucun matériel lié.</p>';
- const items=rs=>rs.map(r=>bouton(r.nom,'choisir',r.id,r.vehicule+' › '+r.zone+' · '+r.quantite+' prévu(s)',String(r.id)===select.value)).join('');
+ selection.innerHTML=liens.size?[...liens].map(id=>{
+ const courant=rows.find(r=>String(r.id)===id);
+ return `<div class="vsav-selection"><strong>${esc(courant?.nom||'Correspondance enregistrée')}</strong><small>${courant?esc(courant.vehicule+' › '+courant.zone+' · '+courant.quantite+' prévu(s)'):esc(id)}</small><button type="button" class="vsav-choix" data-lien-action="effacer" data-lien-valeur="${esc(id)}">Retirer ce rattachement</button></div>`;
+ }).join(''):'<p>Aucun matériel lié. Sélectionne un ou plusieurs emplacements.</p>';
+ const items=rs=>rs.map(r=>bouton(r.nom,'choisir',r.id,r.vehicule+' › '+r.zone+' · '+r.quantite+' prévu(s)',liens.has(String(r.id)))).join('');
  if(terme){const mots=normaliser(terme).trim().split(/\s+/);const trouves=rows.filter(r=>mots.every(mot=>normaliser(r.nom+' '+r.zone+' '+r.vehicule).includes(mot)));choix.innerHTML=items(trouves)||'<p>Aucun matériel trouvé.</p>';return;}
  if(vehicle===null){choix.innerHTML=[...new Set(rows.map(r=>r.vehicule))].map(v=>bouton(v,'vehicule',v,'Choisir un coffre')).join('')||'<p>Aucun matériel disponible.</p>';return;}
  const back=bouton('← '+(zone===null?'Véhicules':vehicle),'retour','');
@@ -40,7 +45,7 @@ async function initialiserLien(m){
  choix.innerHTML=back+'<h4>'+esc(zone)+'</h4>'+items(rows.filter(r=>r.vehicule===vehicle&&r.zone===zone));
  }
  box.querySelector('input[type=search]').addEventListener('input',e=>{terme=e.target.value;render();});
- box.addEventListener('click',e=>{const b=e.target.closest('[data-lien-action]');if(!b)return;const v=b.dataset.lienValeur;switch(b.dataset.lienAction){case 'vehicule':vehicle=v;zone=null;break;case 'zone':zone=v;break;case 'retour':if(zone!==null)zone=null;else vehicle=null;break;case 'choisir':if(!rows.some(r=>String(r.id)===v))return;select.value=v;select.dispatchEvent(new Event('change',{bubbles:true}));break;case 'effacer':select.value='';select.dispatchEvent(new Event('change',{bubbles:true}));break;}render();});
+ box.addEventListener('click',e=>{const b=e.target.closest('[data-lien-action]');if(!b)return;const v=b.dataset.lienValeur;switch(b.dataset.lienAction){case 'vehicule':vehicle=v;zone=null;break;case 'zone':zone=v;break;case 'retour':if(zone!==null)zone=null;else vehicle=null;break;case 'choisir':if(!rows.some(r=>String(r.id)===v))return;if(liens.has(v))liens.delete(v);else liens.add(v);synchroniser();select.dispatchEvent(new Event('change',{bubbles:true}));break;case 'effacer':liens.delete(v);synchroniser();select.dispatchEvent(new Event('change',{bubbles:true}));break;}render();});
  const afficher=data=>{rows=Array.isArray(data)?data:[];render();};
  render();
  try{let cached=null;try{cached=JSON.parse(localStorage.getItem(key)||'null');}catch(_){}if(Array.isArray(cached))afficher(cached);if(!navigator.onLine){statut.textContent='Liste enregistrée sur cet appareil.';return;}const data=await rpc('vsav_correspondances_inventaire');if(!select.isConnected||owner!==String(utilisateurConnecte?.id||''))return;afficher(data);try{localStorage.setItem(key,JSON.stringify(rows));}catch(_){}statut.textContent='';}catch(e){if(statut.isConnected&&owner===String(utilisateurConnecte?.id||''))statut.textContent='Liste indisponible : '+(e.message||'réessaie.');}
