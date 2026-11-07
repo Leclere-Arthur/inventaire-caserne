@@ -2,8 +2,9 @@
 importScripts("./notifications-history.js?v=pharmacie-vsav-prod-20261030-v1");
 
 // Nouvelle version : force le renouvellement du cache applicatif sans effacer les données locales.
-const CACHE_NAME = "cis-compteurs-coherence-v3";
+const CACHE_NAME = "cis-caserne-publication-annonce";
 const FICHIERS_APPLICATION = [
+ "./caserne-annonces.js?v=1",
  "./compteurs-rubriques.js?v=coherence-rubriques",
  "./suivi-materiel.js?v=compteurs-rubriques",
  "./vsav-retour-emplacements.js?v=suivi-hopital",
@@ -12,7 +13,7 @@ const FICHIERS_APPLICATION = [
  "./peremptions-controle.js?v=1","./inventaire-technique.js?v=sous-coffres-prod-20261031-v1","./inventaire-technique.css",
  "./","./index.html","./scan-peremption.js?v=auto-datamatrix-v16","./vendor/zxing-reader.js","./vendor/zxing_reader.wasm",
  "./vsav-sans-stock.js?v=compteurs-rubriques","./suivi-vsav.js?v=pharmacie-vsav-prod-20261030-v1",
- "./app.js?v=compteurs-coherents-historique","./pharmacie-categories.js?v=cis-qr-prod-v6",
+ "./app.js?v=caserne-publication-annonce","./pharmacie-categories.js?v=cis-qr-prod-v6",
  "./formations-commun.js","./formations.js?v=compteurs-rubriques","./formations.css",
  "./travail-equipe.js?v=travail-droits-v1","./fiche-garde.js?v=sous-coffres-prod-20261031-v1","./fiche-garde-pdf.js","./fiche-garde.css","./fiche-fin-garde-modele.pdf",
  "./pilotage-suivi.js","./pilotage-mesures.js","./messages-application.js","./nettoyage-sync.js","./notifications-history.js",

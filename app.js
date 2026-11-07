@@ -1137,7 +1137,7 @@ let minuteurVerificationMiseAJour =
  * Elle permet de détecter une nouvelle version même si seul app.js?v=peremptions-20261031-v5 change.
  */
 const VERSION_APPLICATION_JS =
-    "compteurs-coherents-historique";
+    "caserne-publication-annonce";
 
 async function verifierNouvelleVersionAppJs() {
 
@@ -8502,6 +8502,8 @@ function obtenirRubriquesCaserne() {
 }
 
 function utilisateurPeutVoirRubriqueCaserne(rubrique) {
+    if (!rubrique) return false;
+    if (utilisateurEstSPVAdmin() || utilisateurAPermission(rubrique[3])) return true;
     if (!utilisateurAPermission("acces_espace_caserne")) return false;
     if (rubrique[0] === "amical" && utilisateurAPermission("acces_amical_membre")) return true;
     return utilisateurAPermission(rubrique[2]) || utilisateurAPermission(rubrique[3]);
@@ -9594,7 +9596,7 @@ function cartePublicationCaserne(p, options = {}) {
             ${boutonCalendrierCaserne(titre, p.date_evenement, p.description || "", 60, "Ajouter l'événement au calendrier")}
             ${p.date_preparation ? boutonCalendrierCaserne(`${titre} · Préparation`, p.date_preparation, p.description || "", 60, "Ajouter la préparation au calendrier") : ""}
         </div>` : ""}
-        ${options.admin ? `<div class="caserne-actions-admin"><button type="button" onclick="CISEquipeEvolution.reponses('${p.id}','${p.type_publication}')">Voir toutes les réponses</button><button type="button" class="caserne-export-pdf bouton-pdf-icone" onclick="exporterPublicationCasernePDF('${p.id}')" aria-label="Exporter en PDF" title="Exporter en PDF">${iconePDFHTML()}</button><button type="button" onclick="modifierPublicationCaserne('${p.id}','${p.type_publication}')">Modifier</button><button type="button" onclick="supprimerPublicationCaserne('${p.id}','${p.type_publication}')">Supprimer</button></div>` : ""}
+        ${options.admin ? `<div class="caserne-actions-admin"><button type="button" onclick="CISEquipeEvolution.reponses('${p.id}','${p.type_publication}')">Voir toutes les réponses</button><button type="button" class="caserne-export-pdf bouton-pdf-icone" onclick="exporterPublicationCasernePDF('${p.id}')" aria-label="Exporter en PDF" title="Exporter en PDF">${iconePDFHTML()}</button><button type="button" onclick="CISCaserneAnnonces.annoncer('${p.id}',this)">Envoyer l’annonce</button><button type="button" onclick="modifierPublicationCaserne('${p.id}','${p.type_publication}')">Modifier</button><button type="button" onclick="supprimerPublicationCaserne('${p.id}','${p.type_publication}')">Supprimer</button></div>` : ""}
     </article>`;
 }
 
@@ -9673,7 +9675,9 @@ async function televerserPhotosCaserne(publicationId, fichiers, dossier = "caser
     return urls;
 }
 
+let creationPublicationCaserneEnCours = false;
 async function creerPublicationModuleCaserne(type) {
+    if (creationPublicationCaserneEnCours) return;
     const rubrique = obtenirRubriquesCaserne().find(r => r[0] === type);
     if (!rubrique || (!utilisateurEstSPVAdmin() && !utilisateurAPermission(rubrique[3]))) { alert("Accès non autorisé."); return; }
     const supabase = obtenirClientSupabase();
@@ -9700,26 +9704,25 @@ async function creerPublicationModuleCaserne(type) {
     const bouton = document.querySelector(".caserne-admin-publication .caserne-bouton-admin-principal");
     if (bouton) { bouton.disabled = true; bouton.textContent = "Publication…"; }
     let publicationId = null;
+    const comptePublication = String(utilisateurConnecte?.id || "");
+    creationPublicationCaserneEnCours = true;
     try {
-        const {data, error} = await supabase.rpc("creer_publication_caserne", {
-            p_type_publication:type,
-            p_titre:titre,
-            p_description:description,
-            p_sous_type:sousType,
-            p_visibilite:visibilite,
-            p_date_evenement:dateEvenement,
-            p_date_preparation:datePreparation,
-            p_demande_reponse:demandeReponse,
-            p_demande_reponse_preparation:demandeReponsePreparation
+        const donneesPublication = {
+            type, titre, description, sous_type:sousType, visibilite,
+            date_evenement:dateEvenement, date_preparation:datePreparation,
+            demande_reponse:demandeReponse, demande_reponse_preparation:demandeReponsePreparation,
+            notification_auto:notificationAuto, notification_delai_minutes:notificationDelaiMinutes,
+            notification_creation:notificationCreation
+        };
+        const {data,error} = await supabase.rpc("cis_caserne_publier", {
+            p_cle: CISCaserneAnnonces.identifiant(donneesPublication),
+            p_donnees: donneesPublication
         });
         if (error) throw error;
         publicationId = data;
-        const {error: rappelError} = await supabase.rpc("configurer_rappel_publication_caserne", {
-            p_publication_id: publicationId,
-            p_notification_auto: notificationAuto,
-            p_notification_delai_minutes: notificationDelaiMinutes
-        });
-        if (rappelError) throw rappelError;
+        if (comptePublication !== String(utilisateurConnecte?.id || "")) return;
+        let avertissementPhotos = "";
+        try {
         if (fichiers.length) {
             const photos = await televerserPhotosCaserne(publicationId, fichiers, cfg.dossier);
             if (photos.length) {
@@ -9727,26 +9730,33 @@ async function creerPublicationModuleCaserne(type) {
                 if (photoError) throw photoError;
             }
         }
+        } catch (erreurPhotos) {
+            avertissementPhotos = " Les photos n’ont pas toutes été enregistrées : " + (erreurPhotos.message || "réessaie depuis Modifier.");
+        }
+        let annonce = "";
         if (notificationCreation) {
             try {
-                const libelleRubrique = obtenirLibelleTypeCaserne(type);
-                await envoyerNotificationPush(
-                    `Nouvelle actualité · ${libelleRubrique}`,
-                    `${titre || cfg.titre || libelleRubrique} · Nouvelle actualité disponible`,
-                    `caserne_${type}`
-                );
+                const resultat = await CISCaserneAnnonces.envoyer(publicationId);
+                annonce = " " + CISCaserneAnnonces.bilan(resultat);
             } catch (erreurNotification) {
                 console.error("Notification de création :", erreurNotification);
-                alert("La publication est créée, mais la notification n'a pas pu être envoyée : " + (erreurNotification?.message || "erreur inconnue"));
+                annonce = " Annonce non envoyée : " + (erreurNotification?.message || "erreur inconnue") +
+                    ". Utilise « Envoyer l’annonce » sur l’événement pour réessayer.";
             }
         }
-        alert("Publication enregistrée.");
+        if (comptePublication !== String(utilisateurConnecte?.id || "")) return;
+        alert("Publication enregistrée." + avertissementPhotos + annonce);
+        void window.CISCompteurs?.actualiser(true);
         await afficherRubriqueCaserne(type);
+        if (comptePublication === String(utilisateurConnecte?.id || "")) CISCaserneAnnonces.confirmerIdentifiant();
     } catch (erreur) {
         console.error(erreur);
-        if (publicationId) { try { await supabase.rpc("supprimer_publication_caserne", {p_publication_id:publicationId}); } catch (_) {} }
-        alert("Impossible de publier : " + (erreur?.message || "erreur inconnue"));
-        if (bouton) { bouton.disabled = false; bouton.textContent = cfg.action; }
+        alert(publicationId
+            ? "La publication est enregistrée. Une étape suivante a échoué : " + (erreur?.message || "erreur inconnue")
+            : "Impossible de publier : " + (erreur?.message || "erreur inconnue"));
+    } finally {
+        creationPublicationCaserneEnCours = false;
+        if (bouton?.isConnected) { bouton.disabled = false; bouton.textContent = cfg.action; }
     }
 }
 
