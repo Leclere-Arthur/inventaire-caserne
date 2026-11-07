@@ -1137,7 +1137,7 @@ let minuteurVerificationMiseAJour =
  * Elle permet de détecter une nouvelle version même si seul app.js?v=peremptions-20261031-v5 change.
  */
 const VERSION_APPLICATION_JS =
-    "evenements-pdf-mots-cles";
+    "menage-plan-zones";
 
 async function verifierNouvelleVersionAppJs() {
 
@@ -22510,7 +22510,11 @@ function initialiserStyleEspaceGardeUtilisateur(){
       .plan-menage{position:relative;width:100%;aspect-ratio:1200/850;overflow:hidden;border-radius:9px;background:#fff}
       .plan-menage img,.plan-menage canvas{display:block;width:100%;height:100%;object-fit:contain;position:relative;z-index:1}
       .plan-menage-zone{appearance:none;-webkit-appearance:none;display:block;position:absolute;margin:0;padding:0;border:3px solid transparent;border-radius:7px;box-sizing:border-box;pointer-events:auto;cursor:pointer;z-index:20;background:transparent;transition:background .15s,border-color .15s}
-      .plan-menage-zone.actif{background:#24c95f!important;border:4px solid #087c2b!important;opacity:.72!important;box-shadow:inset 0 0 0 999px rgba(36,201,95,.18)!important}
+      /* Les boutons du plan suivent les dimensions des pièces, sans taille tactile minimale. */
+      #app .plan-menage .plan-menage-zone{min-width:0!important;min-height:0!important;min-inline-size:0!important;min-block-size:0!important;padding:0!important;margin:0!important;box-sizing:border-box!important;border:0!important;line-height:0!important;font-size:0!important;transform:none!important;box-shadow:none!important;overflow:hidden;outline-offset:-2px}
+      #app .plan-menage .plan-menage-zone.actif{background:rgba(36,201,95,.72)!important;border:0!important;opacity:1!important;box-shadow:inset 0 0 0 2px #087c2b!important}
+      #app .plan-menage .plan-menage-zone:focus-visible{outline:2px solid #126ab3}
+
       .pm-reunion{left:4.6%;top:6.5%;width:20.5%;height:44.5%}.pm-foyer{left:26.2%;top:6.5%;width:17.8%;height:21.8%}.pm-pmr{left:45.2%;top:6.5%;width:7.2%;height:21.8%}.pm-femme{left:53.7%;top:6.5%;width:14.1%;height:21.8%}.pm-homme{left:69%;top:6.5%;width:27%;height:21.8%}
       .pm-amical{left:4.6%;top:53%;width:20.5%;height:8%}.pm-radio{left:4.6%;top:62.5%;width:20.5%;height:8%}.pm-bureau{left:4.6%;top:72.5%;width:20.5%;height:21.5%}.pm-remise{left:26.2%;top:30%;width:49%;height:64%}.pm-vsav{left:76.6%;top:30%;width:19.4%;height:64%}
 
