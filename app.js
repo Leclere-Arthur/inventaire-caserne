@@ -1137,7 +1137,7 @@ let minuteurVerificationMiseAJour =
  * Elle permet de détecter une nouvelle version même si seul app.js?v=peremptions-20261031-v5 change.
  */
 const VERSION_APPLICATION_JS =
-    "multi-rattachements-vsav";
+    "retour-emplacements-vsav";
 
 async function verifierNouvelleVersionAppJs() {
 
@@ -5703,6 +5703,9 @@ function normaliserIntervention(intervention) {
 
                     materielId:
                         consommation.materielId,
+                    sansStockPharmacie: consommation.sansStockPharmacie === true,
+                    depassementStock: consommation.depassementStock === true,
+                    emplacementsManquants: consommation.emplacementsManquants || [],
 
                     materiel:
                         String(
@@ -7035,7 +7038,7 @@ async function recupererDonneesSupabase() {
             .select("id,date,numero,created_by,created_by_prenom,created_by_nom,created_at"),
         supabase
             .from("consommations")
-            .select("id,intervention_id,materiel_id,materiel_nom,quantite,sans_stock_pharmacie,depassement_stock")
+            .select("id,intervention_id,materiel_id,materiel_nom,quantite,sans_stock_pharmacie,depassement_stock,emplacements_manquants")
     ]);
 
     resultats.forEach(function (resultat) {
@@ -7187,6 +7190,7 @@ function convertirDonneesSupabaseEnDonneesApplication(donnees) {
             materielId: String(consommation.materiel_id),
             sansStockPharmacie: consommation.sans_stock_pharmacie === true,
             depassementStock: consommation.depassement_stock === true,
+            emplacementsManquants: consommation.emplacements_manquants || [],
             materiel: String(consommation.materiel_nom || "Matériel"),
             quantite: Math.max(
                 0,
@@ -7691,6 +7695,7 @@ async function envoyerDonneesLocalesVersSupabase() {
                 ),
                 sans_stock_pharmacie: consommation.sansStockPharmacie === true,
                 depassement_stock: consommation.depassementStock === true,
+                emplacements_manquants: consommation.emplacementsManquants || [],
                 quantite: Math.max(
                     1,
                     Math.floor(
@@ -12933,14 +12938,32 @@ async function validerRetourIntervention() {
     }
 
 
+    let emplacementsManquants;
+    validationRetourInterventionEnCours = true;
+    try {
+        emplacementsManquants = await window.CISVSAVEmplacements.preparer(
+            ids.map(id => ({
+                materiel: materiels.find(m => String(m.id) === String(id)),
+                quantite: Number(consommationsEnCours[id])
+            })).filter(x => x.materiel && x.quantite > 0)
+        );
+        if (emplacementsManquants === null) {
+            validationRetourInterventionEnCours = false;
+            return;
+        }
+    } catch (error) {
+        validationRetourInterventionEnCours = false;
+        alert(error.message || "Impossible de vérifier les emplacements VSAV.");
+        return;
+    }
+
     if (
         !await afficherConfirmationCIS(
             "Confirmer l'enregistrement du retour d'intervention ?"
         )
     ) {
-
+        validationRetourInterventionEnCours = false;
         return;
-
     }
 
 
@@ -13013,6 +13036,7 @@ async function validerRetourIntervention() {
             if (!depassementStock) preparerNotificationStock(materiel, ancienStock);
 
             consommations.push({
+                emplacementsManquants: emplacementsManquants[String(materiel.id)] || [],
                 depassementStock,
                 sansStockPharmacie: materiel.gere_stock_pharmacie === false,
 

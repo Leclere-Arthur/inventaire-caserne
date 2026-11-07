@@ -264,5 +264,5 @@ async function traiterReapprovisionnement(ajouts) {
  return true;
 }
 
-g.CISQR={collecterRearmement:async(id,quantite)=>{await config(true);return estSuivi(id)?collecterUnitesQR(id,quantite,true):[];},ouvrir,ouvrirAvance,injectAdmin,injectFormulaire,traiterReapprovisionnement};
+g.CISQR={scannerUtilise:callback=>scanner(callback,true),collecterRearmement:async(id,quantite)=>{await config(true);return estSuivi(id)?collecterUnitesQR(id,quantite,true):[];},ouvrir,ouvrirAvance,injectAdmin,injectFormulaire,traiterReapprovisionnement};
 })(window);
