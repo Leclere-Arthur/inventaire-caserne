@@ -1137,7 +1137,7 @@ let minuteurVerificationMiseAJour =
  * Elle permet de détecter une nouvelle version même si seul app.js?v=peremptions-20261031-v5 change.
  */
 const VERSION_APPLICATION_JS =
-    "caserne-publication-annonce";
+    "evenements-pdf-mots-cles";
 
 async function verifierNouvelleVersionAppJs() {
 
@@ -5598,6 +5598,7 @@ function normaliserMateriel(materiel, index) {
         autres_inventaire_vsav_materiel_ids: Array.isArray(m.autres_inventaire_vsav_materiel_ids) ? m.autres_inventaire_vsav_materiel_ids : [],
         peut_laisser_hopital: m.peut_laisser_hopital === true,
         masquer_inventaire: m.masquer_inventaire === true,
+        mots_cles: lireMotsClesMateriel(m.mots_cles),
 
         stock:
             Math.max(
@@ -6941,6 +6942,7 @@ function empreinteMetadonneesMateriel(materiel) {
         autres_inventaire_vsav_materiel_ids: Array.isArray(materiel.autres_inventaire_vsav_materiel_ids) ? materiel.autres_inventaire_vsav_materiel_ids : [],
         peut_laisser_hopital: materiel.peut_laisser_hopital === true,
         masquer_inventaire: materiel.masquer_inventaire === true,
+        mots_cles: lireMotsClesMateriel(materiel.mots_cles),
         minimum: Math.max(0, Math.floor(Number(materiel.minimum || 0))),
         emplacement: String(materiel.emplacement || "")
     });
@@ -7033,7 +7035,7 @@ async function recupererDonneesSupabase() {
         supabase.from("categories").select("id,nom,parent_id,ordre"),
         supabase
             .from("materiels")
-            .select("id,nom,reference,description,stock,minimum,emplacement,gere_stock_pharmacie,autoriser_depassement_stock,inventaire_vsav_materiel_id,autres_inventaire_vsav_materiel_ids,peut_laisser_hopital,masquer_inventaire"),
+            .select("id,nom,reference,description,stock,minimum,emplacement,gere_stock_pharmacie,autoriser_depassement_stock,inventaire_vsav_materiel_id,autres_inventaire_vsav_materiel_ids,peut_laisser_hopital,masquer_inventaire,mots_cles"),
         supabase
             .from("materiel_categories")
             .select("materiel_id,categorie_id"),
@@ -7169,6 +7171,7 @@ function convertirDonneesSupabaseEnDonneesApplication(donnees) {
         autres_inventaire_vsav_materiel_ids: Array.isArray(materiel.autres_inventaire_vsav_materiel_ids) ? materiel.autres_inventaire_vsav_materiel_ids : [],
         peut_laisser_hopital: materiel.peut_laisser_hopital === true,
         masquer_inventaire: materiel.masquer_inventaire === true,
+        mots_cles: lireMotsClesMateriel(materiel.mots_cles),
             stock: Math.max(0, Math.floor(Number(materiel.stock || 0))),
             minimum: Math.max(0, Math.floor(Number(materiel.minimum || 0))),
             emplacement: String(materiel.emplacement || ""),
@@ -7570,6 +7573,7 @@ async function envoyerDonneesLocalesVersSupabase() {
         autres_inventaire_vsav_materiel_ids: Array.isArray(materiel.autres_inventaire_vsav_materiel_ids) ? materiel.autres_inventaire_vsav_materiel_ids : [],
         peut_laisser_hopital: materiel.peut_laisser_hopital === true,
         masquer_inventaire: materiel.masquer_inventaire === true,
+        mots_cles: lireMotsClesMateriel(materiel.mots_cles),
             minimum: Math.max(0, Math.floor(Number(materiel.minimum || 0))),
             emplacement: String(materiel.emplacement || ""),
         };
@@ -9056,6 +9060,105 @@ function iconePDFHTML() {
     </svg>`;
 }
 
+function creerFicheEvenementPDF(PDF, publication) {
+    const doc = new PDF({orientation:"portrait", unit:"mm", format:"a4"});
+    const couleurs = {bleu:[36,61,83], texte:[29,52,72], gris:[110,119,130], fond:[242,246,249], ligne:[220,226,232]};
+    const type = obtenirLibelleTypeCaserne(publication.type_publication);
+    const titre = publication.titre || obtenirConfigurationPublicationCaserne(publication.type_publication).titre;
+    const txt = valeur => texteCompatiblePDF(String(valeur || ""));
+    let y;
+    function entete() {
+        doc.setTextColor(...couleurs.texte);
+        doc.setFont("helvetica","bold"); doc.setFontSize(10);
+        doc.text("CIS LE CHESNE",14,19);
+        doc.setFontSize(8); doc.text("FICHE ÉVÉNEMENT",196,19,{align:"right"});
+        doc.setDrawColor(...couleurs.ligne); doc.line(14,24,196,24);
+        y=32;
+    }
+    function place(hauteur) {
+        if (y+hauteur>276) {doc.addPage(); entete();}
+    }
+    function paragraphe(texte, taille=10, gras=false, couleur=couleurs.texte, largeur=172, x=19) {
+        doc.setFont("helvetica",gras?"bold":"normal"); doc.setFontSize(taille);
+        const lignes=doc.splitTextToSize(txt(texte),largeur);
+        const pas=taille*0.45;
+        for(const ligne of lignes) {
+            place(pas+2);
+            doc.setFont("helvetica",gras?"bold":"normal");doc.setFontSize(taille);
+            doc.setTextColor(...couleur);doc.text(ligne,x,y);y+=pas;
+        }
+    }
+    function bandeau(libelle) {
+        place(18);doc.setFillColor(...couleurs.bleu);doc.roundedRect(14,y,182,9,1.5,1.5,"F");
+        doc.setFont("helvetica","bold");doc.setFontSize(9);doc.setTextColor(255,255,255);
+        doc.text(txt(libelle),18,y+6);y+=15;
+    }
+    entete();
+    paragraphe(titre,16,true,couleurs.texte,182,14);y+=4;
+    const infos=[["TYPE",type]];
+    if(publication.sous_type)infos.push(["SOUS-TYPE",publication.sous_type]);
+    if(publication.date_evenement)infos.push(["DATE DE L'ÉVÉNEMENT",formaterDateHeureCaserne(publication.date_evenement)]);
+    if(publication.date_preparation)infos.push(["DATE DE PRÉPARATION",formaterDateHeureCaserne(publication.date_preparation)]);
+    for(let index=0; index<infos.length; index+=2) {
+        const cellules=infos.slice(index,index+2).map(([libelle,valeur])=>{
+            doc.setFont("helvetica","normal");doc.setFontSize(10);
+            return {libelle,lignes:doc.splitTextToSize(txt(valeur),80)};
+        });
+        const total=Math.max(...cellules.map(c=>c.lignes.length));
+        // Split exceptionally long metadata across pages as well.
+        for(let offset=0;offset<total;offset+=30){
+            const nombre=Math.min(30,total-offset),hauteur=12+nombre*4.5;
+            place(hauteur+2);doc.setFillColor(...couleurs.fond);doc.roundedRect(14,y,182,hauteur,2,2,"F");
+            cellules.forEach((cellule,colonne)=>{
+                const x=19+colonne*91;
+                doc.setFont("helvetica","bold");doc.setFontSize(7);doc.setTextColor(...couleurs.gris);
+                doc.text(txt(cellule.libelle),x,y+5);
+                doc.setFont("helvetica","normal");doc.setFontSize(10);doc.setTextColor(...couleurs.texte);
+                const extrait=cellule.lignes.slice(offset,offset+30);
+                extrait.forEach((ligne,i)=>doc.text(ligne,x,y+12+i*4.5));
+            });y+=hauteur+2;
+        }
+    }
+    y+=5;
+    if(publication.description){bandeau("INFORMATIONS");paragraphe(publication.description);y+=8;}
+    const reponses=Array.isArray(publication.reponses)?publication.reponses:[];
+    const parties=[
+        {titre:"ÉVÉNEMENT",contexte:"evenement",date:publication.date_evenement,actif:publication.demande_reponse||reponses.some(r=>r.contexte==="evenement")},
+        {titre:"PRÉPARATION",contexte:"preparation",date:publication.date_preparation,actif:!!publication.date_preparation}
+    ].filter(p=>p.actif);
+    for(const partie of parties){
+        const presents=reponses.filter(r=>r.contexte===partie.contexte&&r.reponse==="present")
+            .map(r=>[r.user_prenom,r.user_nom].filter(Boolean).join(" ")||"Utilisateur")
+            .sort((a,b)=>a.localeCompare(b,"fr",{sensitivity:"base"}));
+        place(38);bandeau(partie.titre+" — PERSONNES PRÉSENTES");
+        paragraphe(`${presents.length} personne${presents.length>1?"s":""} présente${presents.length>1?"s":""}`,10,true);
+        if(partie.date)paragraphe(formaterDateHeureCaserne(partie.date),9,false,couleurs.gris);
+        y+=4;
+        if(!presents.length){paragraphe("Aucune personne présente enregistrée.",9,false,couleurs.gris);y+=6;}
+        presents.forEach((nom,index)=>{
+            doc.setFont("helvetica","normal");doc.setFontSize(10);
+            const lignes=doc.splitTextToSize(txt(nom),158);
+            // Normal names use one compact row; unusually long names wrap safely.
+            for(let i=0;i<lignes.length;i++){
+                if(y+10>276){doc.addPage();entete();bandeau(partie.titre+" — PERSONNES PRÉSENTES (SUITE)");}
+                doc.setFillColor(247,249,251);doc.roundedRect(14,y,182,9,1.5,1.5,"F");
+                doc.setFillColor(26,135,80);doc.roundedRect(16,y+1.5,1.6,6,0.7,0.7,"F");
+                doc.setFont("helvetica","normal");doc.setFontSize(9);doc.setTextColor(...couleurs.gris);
+                if(i===0)doc.text(String(index+1),22,y+6);
+                doc.setFontSize(10);doc.setTextColor(...couleurs.texte);doc.text(lignes[i],32,y+6);y+=11;
+            }
+        });y+=5;
+    }
+    const pages=doc.getNumberOfPages();
+    for(let page=1;page<=pages;page++){
+        doc.setPage(page);doc.setDrawColor(...couleurs.ligne);doc.line(14,282,196,282);
+        doc.setFont("helvetica","normal");doc.setFontSize(7);doc.setTextColor(...couleurs.gris);
+        doc.text("CIS LE CHESNE | DOCUMENT DE SUIVI",14,288);
+        doc.text(`Page ${page} / ${pages}`,196,288,{align:"right"});
+    }
+    return doc;
+}
+
 async function exporterPublicationCasernePDF(publicationId, modeMail=false) {
     const publication = window.__publicationsCaserneParId?.[publicationId];
     if (!publication) {
@@ -9072,95 +9175,9 @@ async function exporterPublicationCasernePDF(publicationId, modeMail=false) {
 
     try {
         const jsPDF = await obtenirBibliothequesPDF();
-        const doc = new jsPDF({orientation:"portrait", unit:"mm", format:"a4"});
-        const c = couleurPDF();
         const type = obtenirLibelleTypeCaserne(publication.type_publication);
         const titre = publication.titre || obtenirConfigurationPublicationCaserne(publication.type_publication).titre;
-        let y = ajouterEntetePDF(doc, "FICHE EVENEMENT", `${type} - document de suivi`);
-
-        doc.setTextColor(...c.texte);
-        doc.setFont("helvetica", "bold");
-        doc.setFontSize(16);
-        const titreLignes = doc.splitTextToSize(texteCompatiblePDF(titre), 180);
-        doc.text(titreLignes, 14, y);
-        y += titreLignes.length * 6 + 2;
-
-        const infos = [];
-        if (publication.date_evenement) infos.push(["Date de l'evenement", formaterDateHeureCaserne(publication.date_evenement)]);
-        infos.push(["Type", type]);
-        if (publication.sous_type) infos.push(["Sous-type", publication.sous_type]);
-        if (publication.description) infos.push(["Informations", publication.description]);
-
-        doc.autoTable({
-            startY: y,
-            body: infos.map(l => [texteCompatiblePDF(l[0]), texteCompatiblePDF(l[1])]),
-            theme: "plain",
-            margin: {left:14, right:14},
-            styles: {font:"helvetica", fontSize:9, cellPadding:2.4, textColor:c.texte, valign:"top"},
-            columnStyles: {0:{fontStyle:"bold", cellWidth:42, textColor:c.principal}, 1:{cellWidth:"auto"}},
-            didDrawCell: function(data) {
-                if (data.column.index === 0) {
-                    doc.setDrawColor(...c.ligne);
-                    doc.line(data.cell.x, data.cell.y + data.cell.height, data.cell.x + data.cell.width, data.cell.y + data.cell.height);
-                }
-            }
-        });
-        y = doc.lastAutoTable.finalY + 7;
-
-        const reponses = Array.isArray(publication.reponses) ? publication.reponses : [];
-        const listes = [
-            {
-                titre: "EVENEMENT",
-                date: publication.date_evenement,
-                contexte: "evenement",
-                actif: publication.demande_reponse || reponses.some(r => r.contexte === "evenement")
-            },
-            {
-                titre: "PREPARATION",
-                date: publication.date_preparation,
-                contexte: "preparation",
-                actif: !!publication.date_preparation
-            }
-        ].filter(x => x.actif);
-
-        for (const partie of listes) {
-            const presents = reponses
-                .filter(r => r.contexte === partie.contexte && r.reponse === "present")
-                .map(r => [r.user_prenom, r.user_nom].filter(Boolean).join(" ") || "Utilisateur")
-                .sort((a,b) => a.localeCompare(b, "fr", {sensitivity:"base"}));
-
-            if (y > 245) {
-                doc.addPage();
-                y = ajouterEntetePDF(doc, "FICHE EVENEMENT", texteCompatiblePDF(titre));
-            }
-
-            doc.setFillColor(...(partie.contexte === "preparation" ? c.sombre : c.principal));
-            doc.roundedRect(14, y, 182, 13, 2, 2, "F");
-            doc.setTextColor(...c.blanc);
-            doc.setFont("helvetica", "bold");
-            doc.setFontSize(11);
-            doc.text(texteCompatiblePDF(partie.titre), 19, y + 5.3);
-            doc.setFontSize(8.5);
-            const datePartie = partie.date ? formaterDateHeureCaserne(partie.date) : "Date non renseignee";
-            doc.text(texteCompatiblePDF(datePartie), 19, y + 10);
-            doc.text(`${presents.length} present${presents.length > 1 ? "s" : ""}`, 191, y + 7.5, {align:"right"});
-            y += 16;
-
-            const lignes = presents.length ? presents.map((nom, index) => [String(index + 1), texteCompatiblePDF(nom)]) : [["", "Aucune personne presente enregistree"]];
-            doc.autoTable({
-                startY: y,
-                head: [["#", "PERSONNES PRESENTES"]],
-                body: lignes,
-                theme: "grid",
-                margin: {left:14, right:14, bottom:20},
-                headStyles: {fillColor:c.clair, textColor:c.principal, fontStyle:"bold", lineColor:c.ligne, lineWidth:.2},
-                styles: {font:"helvetica", fontSize:9, textColor:c.texte, cellPadding:2.6, lineColor:c.ligne, lineWidth:.15},
-                columnStyles: {0:{cellWidth:12, halign:"center", textColor:c.gris}, 1:{cellWidth:"auto"}}
-            });
-            y = doc.lastAutoTable.finalY + 8;
-        }
-
-        ajouterPiedDePagePDF(doc);
+        const doc = creerFicheEvenementPDF(jsPDF, publication);
         if(modeMail)return pieceJointeDocumentMail(doc.output("blob"), nomFichierPDF(`${type}-${titre}`));
         await enregistrerPDFSansApercuNavigateur(doc, nomFichierPDF(`${type}-${titre}`));
     } catch (erreur) {
@@ -11252,7 +11269,7 @@ function afficherResultatsInventaire() {
 
     if (recherche) {
         const resultats = materiels.filter(materiel =>
-            !materiel.masquer_inventaire && [materiel.nom, materiel.reference, materiel.emplacement, materiel.categories.join(" ")]
+            !materiel.masquer_inventaire && [materiel.nom, materiel.reference, materiel.emplacement, materiel.categories.join(" "), ...lireMotsClesMateriel(materiel.mots_cles)]
                 .some(valeur => normaliserRechercheMateriel(valeur).includes(recherche))
         );
 
@@ -12574,6 +12591,21 @@ function mettreAJourQuantiteRetour(id) {
    RECHERCHE RETOUR
    ========================================================= */
 
+function lireMotsClesMateriel(valeur) {
+    const mots = Array.isArray(valeur) ? valeur : String(valeur || "").split(/[,;\n]+/);
+    const vus = new Set();
+    return mots.map(mot => String(mot).trim()).filter(mot => {
+        const cle = normaliserRechercheMateriel(mot);
+        if (!cle || vus.has(cle)) return false;
+        vus.add(cle);
+        return true;
+    });
+}
+function motsClesMaterielCorrespondent(materiel, recherche) {
+    return lireMotsClesMateriel(materiel.mots_cles)
+        .some(mot => normaliserRechercheMateriel(mot).includes(recherche));
+}
+
 function normaliserRechercheMateriel(valeur) {
     return String(valeur ?? "")
         .normalize("NFD")
@@ -12639,6 +12671,7 @@ function rechercherMaterielRetour() {
 
                 return (
 
+                    motsClesMaterielCorrespondent(materiel, texte) ||
                     normaliserRechercheMateriel(materiel.nom)
                         .includes(
                             texte
@@ -15107,12 +15140,7 @@ function ajouterLigneReapprovisionnementArchive() {
 
 
         const terme =
-            String(
-                texte ||
-                ""
-            )
-                .trim()
-                .toLocaleLowerCase();
+            normaliserRechercheMateriel(texte);
 
 
         if (!terme) {
@@ -15132,18 +15160,10 @@ function ajouterLigneReapprovisionnementArchive() {
                     function (materiel) {
 
                         const nom =
-                            String(
-                                materiel.nom ||
-                                ""
-                            )
-                                .toLocaleLowerCase();
+                            normaliserRechercheMateriel(materiel.nom);
 
                         const reference =
-                            String(
-                                materiel.reference ||
-                                ""
-                            )
-                                .toLocaleLowerCase();
+                            normaliserRechercheMateriel(materiel.reference);
 
                         return (
                             nom.includes(
@@ -15151,7 +15171,7 @@ function ajouterLigneReapprovisionnementArchive() {
                             ) ||
                             reference.includes(
                                 terme
-                            )
+                            ) || motsClesMaterielCorrespondent(materiel, terme)
                         );
 
                     }
@@ -16706,7 +16726,7 @@ function rechercherMaterielEditionRetour() {
         .filter(m => {
             const nom = normaliserRechercheMateriel(m.nom);
             const reference = normaliserRechercheMateriel(m.reference);
-            return nom.includes(terme) || reference.includes(terme);
+            return nom.includes(terme) || reference.includes(terme) || motsClesMaterielCorrespondent(m, terme);
         })
         .sort((a,b) => String(a.nom || "").localeCompare(String(b.nom || ""), "fr", { sensitivity:"base" }))
         .slice(0, 12);
@@ -18644,40 +18664,10 @@ function afficherListeAdmin() {
     }
 
 
-    const recherche =
-        (
-            document.getElementById(
-                "recherche-admin"
-            )?.value ||
-            ""
-        )
-            .trim()
-            .toLowerCase();
-
-
-    const liste =
-        materiels.filter(
-            function (materiel) {
-
-                return (
-                    !recherche
-                    ||
-                    materiel.nom
-                        .toLowerCase()
-                        .includes(
-                            recherche
-                        )
-                    ||
-                    materiel.reference
-                        .toLowerCase()
-                        .includes(
-                            recherche
-                        )
-                );
-
-            }
-        );
-
+    const recherche = normaliserRechercheMateriel(document.getElementById("recherche-admin")?.value);
+    const liste = materiels.filter(materiel => !recherche ||
+        [materiel.nom, materiel.reference, ...lireMotsClesMateriel(materiel.mots_cles)]
+            .some(valeur => normaliserRechercheMateriel(valeur).includes(recherche)));
 
     if (
         liste.length === 0
@@ -18958,6 +18948,11 @@ function afficherFormulaireMateriel(
                     }"
                 >
 
+
+                <label for="mots-cles-materiel">Mots-clés de recherche</label>
+                <input type="text" id="mots-cles-materiel" placeholder="Ex. O2, oxygénothérapie, respiration"
+                    value="${echapperHTML(lireMotsClesMateriel(materiel?.mots_cles).join(', '))}">
+                <p style="font-size:.9em;color:#64717b">Sépare les mots-clés par une virgule.</p>
 
                 <label>
                     Référence
@@ -19249,6 +19244,8 @@ function enregistrerMateriel() {
         .trim();
 
 
+    const motsCles = lireMotsClesMateriel(document.getElementById("mots-cles-materiel")?.value);
+
     const description =
         document.getElementById(
             "description-materiel"
@@ -19355,6 +19352,7 @@ function enregistrerMateriel() {
         materiel.autoriser_depassement_stock = depassement;
         materiel.peut_laisser_hopital = peutLaisserHopital;
         materiel.masquer_inventaire = masquerInventaire;
+        materiel.mots_cles = motsCles;
         materiel.inventaire_vsav_materiel_id = lienVSAV;
         materiel.autres_inventaire_vsav_materiel_ids = liensVSAV.slice(1);
         materiel.nom =
@@ -19451,6 +19449,7 @@ function enregistrerMateriel() {
         inventaire_vsav_materiel_id: lienVSAV,
         peut_laisser_hopital: peutLaisserHopital,
         masquer_inventaire: masquerInventaire,
+        mots_cles: motsCles,
         autres_inventaire_vsav_materiel_ids: liensVSAV.slice(1),
 
         id:
