@@ -4,7 +4,7 @@ const types = ["hopital","rearmement","surveillance","complementaire","stock","f
 let owner="", etats={}, demandes=[], affichages=[], enCours=false, generation=0, dernier=0, timer=null, rendu=null;
 const lectures=new Set();
 const uid=()=>typeof utilisateurConnecte!=="undefined"?String(utilisateurConnecte?.id||""):"";
-const cle=compte=>"cis-compteurs-rubriques:"+compte;
+const cle=compte=>"cis-compteurs-rubriques-v2:"+compte;
 const vide=()=>Object.fromEntries(types.map(type=>[type,[]]));
 const union=(...ensembles)=>[...new Set(ensembles.flat())];
 
@@ -13,7 +13,8 @@ function styles() {
  const style=document.createElement("style");style.id="cis-compteurs-style";
  style.textContent=`
  .cis-compteur-support{position:relative!important;overflow:visible!important}
- .cis-compteur-support>.cis-compteur-bulle{
+ .cis-compteur-support::after{
+  content:attr(data-compteur-nombre)!important;
   position:absolute!important;top:-8px!important;right:-8px!important;bottom:auto!important;left:auto!important;
   display:inline-flex!important;align-items:center!important;justify-content:center!important;
   box-sizing:border-box!important;min-width:25px!important;height:25px!important;width:auto!important;
@@ -23,7 +24,7 @@ function styles() {
   text-indent:0!important;white-space:nowrap!important;box-shadow:0 1px 4px #af103033!important;
   transform:none!important;pointer-events:none!important;z-index:5!important;flex:none!important
  }
- @media(min-width:1000px){.cis-compteur-support>.cis-compteur-bulle{font-size:12px!important;min-width:23px!important;height:23px!important}}
+ @media(min-width:1000px){.cis-compteur-support::after{font-size:12px!important;min-width:23px!important;height:23px!important}}
  `;document.head.append(style);
 }
 function synchroniserCompte() {
@@ -53,6 +54,7 @@ function taches(type) {
  return etats[type]||[];
 }
 function cible(element) {
+ if(element.closest("nav,#navigation-bureau,.sidebar-pc,.caserne-nav-bas,.navigation-principale,.barre-navigation"))return null;
  if(element.dataset.compteurRubrique)return element.dataset.compteurRubrique;
  if(element.dataset.compteurPublication)return "publication:"+element.dataset.compteurPublication;
  if(element.dataset.compteurDemande)return "demande:"+element.dataset.compteurDemande;
@@ -74,14 +76,19 @@ function cible(element) {
 function dessiner() {
  styles();
  document.querySelectorAll("button[onclick],[role=button][onclick],a[onclick],[data-onglet],[data-compteur-rubrique],[data-compteur-publication],[data-compteur-demande]").forEach(element=>{
+  // A pseudo-element keeps the existing title/description children intact.
+  Array.from(element.children).filter(n=>n.classList.contains("cis-compteur-bulle")).forEach(n=>n.remove());
   const type=cible(element);
   const nombre=type&&owner?taches(type).length:0;
-  let badge=Array.from(element.children).find(n=>n.classList.contains("cis-compteur-bulle"));
-  if(!nombre){badge?.remove();element.classList.remove("cis-compteur-support");return;}
+  if(!nombre){
+   element.classList.remove("cis-compteur-support");
+   element.removeAttribute("data-compteur-nombre");
+   element.removeAttribute("aria-description");
+   return;
+  }
   element.classList.add("cis-compteur-support");
-  if(!badge){badge=document.createElement("span");badge.className="cis-compteur-bulle";element.append(badge);}
-  if(badge.textContent!==String(nombre))badge.textContent=String(nombre);
-  badge.setAttribute("aria-label",nombre+" élément"+(nombre>1?"s":"")+" à traiter");
+  element.dataset.compteurNombre=String(nombre);
+  element.setAttribute("aria-description",nombre+" élément"+(nombre>1?"s":"")+" à traiter");
  });
 }
 function planifierRendu() {
@@ -105,10 +112,18 @@ async function toutesLesLignes(fabrique) {
   } finally {clearTimeout(timeout);}
  }
 }
+function referencesStockEnAlerte(materiels,consommations) {
+ const consommes=new Set(consommations.filter(c=>Number(c.quantite)>0).map(c=>String(c.materiel_id??c.materielId)));
+ return [...new Set(materiels.filter(m=>consommes.has(String(m.id))&&m.gere_stock_pharmacie!==false&&
+  (Number(m.stock)<=0||(Number(m.minimum)>0&&Number(m.stock)<=Number(m.minimum)))).map(m=>"stock:"+m.id))];
+}
 async function stock() {
  if(!utilisateurAPermission("acces_historique"))return [];
- const rows=await toutesLesLignes(()=>obtenirClientSupabase().from("materiels").select("id,stock,minimum,gere_stock_pharmacie").order("id"));
- return rows.filter(m=>m.gere_stock_pharmacie!==false&&(Number(m.stock)<=0||(Number(m.minimum)>0&&Number(m.stock)<=Number(m.minimum)))).map(m=>"stock:"+m.id);
+ const [materiels,consommations]=await Promise.all([
+  toutesLesLignes(()=>obtenirClientSupabase().from("materiels").select("id,stock,minimum,gere_stock_pharmacie").order("id")),
+  toutesLesLignes(()=>obtenirClientSupabase().from("consommations").select("id,materiel_id,quantite").order("id"))
+ ]);
+ return referencesStockEnAlerte(materiels,consommations);
 }
 async function complementaire() {
  const rows=await toutesLesLignes(()=>obtenirClientSupabase().from("cis_vsav_suivi_complementaire")
@@ -145,7 +160,8 @@ async function actualiser(forcer=false) {
  if(!compte)return;
  if(!navigator.onLine){
   if(utilisateurAPermission("acces_historique")&&typeof materiels!=="undefined"&&materiels.length){
-   etats.stock=materiels.filter(m=>m.gere_stock_pharmacie!==false&&(Number(m.stock)<=0||(Number(m.minimum)>0&&Number(m.stock)<=Number(m.minimum)))).map(m=>"stock:"+m.id);
+   if(typeof historique!=="undefined")
+    etats.stock=referencesStockEnAlerte(materiels,historique.flatMap(i=>i.consommations||[]));
    sauvegarder();dessiner();
   }
   return;

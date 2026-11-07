@@ -2,9 +2,9 @@
 importScripts("./notifications-history.js?v=pharmacie-vsav-prod-20261030-v1");
 
 // Nouvelle version : force le renouvellement du cache applicatif sans effacer les données locales.
-const CACHE_NAME = "cis-compteurs-rubriques";
+const CACHE_NAME = "cis-compteurs-affichage-stock-v2";
 const FICHIERS_APPLICATION = [
- "./compteurs-rubriques.js?v=1",
+ "./compteurs-rubriques.js?v=correction-affichage-stock",
  "./suivi-materiel.js?v=compteurs-rubriques",
  "./vsav-retour-emplacements.js?v=suivi-hopital",
  "./qr-tracabilite.js?v=messages-scan-rouges","./qr-tracabilite.css?v=prod-v6",
