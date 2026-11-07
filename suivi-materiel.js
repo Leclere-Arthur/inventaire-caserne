@@ -19,6 +19,14 @@ function styles() {
  .suivi-materiel-tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:20px 0}
  .suivi-materiel-tabs button[aria-selected=true]{background:#1f754d;color:#fff}
  .suivi-materiel-card{background:white;border:1px solid #ccd8d0;border-radius:14px;padding:18px;margin:14px 0;overflow-wrap:anywhere}
+
+ .suivi-materiel-card.hopital-attente{background:#fff1f2;border:2px solid #cc343e}
+ .suivi-materiel-card.hopital-en-cours{background:#fff3df;border:2px solid #c77b11}
+ .suivi-materiel-card.hopital-recupere{background:#eaf7ef;border:2px solid #27804c}
+ .hopital-statut{display:inline-block;padding:8px 12px;border-radius:8px;font-weight:750}
+ .hopital-attente .hopital-statut{background:#b71924;color:#fff}
+ .hopital-en-cours .hopital-statut{background:#a95d00;color:#fff}
+ .hopital-recupere .hopital-statut{background:#1e7042;color:#fff}
  .suivi-materiel-page label{display:grid;gap:7px;margin:12px 0;font-weight:650}
  .suivi-materiel-page input,.suivi-materiel-page select{width:100%;box-sizing:border-box;font:inherit;font-size:16px;min-height:48px;padding:12px;border:1px solid #b8c8bf;border-radius:9px;background:#fff;color:#20332a}
  .suivi-materiel-page [role=alert]{color:#b71924;font-weight:700}
@@ -67,7 +75,7 @@ async function charger(onglet) {
   }
   const rows=await rpc("cis_hopital_lire");
   if(!box.isConnected||generation!==seq)return;
-  box.innerHTML='<h2>Matériel laissé à l’hôpital</h2>'+((rows||[]).map(h=>`<article class="suivi-materiel-card"><h3>${esc(h.nom)} · ${h.quantite} unité(s)</h3><p>Hôpital de ${esc(h.hopital)} · Intervention ${esc(h.intervention)}</p><p>${esc(h.emplacement)}</p><p><strong>${h.etape===1?"Récupéré · à réarmer":"À récupérer"}</strong></p>${h.responsable_nom?`<p>Pris en charge par ${esc(h.responsable_nom)}</p>`:""}<div class="suivi-materiel-actions">
+  box.innerHTML='<h2>Matériel laissé à l’hôpital</h2>'+((rows||[]).map(h=>`<article class="suivi-materiel-card ${h.etape===1?"hopital-recupere":h.responsable?"hopital-en-cours":"hopital-attente"}"><h3>${esc(h.nom)} · ${h.quantite} unité(s)</h3><p>Hôpital de ${esc(h.hopital)} · Intervention ${esc(h.intervention)}</p><p>${esc(h.emplacement)}</p><p><span class="hopital-statut">${h.etape===1?"Matériel récupéré · à réarmer":h.responsable?"Prise en charge en cours":"À récupérer"}</span></p>${h.responsable_nom?`<p>Pris en charge par ${esc(h.responsable_nom)}</p>`:""}<div class="suivi-materiel-actions">
   <button data-action="prendre" data-id="${esc(h.id)}" ${h.responsable?"disabled":""}>Je m’en occupe</button>
   <button data-action="recuperer" data-id="${esc(h.id)}" ${h.etape>=1?"disabled":""}>Matériel récupéré</button>
   <button data-action="rearmer" data-id="${esc(h.id)}" ${h.etape!==1?"disabled":""}>Matériel réarmé</button></div><p role="alert"></p></article>`).join("")||"<p>Aucun matériel laissé à l’hôpital.</p>");

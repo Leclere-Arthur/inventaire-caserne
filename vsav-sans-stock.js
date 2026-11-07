@@ -71,6 +71,7 @@ document.addEventListener('change',e=>{
  card.querySelector('[data-vsav-quantite]').value=card.querySelectorAll('[data-vsav-position]:checked').length;
 });
 document.addEventListener('click',async e=>{const b=e.target.closest('[data-vsav-action]');if(!b||b.disabled)return;const card=b.closest('.vsav-attente'),status=card.querySelector('[data-vsav-resultat]'),id=b.dataset.vsavId,action=b.dataset.vsavAction;
+ if(action==='rearmer'&&!utilisateurAPermission('acces_administration')){status.textContent='Le réarmement est réservé à l’administration pharmacie.';return;}
  const positions=Array.from(card.querySelectorAll('[data-vsav-position]:checked'),x=>Number(x.dataset.vsavPosition));
  const quantite=action==='rearmer'?Number(card.querySelector('[data-vsav-quantite]').value):0;
  if(action==='rearmer'&&(!Number.isSafeInteger(quantite)||quantite<1)){status.textContent='Indique une quantité entière positive.';return;}
