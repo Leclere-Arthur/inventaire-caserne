@@ -92,7 +92,7 @@ async function charger(onglet) {
    if(b.dataset.action==="rearmer"&&!await afficherConfirmationCIS("Confirmer que le matériel récupéré a été remis à sa place dans le VSAV ?"))return;
    const card=b.closest("article"),buttons=[...card.querySelectorAll("button")];
    buttons.forEach(x=>x.disabled=true);
-   try {await rpc("cis_hopital_traiter",{p_id:b.dataset.id,p_action:b.dataset.action});await g.actualiserHopitalInventaire?.().catch(()=>{});await charger("hopital");}
+   try {await rpc("cis_hopital_traiter",{p_id:b.dataset.id,p_action:b.dataset.action});void g.CISCompteurs?.actualiser(true);await g.actualiserHopitalInventaire?.().catch(()=>{});await charger("hopital");}
    catch(e){card.querySelector("[role=alert]").textContent=e.message;await chargerApresErreur(card,b);}
   });
  }catch(e){if(box.isConnected&&generation===seq){box.textContent=e.message;box.setAttribute("role","alert");}}
@@ -134,6 +134,7 @@ async function renseigner() {
    event.preventDefault();const bouton=form.querySelector("button");bouton.disabled=true;
    try {
     await rpc("cis_hopital_declarer",{p_id:enregistrement,p_materiel:form.elements.materiel.value,p_inventaire:form.elements.inventaire.value||null,p_hopital:form.elements.hopital.value,p_intervention:form.elements.intervention.value.trim(),p_quantite:form.elements.quantite.valueAsNumber});
+    void g.CISCompteurs?.actualiser(true);
     await charger("hopital");
    }catch(e){form.querySelector("[role=alert]").textContent=e.message;bouton.disabled=false;}
   };

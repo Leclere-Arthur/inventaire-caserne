@@ -1137,7 +1137,7 @@ let minuteurVerificationMiseAJour =
  * Elle permet de détecter une nouvelle version même si seul app.js?v=peremptions-20261031-v5 change.
  */
 const VERSION_APPLICATION_JS =
-    "suivi-materiel-hopital";
+    "compteurs-rubriques";
 
 async function verifierNouvelleVersionAppJs() {
 
@@ -7872,6 +7872,7 @@ async function envoyerDonneesLocalesVersSupabase() {
     try { await synchroniserControlesPharmacieEnAttente(); }
     catch (e) { console.warn("Contrôles conservés en attente d’envoi automatique.", e); }
     enregistrerSnapshotSynchronisation();
+    void window.CISCompteurs?.actualiser(true);
 
 }
 
@@ -9581,7 +9582,7 @@ function cartePublicationCaserne(p, options = {}) {
     const rappelAuto = !estPasse && p.notification_auto && p.date_evenement ? `<span class="caserne-badge-visibilite">Rappel ${echapperHTML(libelleDelaiNotificationCaserne(p.notification_delai_minutes))} avant</span>` : "";
     const classeType = ` caserne-type-${String(p.type_publication || "autre").replace(/[^a-z0-9_-]/gi, "-")}`;
 
-    return `<article class="caserne-actu-card${classeType}${classeReponse}${classePasse}">
+    return `<article data-compteur-publication="${echapperHTML(p.id)}" class="caserne-actu-card${classeType}${classeReponse}${classePasse}">
         <div class="caserne-actu-meta"><span>${echapperHTML(obtenirLibelleTypeCaserne(p.type_publication))}</span>${p.date_evenement ? `<time>${echapperHTML(formaterDateHeureCaserne(p.date_evenement))}</time>` : ""}</div>
         <div class="caserne-badges-publication">${sousType}${visibilite}${rappelAuto}</div>
         <h2>${echapperHTML(titre)}</h2>
@@ -9611,6 +9612,7 @@ async function repondrePublicationCaserne(publicationId, reponse, contexte = "ev
     };
     const {error} = await supabase.from("caserne_reponses").upsert(payload, {onConflict:"publication_id,user_id,contexte"});
     if (error) { console.error(error); alert("Impossible d'enregistrer la réponse : " + (error.message || "erreur inconnue")); return; }
+    void window.CISCompteurs?.actualiser(true);
     await rafraichirVuePublicationCaserne(retour);
 }
 
@@ -24340,6 +24342,7 @@ async function afficherSuiviVSAVComplementaire(){
    btn.disabled=true;
    const {error}=await sb.rpc('cis_vsav_valider_remise_en_etat',{p_id:btn.dataset.vsavAccuse});
    if(error){btn.disabled=false;alert(error.message);return;}
+   void window.CISCompteurs?.actualiser(true);
    await afficherSuiviVSAVComplementaire();
   });
  }catch(e){zone.textContent='Suivi complémentaire indisponible : '+(e.message||e);}

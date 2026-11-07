@@ -97,6 +97,7 @@ document.addEventListener('click',async e=>{const b=e.target.closest('[data-vsav
    throw error;
   }
   localStorage.removeItem(cleScans);
+  void g.CISCompteurs?.actualiser(true);
   oublierOperation(signature);if(card.isConnected)await chargerSuivi(card.closest('#suivi-vsav-attente'));}
  catch(error){if(status.isConnected)status.textContent=(error.message||'Réponse non reçue.')+' Réessaie avec la même quantité ; aucun double réarmement ne sera appliqué.';}
  finally{card.querySelectorAll('button,input').forEach(x=>x.disabled=false);}
