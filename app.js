@@ -1137,7 +1137,7 @@ let minuteurVerificationMiseAJour =
  * Elle permet de détecter une nouvelle version même si seul app.js?v=peremptions-20261031-v5 change.
  */
 const VERSION_APPLICATION_JS =
-    "compteurs-rubriques";
+    "compteurs-coherents-historique";
 
 async function verifierNouvelleVersionAppJs() {
 
@@ -15710,6 +15710,17 @@ function totalConsommeMateriel(
    HISTORIQUE TOTAL
    ========================================================= */
 
+function obtenirEtatStockHistorique(materiel) {
+    const stockMinimum = Number(materiel.minimum) > 0 &&
+        Number(materiel.stock) <= Number(materiel.minimum);
+    const sansReserve = materiel.gere_stock_pharmacie === false;
+    const ruptureStock = !sansReserve && Number(materiel.stock) === 0;
+    const classeAlerte = ruptureStock || sansReserve
+        ? " historique-rupture-stock"
+        : stockMinimum ? " historique-stock-faible" : "";
+    return {stockMinimum, sansReserve, ruptureStock, classeAlerte};
+}
+
 function afficherHistoriqueTotal() {
 
     const conteneur =
@@ -15832,26 +15843,8 @@ function afficherHistoriqueTotal() {
             .map(
                 function (ligne) {
 
-                    const stockMinimum =
-                        ligne.materiel.minimum > 0 &&
-                        ligne.materiel.stock <=
-                        ligne.materiel.minimum;
-
-                    const ruptureStock =
-                        ligne.materiel.gere_stock_pharmacie !== false && Number(
-                            ligne.materiel.stock
-                        ) === 0;
-
-
-                    const sansReserve = ligne.materiel.gere_stock_pharmacie === false;
-                    const classeAlerte =
-                        (ruptureStock || sansReserve)
-                            ? " historique-rupture-stock"
-                            : (
-                                stockMinimum
-                                    ? " historique-stock-faible"
-                                    : ""
-                            );
+                    const {stockMinimum, ruptureStock, sansReserve, classeAlerte} =
+                        obtenirEtatStockHistorique(ligne.materiel);
 
 
                     return `

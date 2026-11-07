@@ -4,7 +4,7 @@ const types = ["hopital","rearmement","surveillance","complementaire","stock","f
 let owner="", etats={}, demandes=[], affichages=[], enCours=false, generation=0, dernier=0, timer=null, rendu=null;
 const lectures=new Set();
 const uid=()=>typeof utilisateurConnecte!=="undefined"?String(utilisateurConnecte?.id||""):"";
-const cle=compte=>"cis-compteurs-rubriques-v2:"+compte;
+const cle=compte=>"cis-compteurs-rubriques-v3:"+compte;
 const vide=()=>Object.fromEntries(types.map(type=>[type,[]]));
 const union=(...ensembles)=>[...new Set(ensembles.flat())];
 
@@ -42,11 +42,11 @@ function sauvegarder() {
  try{localStorage.setItem(cle(owner),JSON.stringify({etats,demandes}));}catch(_){}
 }
 function taches(type) {
- if(type==="pharmacie")return union(etats.hopital,etats.rearmement,etats.surveillance,etats.complementaire,etats.stock);
+ if(type==="pharmacie")return union(etats.hopital,etats.stock,utilisateurAPermission("acces_administration")?union(etats.rearmement,etats.surveillance,etats.complementaire):[]);
  if(type==="suivi")return etats.hopital;
- if(type==="vsav")return union(etats.rearmement,etats.surveillance,etats.complementaire);
+ if(type==="vsav")return utilisateurAPermission("acces_administration")?union(etats.rearmement,etats.surveillance,etats.complementaire):[];
  if(type==="equipe")return etats.formation;
- if(type==="tout")return union(...types.map(t=>t==="caserne"?etats[t].map(x=>x.id):etats[t]));
+ if(type==="tout")return union(taches("pharmacie"),etats.formation,etats.caserne.map(x=>x.id));
  if(type.startsWith("caserne:"))return etats.caserne.filter(t=>t.type===type.slice(8)).map(t=>t.id);
  if(type==="caserne")return etats.caserne.map(t=>t.id);
  if(type.startsWith("publication:"))return etats.caserne.some(t=>t.id==="caserne:"+type.slice(12))?[type]:[];
@@ -58,7 +58,7 @@ function cible(element) {
  if(element.dataset.compteurRubrique)return element.dataset.compteurRubrique;
  if(element.dataset.compteurPublication)return "publication:"+element.dataset.compteurPublication;
  if(element.dataset.compteurDemande)return "demande:"+element.dataset.compteurDemande;
- if(element.dataset.onglet)return ({hopital:"hopital",rearmer:"rearmement",surveiller:"surveillance"})[element.dataset.onglet]||null;
+ if(element.dataset.onglet)return ({hopital:"hopital",surveiller:"surveillance"})[element.dataset.onglet]||null;
  const action=element.getAttribute("onclick")||"";
  if(element.matches(".retour-button,.veh-retour,.cisqr-back")||element.textContent.trim().startsWith("←"))return null;
  const rubrique=action.match(/afficherRubriqueCaserne\(['"]([^'"]+)['"]/);
@@ -75,6 +75,10 @@ function cible(element) {
 }
 function dessiner() {
  styles();
+ const stockActuel=stockLocal();
+ if(stockActuel!==null&&owner&&etats.stock.join("|")!==stockActuel.join("|")){
+  etats.stock=stockActuel;sauvegarder();
+ }
  document.querySelectorAll("button[onclick],[role=button][onclick],a[onclick],[data-onglet],[data-compteur-rubrique],[data-compteur-publication],[data-compteur-demande]").forEach(element=>{
   // A pseudo-element keeps the existing title/description children intact.
   Array.from(element.children).filter(n=>n.classList.contains("cis-compteur-bulle")).forEach(n=>n.remove());
@@ -113,12 +117,28 @@ async function toutesLesLignes(fabrique) {
  }
 }
 function referencesStockEnAlerte(materiels,consommations) {
- const consommes=new Set(consommations.filter(c=>Number(c.quantite)>0).map(c=>String(c.materiel_id??c.materielId)));
- return [...new Set(materiels.filter(m=>consommes.has(String(m.id))&&m.gere_stock_pharmacie!==false&&
-  (Number(m.stock)<=0||(Number(m.minimum)>0&&Number(m.stock)<=Number(m.minimum)))).map(m=>"stock:"+m.id))];
+ const totaux=new Map();
+ for(const consommation of consommations) {
+  const id=String(consommation.materiel_id??consommation.materielId);
+  totaux.set(id,(totaux.get(id)||0)+Number(consommation.quantite||0));
+ }
+ return [...new Set(materiels.filter(m=>{
+  if(!(totaux.get(String(m.id))>0))return false;
+  if(typeof obtenirEtatStockHistorique==="function")return !!obtenirEtatStockHistorique(m).classeAlerte;
+  return m.gere_stock_pharmacie===false||Number(m.stock)===0||
+   Number(m.minimum)>0&&Number(m.stock)<=Number(m.minimum);
+ }).map(m=>"stock:"+m.id))];
+}
+function stockLocal() {
+ if(typeof profilUtilisateurConnecte!=="undefined"&&String(profilUtilisateurConnecte?.id||"")!==uid())return null;
+ if(!utilisateurAPermission("acces_historique"))return [];
+ if(typeof materiels==="undefined"||!materiels.length||typeof historique==="undefined")return null;
+ return referencesStockEnAlerte(materiels,historique.flatMap(i=>i.consommations||[]));
 }
 async function stock() {
  if(!utilisateurAPermission("acces_historique"))return [];
+ const local=stockLocal();
+ if(local!==null)return local;
  const [materiels,consommations]=await Promise.all([
   toutesLesLignes(()=>obtenirClientSupabase().from("materiels").select("id,stock,minimum,gere_stock_pharmacie").order("id")),
   toutesLesLignes(()=>obtenirClientSupabase().from("consommations").select("id,materiel_id,quantite").order("id"))
