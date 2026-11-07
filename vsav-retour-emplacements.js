@@ -60,7 +60,7 @@ function demander(materiel, quantite, options, suiviQR) {
  return new Promise(resolve => {
   const dialog = document.createElement("div");
   dialog.style.cssText = "position:fixed;inset:0;z-index:200000;background:#0008;display:grid;place-items:center;padding:16px";
-  dialog.innerHTML = `<form role="dialog" aria-modal="true" aria-label="Emplacements manquants" style="background:white;color:#20303a;border-radius:16px;padding:20px;max-width:560px;width:100%;box-sizing:border-box;max-height:85dvh;overflow:auto">
+  dialog.innerHTML = `<form class="cis-unites-dialog" role="dialog" aria-modal="true" aria-label="Emplacements manquants" style="background:white;color:#20303a;border-radius:16px;padding:20px;max-width:560px;width:100%;box-sizing:border-box;max-height:85dvh;overflow:auto">
    <h2>${esc(materiel.nom)}</h2><p>${quantite} unité(s) à remplacer sans réserve disponible.</p>
    <div data-unites></div><p data-statut role="status"></p>
    <button type="submit" class="equipe-action-button">Confirmer les emplacements</button>

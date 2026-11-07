@@ -1137,7 +1137,7 @@ let minuteurVerificationMiseAJour =
  * Elle permet de détecter une nouvelle version même si seul app.js?v=peremptions-20261031-v5 change.
  */
 const VERSION_APPLICATION_JS =
-    "retour-emplacements-vsav";
+    "suivi-materiel-hopital";
 
 async function verifierNouvelleVersionAppJs() {
 
@@ -5596,6 +5596,8 @@ function normaliserMateriel(materiel, index) {
         autoriser_depassement_stock: m.autoriser_depassement_stock === true,
         inventaire_vsav_materiel_id: m.inventaire_vsav_materiel_id || null,
         autres_inventaire_vsav_materiel_ids: Array.isArray(m.autres_inventaire_vsav_materiel_ids) ? m.autres_inventaire_vsav_materiel_ids : [],
+        peut_laisser_hopital: m.peut_laisser_hopital === true,
+        masquer_inventaire: m.masquer_inventaire === true,
 
         stock:
             Math.max(
@@ -6937,6 +6939,8 @@ function empreinteMetadonneesMateriel(materiel) {
         autoriser_depassement_stock: materiel.autoriser_depassement_stock === true,
         inventaire_vsav_materiel_id: materiel.inventaire_vsav_materiel_id || null,
         autres_inventaire_vsav_materiel_ids: Array.isArray(materiel.autres_inventaire_vsav_materiel_ids) ? materiel.autres_inventaire_vsav_materiel_ids : [],
+        peut_laisser_hopital: materiel.peut_laisser_hopital === true,
+        masquer_inventaire: materiel.masquer_inventaire === true,
         minimum: Math.max(0, Math.floor(Number(materiel.minimum || 0))),
         emplacement: String(materiel.emplacement || "")
     });
@@ -7029,7 +7033,7 @@ async function recupererDonneesSupabase() {
         supabase.from("categories").select("id,nom,parent_id,ordre"),
         supabase
             .from("materiels")
-            .select("id,nom,reference,description,stock,minimum,emplacement,gere_stock_pharmacie,autoriser_depassement_stock,inventaire_vsav_materiel_id,autres_inventaire_vsav_materiel_ids"),
+            .select("id,nom,reference,description,stock,minimum,emplacement,gere_stock_pharmacie,autoriser_depassement_stock,inventaire_vsav_materiel_id,autres_inventaire_vsav_materiel_ids,peut_laisser_hopital,masquer_inventaire"),
         supabase
             .from("materiel_categories")
             .select("materiel_id,categorie_id"),
@@ -7163,6 +7167,8 @@ function convertirDonneesSupabaseEnDonneesApplication(donnees) {
         autoriser_depassement_stock: materiel.autoriser_depassement_stock === true,
             inventaire_vsav_materiel_id: materiel.inventaire_vsav_materiel_id || null,
         autres_inventaire_vsav_materiel_ids: Array.isArray(materiel.autres_inventaire_vsav_materiel_ids) ? materiel.autres_inventaire_vsav_materiel_ids : [],
+        peut_laisser_hopital: materiel.peut_laisser_hopital === true,
+        masquer_inventaire: materiel.masquer_inventaire === true,
             stock: Math.max(0, Math.floor(Number(materiel.stock || 0))),
             minimum: Math.max(0, Math.floor(Number(materiel.minimum || 0))),
             emplacement: String(materiel.emplacement || ""),
@@ -7562,6 +7568,8 @@ async function envoyerDonneesLocalesVersSupabase() {
         autoriser_depassement_stock: materiel.autoriser_depassement_stock === true,
             inventaire_vsav_materiel_id: materiel.inventaire_vsav_materiel_id || null,
         autres_inventaire_vsav_materiel_ids: Array.isArray(materiel.autres_inventaire_vsav_materiel_ids) ? materiel.autres_inventaire_vsav_materiel_ids : [],
+        peut_laisser_hopital: materiel.peut_laisser_hopital === true,
+        masquer_inventaire: materiel.masquer_inventaire === true,
             minimum: Math.max(0, Math.floor(Number(materiel.minimum || 0))),
             emplacement: String(materiel.emplacement || ""),
         };
@@ -8518,6 +8526,10 @@ function navigationCaserne(active) {
 
 function obtenirOngletsPharmacieAccessibles() {
     const onglets = [];
+    if (profilUtilisateurConnecte) onglets.push({
+        libelle:"Suivi matériel", aide:"Hôpital, réarmement et surveillance",
+        icone:"▤", action:"CISSuiviMateriel.ouvrir()"
+    });
 
     if (utilisateurAPermission("acces_inventaire")) {
         onglets.push({
@@ -10948,6 +10960,8 @@ function afficherAccueil() {
         obtenirRoleUtilisateur();
 
     const boutons = [];
+    boutons.push(`<button type="button" class="menu-button" onclick="CISSuiviMateriel.ouvrir()"><span><strong>Suivi matériel</strong><small>Hôpital, réarmement et matériel à surveiller</small></span></button>`);
+
 
 
     if (
@@ -11226,7 +11240,7 @@ function afficherResultatsInventaire() {
 
     if (recherche) {
         const resultats = materiels.filter(materiel =>
-            [materiel.nom, materiel.reference, materiel.emplacement, materiel.categories.join(" ")]
+            !materiel.masquer_inventaire && [materiel.nom, materiel.reference, materiel.emplacement, materiel.categories.join(" ")]
                 .some(valeur => normaliserRechercheMateriel(valeur).includes(recherche))
         );
 
@@ -11281,7 +11295,7 @@ function afficherResultatsInventaire() {
 
 
     CISPharmaCategories.style();
-    conteneur.innerHTML = CISPharmaCategories.blocs(categories, materiels, genererCarteInventaire);
+    conteneur.innerHTML = CISPharmaCategories.blocs(categories, materiels.filter(m=>!m.masquer_inventaire), genererCarteInventaire);
 
 }
 
@@ -18981,6 +18995,8 @@ function afficherFormulaireMateriel(
                 <label style="display:flex;align-items:center;gap:10px"><input id="autoriser-depassement-stock" type="checkbox" ${materiel?.autoriser_depassement_stock === true ? 'checked' : ''} style="width:auto"> Autoriser l’enregistrement sans stock suffisant</label>
                 <p>La réserve est utilisée en premier. Seule la quantité manquante apparaît dans Suivi VSAV.</p>
                 <p>Sans réserve pharmacie : l’utilisation est signalée dans Suivi VSAV jusqu’au réarmement.</p>
+                <p><label><input type="checkbox" id="peut-laisser-hopital" ${materiel?.peut_laisser_hopital ? 'checked' : ''} style="width:auto"> Possibilité de laisser le matériel à l’hôpital</label></p>
+                <p><label><input type="checkbox" id="masquer-inventaire" ${materiel?.masquer_inventaire ? 'checked' : ''} style="width:auto"> Masquer dans l’inventaire</label></p>
                 <div id="vsav-lien-groupe"><label>Matériels correspondants dans l’inventaire VSAV<input type="hidden" id="inventaire-vsav-lien" value="${echapperHTML(materiel?.inventaire_vsav_materiel_id||'')}"></label><div id="vsav-lien-selecteur"></div><p id="vsav-lien-statut" role="status"></p></div>
                 <label>
                     Quantité en stock
@@ -19172,6 +19188,8 @@ function afficherApercuPhoto(
    ========================================================= */
 
 function enregistrerMateriel() {
+    const peutLaisserHopital = document.getElementById("peut-laisser-hopital")?.checked === true;
+    const masquerInventaire = document.getElementById("masquer-inventaire")?.checked === true;
 
     const gereStock = document.getElementById("gere-stock-pharmacie")?.checked !== true;
     const depassement = gereStock && document.getElementById("autoriser-depassement-stock")?.checked === true;
@@ -19330,6 +19348,8 @@ function enregistrerMateriel() {
 
         materiel.gere_stock_pharmacie = gereStock;
         materiel.autoriser_depassement_stock = depassement;
+        materiel.peut_laisser_hopital = peutLaisserHopital;
+        materiel.masquer_inventaire = masquerInventaire;
         materiel.inventaire_vsav_materiel_id = lienVSAV;
         materiel.autres_inventaire_vsav_materiel_ids = liensVSAV.slice(1);
         materiel.nom =
@@ -19424,6 +19444,8 @@ function enregistrerMateriel() {
         gere_stock_pharmacie: gereStock,
         autoriser_depassement_stock: depassement,
         inventaire_vsav_materiel_id: lienVSAV,
+        peut_laisser_hopital: peutLaisserHopital,
+        masquer_inventaire: masquerInventaire,
         autres_inventaire_vsav_materiel_ids: liensVSAV.slice(1),
 
         id:
@@ -22757,7 +22779,8 @@ async function vehInventaireCommencer(id){
    const personnels=listePersonnelAvecAuteur(await chargerUtilisateursEspaceGarde());
    const dernier=await sb.from('cis_inventaires_vehicules').select('details').eq('vehicule_id',id).order('created_at',{ascending:false}).limit(1).abortSignal(ac.signal);
    if(dernier.error)throw dernier.error;
-   return {zones,materiels:m.data||[],anomalies:signalements.data||[],personnels,dernierInventaire:dernier.data?.[0]?.details||[]};
+   const hopital=await CISSuiviMateriel.lire(id);
+   return {zones,materiels:m.data||[],anomalies:signalements.data||[],personnels,hopital,dernierInventaire:dernier.data?.[0]?.details||[]};
   };
   const resultat=await Promise.race([charger(),new Promise((_,rej)=>{timer=setTimeout(()=>{delaiDepasse=true;ac.abort();rej(Error('Le chargement des coffres prend trop de temps. Vérifie la connexion puis réessaie.'));},15000);})]);
   if(!resultat||!active())return;
@@ -22778,10 +22801,11 @@ async function vehInventaireCommencer(id){
      date:actuel.dates_peremption?.[Number(x.unite)-1],action:'absente',identification:'selection_utilisateur'
     })).filter(x=>x.initiale);
     if(!controlesPrecedents[actuel.zone_id])controlesPrecedents[actuel.zone_id]={};
-    controlesPrecedents[actuel.zone_id][actuel.id]={quantite_constatee:q,etat:q===0?null:null,peremptions_controle:absentes,observation:''};
+    controlesPrecedents[actuel.zone_id][actuel.id]={hopital_quantite:Number(m.hopital_quantite||0),quantite_constatee:q,etat:q===0?null:null,peremptions_controle:absentes,observation:''};
    }
   }
   vehInventaireSession={vehicule:{id:v.id,nom:v.nom,code:v.code},controles:controlesPrecedents,anomalies:resultat.anomalies,participants:personnesAvecAuteur([]),personnels:resultat.personnels};
+  CISSuiviMateriel.appliquer(vehInventaireSession,vehInventaireMateriels,resultat.hopital||[]);
   vehInventaireAfficherZones();
  }catch(e){
   if(!page?.isConnected||String(utilisateurConnecte?.id||'')!==compte)return;
@@ -22913,13 +22937,47 @@ function vehInventaireActualiserQuantite(input){
   e.textContent=erreur?(Number.isInteger(valeur)&&valeur>=0&&valeur<attendue?'Matériel manquant : ':'Écart de quantité : ')+(Number.isInteger(valeur)&&valeur>=0?valeur:'à renseigner')+' / '+attendue:'Quantité conforme';
  });
 }
-function quantiteVSAVDisponible(m,session){const a=(session?.anomalies||[]).find(a=>a.materiel_id===m.id&&a.source==='utilisation_pharmacie');return a?.quantite_constatee??m.quantite;}
-function vehInventaireOuvrirZone(id){
+let actualisationHopitalInventaireEnCours = false;
+async function actualiserHopitalInventaire() {
+ const session = vehInventaireSession;
+ if (!session || actualisationHopitalInventaireEnCours || !navigator.onLine) return;
+ actualisationHopitalInventaireEnCours = true;
+ try {
+  const suivis = await CISSuiviMateriel.lire(session.vehicule.id);
+  if (session !== vehInventaireSession) return;
+  const anciens = session.hopital || [];
+  CISSuiviMateriel.appliquer(session, vehInventaireMateriels, suivis);
+  document.querySelectorAll(".veh-inventaire-contenu [data-materiel]").forEach(carte => {
+   const id = carte.dataset.materiel;
+   const avant = anciens.filter(h=>h.inventaire_id===id).reduce((n,h)=>n+Number(h.quantite),0);
+   const apres = suivis.filter(h=>h.inventaire_id===id).reduce((n,h)=>n+Number(h.quantite),0);
+   const input = carte.querySelector('input[type="number"]');
+   if (input && avant !== apres && input.value.trim() !== "") {
+    input.value = Math.max(0,Number(input.value)+avant-apres);
+    vehInventaireActualiserQuantite(input);
+   }
+   const note = carte.querySelector("[data-hopital-note]");
+   if (note) {
+    note.textContent = CISSuiviMateriel.note(session,id);
+    note.hidden = !note.textContent;
+   }
+  });
+ } finally { actualisationHopitalInventaireEnCours = false; }
+}
+setInterval(()=>{
+ if (!document.hidden && document.querySelector(".veh-inventaire-contenu [data-materiel]"))
+  void actualiserHopitalInventaire().catch(e=>console.warn("Actualisation du suivi hôpital",e.message));
+},15000);
+
+function quantiteVSAVDisponible(m,session){const a=(session?.anomalies||[]).find(a=>a.materiel_id===m.id&&a.source==='utilisation_pharmacie');return Math.max(0,Number(a?.quantite_constatee??m.quantite)-(session?.hopital||[]).filter(h=>h.inventaire_id===m.id).reduce((n,h)=>n+Number(h.quantite),0));}
+async function vehInventaireOuvrirZone(id){
  if(id==='__technique'){CISTechnique.ouvrir();return;}
  const session=vehInventaireSession,z=vehInventaireZones.find(x=>x.id===id);if(!session||!z)return;
+ try{const hopital=await CISSuiviMateriel.lire(session.vehicule.id);if(session!==vehInventaireSession)return;CISSuiviMateriel.appliquer(session,vehInventaireMateriels,hopital);}
+ catch(e){alert("Suivi hôpital indisponible : "+e.message);return;}
  const materiels=vehInventaireMateriels.filter(m=>m.zone_id===id);
  const precedent=session.controles[id]||{},enfants=vehInventaireSousZones(id),parent=vehInventaireZones.find(p=>p.id===z.parent_id);
- vehInventaireAfficher(`<div class="veh-inventaire-contenu" data-veh-zone="${z.id}"><button class="retour-button veh-retour" onclick="${parent?`vehInventaireOuvrirZone('${parent.id}')`:'vehInventaireAfficherZones()'}">← Retour</button><h1>${vehInventaireHTML(z.nom)}</h1><p class="veh-muted">${vehInventaireHTML(session.vehicule.nom+' › '+vehInventaireCheminZone(z))}</p>${enfants.length?`<section class="veh-card"><h2>Sous-catégories</h2>${enfants.map(vehInventaireCarteZone).join('')}</section>`:''}${vehPhotoMiniature(z.photo_path,"detail")}<p class="veh-muted">Choisis l'état du matériel présent. En cas de quantité manquante, sélectionne la bouteille absente uniquement lorsque des dates de péremption sont enregistrées.</p><div id="veh-materiels">${materiels.length?materiels.map(m=>{const alerte=(session.anomalies||[]).find(a=>a.materiel_id===m.id);const valeur=precedent[m.id]||{},q=valeur.quantite_constatee??quantiteVSAVDisponible(m,session),ecart=Number(q)!==Number(m.quantite);return `<div class="veh-materiel-ligne" data-materiel="${m.id}" data-quantite-attendue="${Number(m.quantite)}"><div class="veh-materiel-haut"><button type="button" class="veh-materiel-ouvrir" aria-expanded="false" onclick="vehInventaireBasculerMateriel('${m.id}')"><strong>${vehInventaireHTML(m.nom)}</strong><small>Prévu : <b>${Number(m.quantite)}</b> ${ecart?`· <span class="veh-quantite-erreur">${Number(q)<Number(m.quantite)?'Matériel manquant':'Constaté'} : ${Number(q)}</span>`:''}</small></button><span class="veh-materiel-chevron" aria-hidden="true">⌄</span></div>${alerte?`<p role="note" style="padding:12px;border-radius:9px;background:${alerte.etat==='hs'?'#ffe1e1':'#fff0b3'};color:#442b25;border:2px solid ${alerte.etat==='hs'?'#bc2525':'#bc8d13'}"><strong>${alerte.source==='utilisation_pharmacie'?'Matériel manquant — réarmement en attente'+(alerte.etat==='hs'?' · HS':''):'Dernier signalement : '+(alerte.etat==='hs'?'HS':'À surveiller')}</strong>${alerte.observation?'<br>'+vehInventaireHTML(alerte.observation):''}<br><small>${new Date(alerte.date).toLocaleString('fr-FR')}</small></p>`:''}<div class="veh-etat">${[["bon","Bon"],["a_surveiller","À surveiller"],["hs","HS"]].map(([val,lib])=>`<label><input type="radio" name="etat-${m.id}" value="${val}" ${valeur.etat===val?"checked":""}> ${lib}</label>`).join("")}</div>${vehPeremptionsHTML(m,valeur)}<div class="veh-materiel-details">${vehPhotoMiniature(m.photo_path,"materiel")}<label class="veh-quantite-saisie"><strong>Quantité constatée</strong><input type="number" min="0" step="1" inputmode="numeric" value="${Number(q)}" oninput="vehInventaireActualiserQuantite(this)" aria-label="Quantité constatée de ${vehInventaireHTML(m.nom)}"></label><p class="veh-quantite-statut ${ecart?'veh-quantite-erreur':''}">${ecart?`${Number(q)<Number(m.quantite)?'Matériel manquant':'Écart de quantité'} : ${Number(q)} / ${Number(m.quantite)}`:'Quantité conforme'}</p><label>Observation<textarea class="veh-note" rows="2" placeholder="Observation (facultatif)">${vehInventaireHTML(valeur.observation||"")}</textarea></label></div></div>`}).join(""):(enfants.length?'':'<p>Aucun matériel configuré pour cette zone.</p>')}</div><button class="veh-action" onclick="vehInventaireEnregistrerZone('${id}')">Enregistrer ${parent?'cette sous-catégorie':'cette catégorie'}</button></div>`);
+ vehInventaireAfficher(`<div class="veh-inventaire-contenu" data-veh-zone="${z.id}"><button class="retour-button veh-retour" onclick="${parent?`vehInventaireOuvrirZone('${parent.id}')`:'vehInventaireAfficherZones()'}">← Retour</button><h1>${vehInventaireHTML(z.nom)}</h1><p class="veh-muted">${vehInventaireHTML(session.vehicule.nom+' › '+vehInventaireCheminZone(z))}</p>${enfants.length?`<section class="veh-card"><h2>Sous-catégories</h2>${enfants.map(vehInventaireCarteZone).join('')}</section>`:''}${vehPhotoMiniature(z.photo_path,"detail")}<p class="veh-muted">Choisis l'état du matériel présent. En cas de quantité manquante, sélectionne la bouteille absente uniquement lorsque des dates de péremption sont enregistrées.</p><div id="veh-materiels">${materiels.length?materiels.map(m=>{const alerte=(session.anomalies||[]).find(a=>a.materiel_id===m.id);const valeur=precedent[m.id]||{},q=valeur.quantite_constatee??quantiteVSAVDisponible(m,session),ecart=Number(q)!==Number(m.quantite);return `<div class="veh-materiel-ligne" data-materiel="${m.id}" data-quantite-attendue="${Number(m.quantite)}"><div class="veh-materiel-haut"><button type="button" class="veh-materiel-ouvrir" aria-expanded="false" onclick="vehInventaireBasculerMateriel('${m.id}')"><strong>${vehInventaireHTML(m.nom)}</strong><small>Prévu : <b>${Number(m.quantite)}</b> ${ecart?`· <span class="veh-quantite-erreur">${Number(q)<Number(m.quantite)?'Matériel manquant':'Constaté'} : ${Number(q)}</span>`:''}</small></button><span class="veh-materiel-chevron" aria-hidden="true">⌄</span></div>${alerte?`<p role="note" style="padding:12px;border-radius:9px;background:${alerte.etat==='hs'?'#ffe1e1':'#fff0b3'};color:#442b25;border:2px solid ${alerte.etat==='hs'?'#bc2525':'#bc8d13'}"><strong>${alerte.source==='utilisation_pharmacie'?'Matériel manquant — réarmement en attente'+(alerte.etat==='hs'?' · HS':''):'Dernier signalement : '+(alerte.etat==='hs'?'HS':'À surveiller')}</strong>${alerte.observation?'<br>'+vehInventaireHTML(alerte.observation):''}<br><small>${new Date(alerte.date).toLocaleString('fr-FR')}</small></p>`:''}<p data-hopital-note ${CISSuiviMateriel.note(session,m.id)?"":"hidden"} style="padding:12px;background:#fff0c2;border:1px solid #ad7610;border-radius:9px">${vehInventaireHTML(CISSuiviMateriel.note(session,m.id))}</p><div class="veh-etat">${[["bon","Bon"],["a_surveiller","À surveiller"],["hs","HS"]].map(([val,lib])=>`<label><input type="radio" name="etat-${m.id}" value="${val}" ${valeur.etat===val?"checked":""}> ${lib}</label>`).join("")}</div>${vehPeremptionsHTML(m,valeur)}<div class="veh-materiel-details">${vehPhotoMiniature(m.photo_path,"materiel")}<label class="veh-quantite-saisie"><strong>Quantité constatée</strong><input type="number" min="0" step="1" inputmode="numeric" value="${Number(q)}" oninput="vehInventaireActualiserQuantite(this)" aria-label="Quantité constatée de ${vehInventaireHTML(m.nom)}"></label><p class="veh-quantite-statut ${ecart?'veh-quantite-erreur':''}">${ecart?`${Number(q)<Number(m.quantite)?'Matériel manquant':'Écart de quantité'} : ${Number(q)} / ${Number(m.quantite)}`:'Quantité conforme'}</p><label>Observation<textarea class="veh-note" rows="2" placeholder="Observation (facultatif)">${vehInventaireHTML(valeur.observation||"")}</textarea></label></div></div>`}).join(""):(enfants.length?'':'<p>Aucun matériel configuré pour cette zone.</p>')}</div><button class="veh-action" onclick="vehInventaireEnregistrerZone('${id}')">Enregistrer ${parent?'cette sous-catégorie':'cette catégorie'}</button></div>`);
  document.querySelectorAll('[data-materiel]').forEach(vehInventaireSynchroniserQuantite);
 }
 function vehInventaireEnregistrerZone(id){
@@ -22932,7 +22990,7 @@ function vehInventaireEnregistrerZone(id){
   if(!Number.isInteger(quantite)||quantite<0){card.classList.add('ouvert');input.focus();alert('Indique une quantité constatée valide pour '+m.nom+'.');return;}
   if(quantite>0&&!etat){card.classList.add('ouvert');alert('Sélectionne le statut du matériel présent : '+m.nom+'.');return;}
   let peremptions;try{peremptions=vehLirePeremptions(m,card);}catch(e){alert(e.message);return;}
-  controles[m.id]={peremptions_controle:peremptions,etat:quantite===0?null:(etat||null),observation:card.querySelector('textarea')?.value?.trim()||"",quantite_constatee:quantite};
+  controles[m.id]={hopital_quantite:(session.hopital||[]).filter(h=>h.inventaire_id===m.id).reduce((n,h)=>n+Number(h.quantite),0),peremptions_controle:peremptions,etat:quantite===0?null:(etat||null),observation:card.querySelector('textarea')?.value?.trim()||"",quantite_constatee:quantite};
  }
  session.controles[id]=controles;session.revisionControles=(session.revisionControles||0)+1;
  const zone=vehInventaireZones.find(z=>z.id===id);
@@ -22949,13 +23007,14 @@ async function vehInventaireTerminer(){
 }
 async function vehInventaireTerminerInterne(){
  const session=vehInventaireSession;if(!session)return;
+ try{await actualiserHopitalInventaire();}catch(e){alert("Impossible de vérifier le suivi hôpital : "+e.message);return;}
  const nonConfirme=vehInventaireMateriels.find(m=>!vehPeremptionsCompletes(m,session.controles[m.zone_id]?.[m.id]));if(nonConfirme){vehInventaireOuvrirZone(nonConfirme.zone_id);alert('Complète le statut du matériel présent et ses péremptions avant de terminer l’inventaire.');return;}
  const manquants=CISTechnique.manquants(session);
  const avertissement=manquants.length?"Cet inventaire n’est pas entièrement complété :\n\n"+manquants.join("\n")+"\n\nEnregistrer quand même ? Les contrôles manquants resteront visibles.":"Confirmer l’enregistrement définitif de l’inventaire ?";
  if(!(await afficherConfirmationCIS(avertissement)))return;
  const btn=document.querySelector(".veh-inventaire-contenu > .veh-action");if(btn){btn.disabled=true;btn.textContent="Enregistrement…";}
  try{
-  const sb=obtenirClientSupabase();const payload={vehicule_id:session.vehicule.id,vehicule_nom:session.vehicule.nom,controle_par:profilUtilisateurConnecte?.id,personnes_presentes:personnesAvecAuteur(session.participants),details:vehInventaireZones.map(z=>({zone_id:z.id,parent_zone_id:z.parent_id||null,zone_nom_propre:z.nom,zone_nom:vehInventaireCheminZone(z),cote:z.cote,materiels:vehInventaireMateriels.filter(m=>m.zone_id===z.id).map(m=>({controle_peremptions_version:2,unites_manquantes:Math.max(0,Number(m.quantite)-Number(session.controles[z.id]?.[m.id]?.quantite_constatee??quantiteVSAVDisponible(m,session))),dates_peremption_reference:m.dates_peremption||[],peremptions_controle:session.controles[z.id]?.[m.id]?.peremptions_controle||[],materiel_id:m.id,nom:m.nom,quantite:m.quantite,quantite_constatee:session.controles[z.id]?.[m.id]?.quantite_constatee??quantiteVSAVDisponible(m,session),etat_reference:m.etat_reference,etat:session.controles[z.id]?.[m.id]?.etat||null,observation:[session.controles[z.id]?.[m.id]?.observation||"",...(session.controles[z.id]?.[m.id]?.peremptions_controle||[]).filter(p=>p.action==="absente").map(p=>"Unité "+p.unite+" absente — péremption de référence "+p.initiale.split("-").reverse().join("/")+" (non contrôlée)"),...(session.controles[z.id]?.[m.id]?.peremptions_controle||[]).filter(p=>p.action!=="absente").map(p=>"Péremption unité "+p.unite+" : "+p.date.split("-").reverse().join("/")+(p.date===p.initiale?" (confirmée)":" (modifiée, avant : "+p.initiale.split("-").reverse().join("/")+")"))].filter(Boolean).join("\n")}))}))};
+  const sb=obtenirClientSupabase();const payload={vehicule_id:session.vehicule.id,vehicule_nom:session.vehicule.nom,controle_par:profilUtilisateurConnecte?.id,personnes_presentes:personnesAvecAuteur(session.participants),details:vehInventaireZones.map(z=>({zone_id:z.id,parent_zone_id:z.parent_id||null,zone_nom_propre:z.nom,zone_nom:vehInventaireCheminZone(z),cote:z.cote,materiels:vehInventaireMateriels.filter(m=>m.zone_id===z.id).map(m=>({hopital_quantite:(session.hopital||[]).filter(h=>h.inventaire_id===m.id).reduce((n,h)=>n+Number(h.quantite),0),controle_peremptions_version:2,unites_manquantes:Math.max(0,Number(m.quantite)-Number(session.controles[z.id]?.[m.id]?.quantite_constatee??quantiteVSAVDisponible(m,session))),dates_peremption_reference:m.dates_peremption||[],peremptions_controle:session.controles[z.id]?.[m.id]?.peremptions_controle||[],materiel_id:m.id,nom:m.nom,quantite:m.quantite,quantite_constatee:session.controles[z.id]?.[m.id]?.quantite_constatee??quantiteVSAVDisponible(m,session),etat_reference:m.etat_reference,etat:session.controles[z.id]?.[m.id]?.etat||null,observation:[session.controles[z.id]?.[m.id]?.observation||"",...(session.controles[z.id]?.[m.id]?.peremptions_controle||[]).filter(p=>p.action==="absente").map(p=>"Unité "+p.unite+" absente — péremption de référence "+p.initiale.split("-").reverse().join("/")+" (non contrôlée)"),...(session.controles[z.id]?.[m.id]?.peremptions_controle||[]).filter(p=>p.action!=="absente").map(p=>"Péremption unité "+p.unite+" : "+p.date.split("-").reverse().join("/")+(p.date===p.initiale?" (confirmée)":" (modifiée, avant : "+p.initiale.split("-").reverse().join("/")+")"))].filter(Boolean).join("\n")}))}))};
   payload.details.push(CISTechnique.zone(session.technique||{}),CISTechnique.zoneAnnexe(session.annexe||{}));
    payload.id=genererUUID();
    CISSynchronisationFiable.ajouterInventaire(payload);
