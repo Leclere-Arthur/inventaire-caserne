@@ -12,6 +12,15 @@ function styles() {
  const style=document.createElement("style");
  style.id="suivi-materiel-style";
  style.textContent=`
+ .suivi-materiel-page,.cisqr-page{box-sizing:border-box;min-height:100vh;min-height:100dvh}
+ @media(max-width:999px){
+  html:has(.suivi-materiel-page),html:has(.cisqr-page),
+  body:has(.suivi-materiel-page),body:has(.cisqr-page),
+  body:has(.suivi-materiel-page) #app,body:has(.cisqr-page) #app{
+   min-height:100vh;min-height:100dvh;background:#f3f4f6!important
+  }
+ }
+
  .suivi-materiel-page{max-width:850px;margin:auto;padding:20px 16px calc(140px + env(safe-area-inset-bottom))}
  .suivi-materiel-page button,.cis-unites-dialog button{font:inherit;font-size:16px;line-height:1.35;min-height:48px;padding:12px 16px;border:1px solid #b7c7be;border-radius:10px;background:#fff;color:#195c3d;white-space:normal;overflow-wrap:anywhere;cursor:pointer}
  .suivi-materiel-page button:disabled{opacity:.55;cursor:default}

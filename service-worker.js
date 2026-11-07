@@ -2,9 +2,9 @@
 importScripts("./notifications-history.js?v=pharmacie-vsav-prod-20261030-v1");
 
 // Nouvelle version : force le renouvellement du cache applicatif sans effacer les données locales.
-const CACHE_NAME = "cis-suivi-hopital-couleurs";
+const CACHE_NAME = "cis-fond-suivi-qr-pleine-hauteur";
 const FICHIERS_APPLICATION = [
- "./suivi-materiel.js?v=couleurs-hopital",
+ "./suivi-materiel.js?v=fond-pleine-hauteur",
  "./vsav-retour-emplacements.js?v=suivi-hopital",
  "./qr-tracabilite.js?v=messages-scan-rouges","./qr-tracabilite.css?v=prod-v6",
  "./maintenance-client.js","./interface-personnelle.js?v=profil","./equipe-evolution.js",
