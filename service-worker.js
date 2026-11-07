@@ -2,10 +2,10 @@
 importScripts("./notifications-history.js?v=pharmacie-vsav-prod-20261030-v1");
 
 // Nouvelle version : force le renouvellement du cache applicatif sans effacer les données locales.
-const CACHE_NAME = "cis-retour-emplacements-vsav";
+const CACHE_NAME = "cis-messages-scan-rouges";
 const FICHIERS_APPLICATION = [
- "./vsav-retour-emplacements.js?v=1",
- "./qr-tracabilite.js?v=retour-emplacements","./qr-tracabilite.css?v=prod-v6",
+ "./vsav-retour-emplacements.js?v=messages-scan-rouges",
+ "./qr-tracabilite.js?v=messages-scan-rouges","./qr-tracabilite.css?v=prod-v6",
  "./maintenance-client.js","./interface-personnelle.js?v=profil","./equipe-evolution.js",
  "./peremptions-controle.js?v=1","./inventaire-technique.js?v=sous-coffres-prod-20261031-v1","./inventaire-technique.css",
  "./","./index.html","./scan-peremption.js?v=auto-datamatrix-v16","./vendor/zxing-reader.js","./vendor/zxing_reader.wasm",

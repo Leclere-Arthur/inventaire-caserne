@@ -187,32 +187,43 @@ async function collecterUnitesQR(id, quantite, rearmement=false) {
   const progression = dialog.querySelector('[data-progression]');
   const statut = dialog.querySelector('[data-etat]');
   const bouton = dialog.querySelector('[data-scan]');
+  const afficherEtat = (texte, erreur = false) => {
+   statut.textContent = texte;
+   statut.style.color = erreur ? '#b71924' : '#176b43';
+   statut.style.fontWeight = '700';
+  };
   const fin = valeur => { dialog.remove(); resolve(valeur); };
   progression.textContent = `Unité 1 sur ${quantite}`;
   dialog.querySelector('[data-annuler]').onclick = () => fin(null);
   bouton.onclick = async () => {
    const date = dialog.querySelector('[data-date]').value;
-   if (!date) { statut.textContent = 'Indique la date de péremption.'; return; }
+   if (!date) { afficherEtat('Indique la date de péremption.', true); return; }
    const lot = dialog.querySelector('[data-lot]').value.trim();
    await scanner(async code => {
-    if (!dialog.isConnected) return;
-    if (unites.some(u => u.code === code)) {
-     statut.textContent = 'Ce QR a déjà été saisi.';
-     return;
-    }
-    if (rearmement) {
-     const fiche = await rpc('cis_qr_fiche',{p_code:code});
+    try {
      if (!dialog.isConnected) return;
-     if (fiche?.etat !== 'vierge') {
-      statut.textContent = 'Scanne une étiquette QR vierge.';
+     if (unites.some(u => u.code === code)) {
+      afficherEtat('Ce QR a déjà été scanné. Scanne une autre étiquette vierge.', true);
       return;
      }
-    }
-    unites.push({code,date,lot});
-    if (unites.length === quantite) fin(unites);
-    else {
-     statut.textContent = 'QR saisi : ' + code;
-     progression.textContent = `Unité ${unites.length + 1} sur ${quantite}`;
+     const fiche = await rpc('cis_qr_fiche',{p_code:code});
+     if (!dialog.isConnected) return;
+     if (!fiche) {
+      afficherEtat('QR inconnu. Scanne une étiquette vierge générée par l’application.', true);
+      return;
+     }
+     if (fiche.etat !== 'vierge') {
+      afficherEtat('Ce QR est déjà enregistré ou indisponible. Scanne une étiquette QR vierge.', true);
+      return;
+     }
+     unites.push({code,date,lot});
+     if (unites.length === quantite) fin(unites);
+     else {
+      afficherEtat('QR saisi · ' + code);
+      progression.textContent = `Unité ${unites.length + 1} sur ${quantite}`;
+     }
+    } catch (error) {
+     if (dialog.isConnected) afficherEtat(erreur(error), true);
     }
    },rearmement);
   };

@@ -74,7 +74,7 @@ function demander(materiel, quantite, options, suiviQR) {
    section.style.cssText = "margin:14px 0;padding:12px";
    section.innerHTML = `<legend>Unité manquante ${index + 1}</legend>
     ${options.length ? `<label>Où manque cette unité ?<select required style="width:100%;font:inherit;padding:12px"><option value="">Choisir un emplacement</option>${options.map(x => `<option value="${esc(x.id)}">${esc(labels.get(String(x.id)))}</option>`).join("")}</select></label>` : "<p>Aucun rattachement VSAV configuré.</p>"}
-    ${suiviQR ? '<p>Scanne le QR du matériel utilisé, devenu manquant.</p><button type="button" class="equipe-action-button" data-scan>Scanner le QR utilisé</button><p data-code></p>' : ""}`;
+    ${suiviQR ? '<p>Scanne le QR du matériel utilisé, devenu manquant.</p><button type="button" class="equipe-action-button" data-scan>Scanner le QR utilisé</button><p data-code role="status" aria-live="polite"></p>' : ""}`;
    const select = section.querySelector("select");
    if (select) select.onchange = () => {
     unite.inventaire_id = select.value || null;
@@ -82,16 +82,34 @@ function demander(materiel, quantite, options, suiviQR) {
    };
    if (suiviQR) section.querySelector("[data-scan]").onclick = () => {
     void g.CISQR.scannerUtilise(async code => {
-     const {data:fiche, error} = await obtenirClientSupabase().rpc("cis_qr_fiche",{p_code:code});
-     if (error) throw error;
-     if (!fiche || fiche.etat !== "attribuee" || fiche.emplacement !== "vsav" ||
-         String(fiche.materiel_id) !== String(materiel.id)) {
-      throw Error("Scanne le QR d’une unité de ce matériel présente dans le VSAV.");
+     const statut = section.querySelector("[data-code]");
+     try {
+      const {data:fiche, error} = await obtenirClientSupabase().rpc("cis_qr_fiche",{p_code:code});
+      if (error) throw error;
+      if (!dialog.isConnected) return;
+      if (!fiche) throw Error("QR inconnu. Scanne l’étiquette du matériel utilisé.");
+      if (String(fiche.materiel_id) !== String(materiel.id)) {
+       throw Error("Ce QR ne correspond pas à " + materiel.nom + ". Scanne l’étiquette de ce matériel.");
+      }
+      if (fiche.etat !== "attribuee") {
+       throw Error(fiche.etat === "utilisee"
+        ? "Ce QR est déjà déclaré utilisé. Scanne celui de l’unité utilisée pour ce retour."
+        : "Ce QR n’est pas attribué à une unité en service. Scanne l’étiquette du matériel utilisé.");
+      }
+      if (fiche.emplacement !== "vsav") throw Error("Ce QR est enregistré hors du VSAV. Scanne l’unité utilisée dans le VSAV.");
+      if (unites.some(x => x !== unite && x.qr === code)) throw Error("Ce QR a déjà été scanné pour une autre unité. Chaque unité doit avoir son propre QR.");
+      unite.qr = code;
+      statut.style.color = "#176b43";
+      statut.style.fontWeight = "700";
+      statut.textContent = "QR utilisé · " + code;
+     } catch (error) {
+      if (!dialog.isConnected) return;
+      unite.qr = null;
+      statut.style.color = "#b71924";
+      statut.style.fontWeight = "700";
+      statut.textContent = error.message || "Impossible de vérifier ce QR. Réessaie.";
+      statut.scrollIntoView?.({block:"nearest"});
      }
-     if (!dialog.isConnected) return;
-     if (unites.some(x => x !== unite && x.qr === code)) throw Error("Ce QR a déjà été scanné pour une autre unité.");
-     unite.qr = code;
-     section.querySelector("[data-code]").textContent = "QR utilisé · " + code;
     });
    };
    host.append(section);
@@ -100,7 +118,10 @@ function demander(materiel, quantite, options, suiviQR) {
   dialog.querySelector("form").onsubmit = event => {
    event.preventDefault();
    if (suiviQR && unites.some(x => !x.qr)) {
-    dialog.querySelector("[data-statut]").textContent = "Scanne un QR différent pour chaque unité manquante.";
+    const statut = dialog.querySelector("[data-statut]");
+    statut.style.color = "#b71924";
+    statut.style.fontWeight = "700";
+    statut.textContent = "Scanne un QR valide et différent pour chaque unité manquante.";
     return;
    }
    dialog.remove();
