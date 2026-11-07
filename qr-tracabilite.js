@@ -110,9 +110,43 @@ async function afficherProduits(){
 async function afficherExemplaires(id){const box=document.getElementById('cisqr-sub-'+id);if(!box)return;box.textContent='Chargement…';try{const data=await rpc('cis_qr_exemplaires_lire',{p_materiel:id});box.innerHTML=(data||[]).map(x=>`<p class="cisqr-card-detail"><code>${esc(x.code)}</code> — ${esc(x.emplacement||x.etat)} — Péremption : ${esc(x.peremption||'non renseignée')} — Lot : ${esc(x.lot||'—')}</p>`).join('')||'Aucun exemplaire attribué.';}catch(e){box.textContent=erreur(e);}}
 async function attribuerMateriel(id){if(!isAdmin())return;try{await config();if(!estSuivi(id))throw Error('Active d’abord le suivi QR pour ce produit.');await scanner(async code=>{const f=await rpc('cis_qr_fiche',{p_code:code});if(!f||f.etat!=='vierge')throw Error('Étiquette inconnue ou déjà attribuée');await formulaireAttribution(code,id);});}catch(e){alert(erreur(e));}}
 async function formulaireAttribution(code,selected){
- const possibles=(typeof materiels!=='undefined'?materiels:[]).filter(m=>estSuivi(m.id));if(!possibles.length)throw Error('Aucun matériel activé pour la traçabilité QR.');
- const w=document.createElement('div');w.className='cisqr-scan-dialog';w.innerHTML=`<div class="cisqr-scan-card" role="dialog" aria-modal="true"><h2>Attribuer une étiquette</h2><p><code>${esc(code)}</code></p><div class="cisqr-row"><label>Matériel</label><select id="cisqr-material-select">${possibles.map(m=>`<option value="${esc(m.id)}" ${m.id===selected?'selected':''}>${esc(m.nom)}</option>`).join('')}</select></div><div class="cisqr-row"><label>N° de lot</label><input id="cisqr-n-lot" maxlength="120" placeholder="Facultatif"></div><div class="cisqr-row"><label>Péremption</label><input type="date" id="cisqr-date"></div><div class="cisqr-row"><label>Emplacement</label><select id="cisqr-place"><option value="pharmacie">Stock pharmacie</option><option value="vsav">VSAV</option></select></div><p id="cisqr-assign-status" class="cisqr-status"></p><div class="cisqr-row"><button class="cisqr-main" id="cisqr-assign-ok">Confirmer l'attribution</button><button id="cisqr-assign-cancel">Annuler</button></div></div>`;document.body.appendChild(w);
- w.querySelector('#cisqr-assign-cancel').onclick=()=>w.remove();w.querySelector('#cisqr-assign-ok').onclick=async()=>{const b=w.querySelector('#cisqr-assign-ok');b.disabled=true;try{await rpc('cis_qr_attribuer',{p_code:code,p_materiel:w.querySelector('#cisqr-material-select').value,p_emplacement:w.querySelector('#cisqr-place').value,p_lot:w.querySelector('#cisqr-n-lot').value,p_peremption:w.querySelector('#cisqr-date').value||null});w.remove();alert('QR code attribué.');if(document.getElementById('cisqr-materiels'))await afficherProduits();}catch(e){setStatut('cisqr-assign-status',erreur(e),true);b.disabled=false;}};
+ const possibles=(typeof materiels!=='undefined'?materiels:[]).filter(m=>estSuivi(m.id));
+ if(!possibles.length)throw Error('Aucun matériel activé pour la traçabilité QR.');
+ // Charger les rattachements actuels pour ne pas proposer une ancienne configuration locale.
+ const s=client();if(!s)throw Error('Supabase indisponible.');
+ const [fiches,correspondances]=await Promise.all([
+  s.from('materiels').select('id,inventaire_vsav_materiel_id,autres_inventaire_vsav_materiel_ids').in('id',possibles.map(m=>m.id)),
+  s.rpc('vsav_correspondances_inventaire')
+ ]);
+ for(const resultat of [fiches,correspondances])if(resultat.error)throw resultat.error;
+ const configurations=new Map((fiches.data||[]).map(m=>[String(m.id),m]));
+ const w=document.createElement('div');w.className='cisqr-scan-dialog';w.innerHTML=`<div class="cisqr-scan-card" role="dialog" aria-modal="true"><h2>Attribuer une étiquette</h2><p><code>${esc(code)}</code></p><div class="cisqr-row"><label for="cisqr-material-select">Matériel</label><select id="cisqr-material-select">${possibles.map(m=>`<option value="${esc(m.id)}" ${String(m.id)===String(selected)?'selected':''}>${esc(m.nom)}</option>`).join('')}</select></div><div class="cisqr-row"><label>N° de lot</label><input id="cisqr-n-lot" maxlength="120" placeholder="Facultatif"></div><div class="cisqr-row"><label>Péremption</label><input type="date" id="cisqr-date"></div><div class="cisqr-row"><label for="cisqr-place">Emplacement</label><select id="cisqr-place"><option value="pharmacie">Stock pharmacie</option><option value="vsav">VSAV</option></select></div><div class="cisqr-row" id="cisqr-vsav-wrap" hidden><label for="cisqr-vsav-select">Emplacement dans le VSAV (obligatoire)</label><select id="cisqr-vsav-select"><option value="">Choisir un emplacement</option></select><p id="cisqr-vsav-help" class="cisqr-small"></p></div><p id="cisqr-assign-status" class="cisqr-status" role="status"></p><div class="cisqr-row"><button class="cisqr-main" id="cisqr-assign-ok">Confirmer l'attribution</button><button id="cisqr-assign-cancel">Annuler</button></div></div>`;
+ document.body.appendChild(w);
+ const produit=w.querySelector('#cisqr-material-select'),lieu=w.querySelector('#cisqr-place'),choix=w.querySelector('#cisqr-vsav-select'),zone=w.querySelector('#cisqr-vsav-wrap'),bouton=w.querySelector('#cisqr-assign-ok');
+ let liens=new Set(),options=[];
+ function actualiser(){
+  const fiche=configurations.get(produit.value);
+  liens=new Set([fiche?.inventaire_vsav_materiel_id,...(fiche?.autres_inventaire_vsav_materiel_ids||[])].filter(Boolean).map(String));
+  options=(correspondances.data||[]).filter(x=>liens.has(String(x.id)));
+  choix.innerHTML='<option value="">Choisir un emplacement</option>'+options.map(x=>`<option value="${esc(x.id)}">${esc([x.vehicule,x.zone,x.nom].filter(Boolean).join(' › '))}</option>`).join('');
+  const obligatoire=lieu.value==='vsav'&&liens.size>0;
+  zone.hidden=!obligatoire;zone.style.display=obligatoire?'':'none';choix.required=obligatoire;choix.disabled=!obligatoire;
+  const incomplet=obligatoire&&options.length!==liens.size;
+  w.querySelector('#cisqr-vsav-help').textContent=incomplet?'Un rattachement est indisponible. Vérifie les réglages du matériel.':'Sélectionne la zone où cet exemplaire sera rangé.';
+  bouton.disabled=!fiche||incomplet;setStatut('cisqr-assign-status',!fiche?'Matériel indisponible. Actualise la page.':'',!fiche);
+ }
+ produit.onchange=actualiser;lieu.onchange=actualiser;actualiser();
+ w.querySelector('#cisqr-assign-cancel').onclick=()=>w.remove();
+ bouton.onclick=async()=>{
+  if(lieu.value==='vsav'&&liens.size>0&&!options.some(x=>String(x.id)===choix.value)){
+   setStatut('cisqr-assign-status','Sélectionne l’emplacement de cet exemplaire dans le VSAV.',true);choix.focus();return;
+  }
+  bouton.disabled=true;
+  try{
+   await rpc('cis_qr_attribuer_precis',{p_code:code,p_materiel:produit.value,p_emplacement:lieu.value,p_lot:w.querySelector('#cisqr-n-lot').value,p_peremption:w.querySelector('#cisqr-date').value||null,p_inventaire:lieu.value==='vsav'&&liens.size>0?choix.value:null});
+   w.remove();alert('QR code attribué.');if(document.getElementById('cisqr-materiels'))await afficherProduits();
+  }catch(e){setStatut('cisqr-assign-status',erreur(e),true);bouton.disabled=false;}
+ };
 }
 function injectAdmin(){if(!isAdmin())return;const menu=document.querySelector('.menu-administration');if(!menu||menu.querySelector('[data-cisqr-menu]'))return;const b=document.createElement('button');b.type='button';b.className='menu-button';b.dataset.cisqrMenu='1';b.innerHTML='<span class="menu-icon">▦</span><span><strong>Traçabilité QR code</strong><small>Attribuer, déplacer et consulter les exemplaires</small></span>';b.onclick=ouvrir;menu.appendChild(b);}
 function injectFormulaire(m){if(!m?.id||!isAdmin())return;const formulaire=document.querySelector('#nom-materiel')?.closest('.formulaire');if(!formulaire)return;const c=document.createElement('div');c.className='cisqr-admin-mini';c.innerHTML=`<h3>Traçabilité QR code</h3><label><input type="checkbox" id="cisqr-suivi-enable"> Activer le suivi individuel par QR code pour ce produit</label><div class="cisqr-row"><button type="button" id="cisqr-assign-direct">Attribuer un QR code (caméra)</button><button type="button" id="cisqr-open-admin">Gestion des étiquettes</button></div><p class="cisqr-small">Une étiquette = un exemplaire physique, comme les bouteilles d’oxygène.</p><p class="cisqr-status" id="cisqr-form-status"></p>`;formulaire.appendChild(c);
@@ -147,10 +181,11 @@ function cisqrDetailMouvement(e){
 }
 async function afficherHistorique(code){try{
  const h=await rpc('cis_qr_historique',{p_code:code}),f=h.fiche,host=document.getElementById('cisqr-adv-detail');if(!host)return;
+ const precis=await rpc('cis_qr_emplacement_lire',{p_code:code});
  const etat=String(f.etat||'').toLowerCase();const statut=etat==='utilisee'?'Utilisé':etat==='attribuee'?'En service':etat==='vierge'?'Vierge':cisqrLieu(etat);
  const events=Array.isArray(h.evenements)?h.evenements:[];
  host.innerHTML=`<p class="cisqr-fiche-repere">FICHE INDIVIDUELLE</p><div class="cisqr-fiche-head"><div><h2>${esc(f.materiel||'Matériel')}</h2><p>Fiche individuelle ${f.unite?'— '+esc(f.unite):''}</p></div><span class="cisqr-etat ${etat==='utilisee'?'cisqr-etat-sorti':etat==='attribuee'?'cisqr-etat-actif':''}">${esc(statut)}</span></div>
- <div class="cisqr-fiche-grid"><div><small>Emplacement</small><strong>${esc(cisqrLieu(f.emplacement))}</strong></div><div><small>Péremption</small><strong>${esc(cisqrJour(f.date_peremption))}</strong></div><div><small>Numéro de lot</small><strong>${esc(f.numero_lot||'Non renseigné')}</strong></div></div>
+ <div class="cisqr-fiche-grid"><div><small>Emplacement</small><strong>${esc(cisqrLieu(f.emplacement))}${precis?.libelle?`<br><span style="font-size:.9em">${esc(precis.libelle)}</span>`:''}</strong></div><div><small>Péremption</small><strong>${esc(cisqrJour(f.date_peremption))}</strong></div><div><small>Numéro de lot</small><strong>${esc(f.numero_lot||'Non renseigné')}</strong></div></div>
  <div class="cisqr-ref"><div><small>Référence QR</small><strong>${esc(f.code)}</strong></div><button type="button" id="cisqr-copy-ref">Copier</button></div>
  ${etat==='attribuee'?'<button type="button" id="cisqr-move-unit">Déplacer cet exemplaire</button>':''}
  <h3 class="cisqr-historique-titre">Historique du matériel <span>(${events.length})</span></h3>
