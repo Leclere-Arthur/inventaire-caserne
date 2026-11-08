@@ -148,7 +148,8 @@ async function stock() {
 async function complementaire() {
  const rows=await toutesLesLignes(()=>obtenirClientSupabase().from("cis_vsav_suivi_complementaire")
   .select("id,resolu_at").is("resolu_at",null).order("id"));
- return rows.map(r=>"complementaire:"+r.id);
+ const preavis=await rpc("cis_preavis_suivis");
+ return [...rows.map(r=>"complementaire:"+r.id),...(preavis||[]).map(r=>"preavis:"+r.id)];
 }
 async function caserne(compte) {
  if(!utilisateurAPermission("acces_espace_caserne"))return [];

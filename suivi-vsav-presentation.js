@@ -50,7 +50,7 @@ function installer(){
  if(document.getElementById('vsav-rubriques')){void chargerSpecifique();return;}
  const grille=document.createElement('section');grille.id='vsav-rubriques';grille.setAttribute('aria-label','Rubriques du suivi VSAV');main.appendChild(grille);
  grille.appendChild(dossier('SUIVI SPÉCIFIQUE','vsav-specifique'));
- for(const [id,titre] of [['suivi-vsav-attente','Matériel à réarmer'],['suivi-vsav-liste','Matériel à surveiller ou HS'],['suivi-vsav-complementaire','Matériel manquant et péremptions modifiées']]){
+ for(const [id,titre] of [['suivi-vsav-attente','Matériel à réarmer'],['suivi-vsav-liste','Matériel à surveiller ou HS'],['suivi-vsav-complementaire','Matériel manquant et péremptions']]){
   const root=document.getElementById(id);if(!root)continue;
   if(root.previousElementSibling?.tagName==='H2')root.previousElementSibling.remove();
   const d=dossier(titre,'vsav-rubrique-'+id),corps=d.querySelector('.vsav-dossier-corps');corps.appendChild(root);grille.appendChild(d);

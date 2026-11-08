@@ -1195,7 +1195,7 @@ let minuteurVerificationMiseAJour =
  * Elle permet de détecter une nouvelle version même si seul app.js?v=peremptions-20261031-v5 change.
  */
 const VERSION_APPLICATION_JS =
-    "inventaires-reprise-controles";
+    "preavis-peremption-20h";
 
 async function verifierNouvelleVersionAppJs() {
 
@@ -24286,6 +24286,7 @@ async function remplirHistoriqueNotifications(){
  try{
   if(window.CISVSAVSansStock) await CISVSAVSansStock.importerAlertes();
   if(window.CISPeremptions) await CISPeremptions.importer();
+  if(window.CISPreavis) await CISPreavis.importer();
   const store=await chargerHistoriqueNotificationsModule(),rows=await cisVSAVNotificationsFusionner(await store.list(uid),uid);
   if(!zone.isConnected||String(utilisateurConnecte?.id)!==String(uid))return;
   zone.innerHTML=rows.length?rows.map(r=>`<button type="button" class="notif-ligne ${r.read?'':'non-lue'} ${!r.read&&notificationEstRuptureStock(r)?'rupture-stock':''} ${r.read&&r.id?.startsWith('vsav-server:')?'vsav-lue':''}" data-notification-id="${echapperHTML(r.id)}"><span class="notif-contenu"><strong>${echapperHTML(r.title)}</strong>${r.body?`<p>${echapperHTML(r.body)}</p>`:''}<time datetime="${echapperHTML(r.receivedAt)}">${echapperHTML(new Date(r.receivedAt).toLocaleString('fr-FR',{timeZone:'Europe/Paris',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}))}</time></span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></button>`).join(''):'<p class="notif-vide">Aucune notification reçue depuis l’activation de cet historique.</p>';
@@ -24304,7 +24305,7 @@ async function ouvrirNotificationHistorique(id){
   if(String(utilisateurConnecte?.id)!==String(uid))return;
   if(!r)return alert('Cette notification n’est pas disponible pour ce compte.');
   const target=r.target;
-  if(target==='suivi-vsav'&&!utilisateurAPermission('acces_administration'))return alert('Accès réservé aux admins pharmacie.');
+  if(target==='suivi-vsav'&&!utilisateurAPermission('acces_administration')&&!(id.startsWith(uid+':preavis-')&&utilisateurAPermission('acces_notifications_pharmacie')))return alert('Accès réservé aux admins pharmacie.');
   if(target==='menage-inventaire'&&!utilisateurAPermission('acces_admin_menage'))return alert('Vous n’avez plus accès à l’inventaire ménage.');
   if(target==='vehicules-inventaire'&&!id.startsWith('vsav-server:')&&!utilisateurAPermission('acces_admin_menage'))return alert('Vous n’avez plus accès aux inventaires véhicules.');
   if(target.startsWith('caserne:')){const rubrique=obtenirRubriquesCaserne().find(x=>x[0]===target.slice(8));if(!rubrique||!utilisateurPeutVoirRubriqueCaserne(rubrique))return alert('Vous n’avez plus accès à cette rubrique.');}
@@ -24312,6 +24313,7 @@ async function ouvrirNotificationHistorique(id){
   if(id.startsWith('vsav-server:')){const {error}=await obtenirClientSupabase().from('cis_notifications_vsav').update({read_at:new Date().toISOString()}).eq('id',id.slice(12)).eq('user_id',uid);if(error)throw error;}else await store.read(id,uid);
   await actualiserPointNotifications();
   if(String(utilisateurConnecte?.id)!==String(uid))return;
+  if(target==='suivi-vsav'&&id.startsWith(uid+':preavis-')&&!utilisateurAPermission('acces_administration'))return afficherFenetreCIS(r.title+'\n\n'+r.body);
   if(target==='suivi-vsav')return ouvrirSuiviVSAVPharma();
   if(target==='menage-inventaire'){rubriqueEquipeOrigine='menage';return afficherInventaireMenage();}
   if(target==='vehicules-inventaire'){rubriqueEquipeOrigine='vehicules';return utilisateurAPermission('acces_admin_menage')?afficherAdminInventairesEquipe():afficherEspaceGarde();}
@@ -24333,7 +24335,8 @@ async function actualiserPointNotifications(){
  const sequence=(window.__cisPointNotificationsSequence||0)+1;window.__cisPointNotificationsSequence=sequence;
  try{
   if(window.CISVSAVSansStock) await CISVSAVSansStock.importerAlertes();
-  const store=await chargerHistoriqueNotificationsModule(),rows=await cisVSAVNotificationsFusionner(await store.list(uid),uid);
+  if(window.CISPreavis)await CISPreavis.importer();
+ const store=await chargerHistoriqueNotificationsModule(),rows=await cisVSAVNotificationsFusionner(await store.list(uid),uid);
   if(sequence!==window.__cisPointNotificationsSequence||String(utilisateurConnecte?.id)!==String(uid))return;
   afficherEtatPointNotifications(rows.some(r=>!r.read));
  }catch(e){console.warn('État notifications :',e);}
@@ -24483,7 +24486,7 @@ async function afficherSuiviVSAVComplementaire(){
  const parent=document.getElementById('suivi-vsav-liste');if(!parent)return;
  let zone=document.getElementById('suivi-vsav-complementaire');
  if(!zone){zone=document.createElement('section');zone.id='suivi-vsav-complementaire';parent.insertAdjacentElement('afterend',zone);}
- zone.innerHTML='<h2>Matériel manquant et péremptions modifiées</h2><p>Chargement…</p>';
+ zone.innerHTML='<h2>Matériel manquant et péremptions</h2><p>Chargement…</p>';
  try{
   const sb=obtenirClientSupabase();
   const {data,error}=await sb.from('cis_vsav_suivi_complementaire')
@@ -24491,7 +24494,7 @@ async function afficherSuiviVSAVComplementaire(){
    .is('resolu_at',null).order('date',{ascending:false}).limit(200);
   if(error)throw error;
   const esc=vehInventaireHTML;
-  zone.innerHTML='<h2>Matériel manquant et péremptions modifiées</h2>'+
+  zone.innerHTML='<h2>Matériel manquant et péremptions</h2>'+
    ((data||[]).length?(data||[]).map(a=>`<article class="veh-card" style="margin:12px 0;padding:16px;border:1px solid #b9c9d7;border-radius:12px"><strong>${esc(a.vehicule_nom)} · ${esc(a.zone_nom||'')} · ${esc(a.nom)}</strong><p><b>${a.nature==='manquant'?'Matériel manquant':'Date de péremption modifiée'}</b></p><p>${esc(a.detail)}</p><small>${new Date(a.date).toLocaleString('fr-FR')}</small><p><button type="button" class="equipe-action-button" data-vsav-accuse="${esc(a.id)}">Valider la remise en état</button></p></article>`).join(''):'<p>Aucune anomalie complémentaire en attente.</p>');
   zone.querySelectorAll('[data-vsav-accuse]').forEach(btn=>btn.onclick=async()=>{
    btn.disabled=true;
@@ -24500,5 +24503,6 @@ async function afficherSuiviVSAVComplementaire(){
    void window.CISCompteurs?.actualiser(true);
    await afficherSuiviVSAVComplementaire();
   });
+  if(window.CISPreavis)await CISPreavis.ajouterSuivi(zone);
  }catch(e){zone.textContent='Suivi complémentaire indisponible : '+(e.message||e);}
 }
