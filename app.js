@@ -1137,7 +1137,7 @@ let minuteurVerificationMiseAJour =
  * Elle permet de détecter une nouvelle version même si seul app.js?v=peremptions-20261031-v5 change.
  */
 const VERSION_APPLICATION_JS =
-    "menage-plan-zones";
+    "ordre-pharmacie-preparation";
 
 async function verifierNouvelleVersionAppJs() {
 
@@ -9097,8 +9097,8 @@ function creerFicheEvenementPDF(PDF, publication) {
     paragraphe(titre,16,true,couleurs.texte,182,14);y+=4;
     const infos=[["TYPE",type]];
     if(publication.sous_type)infos.push(["SOUS-TYPE",publication.sous_type]);
-    if(publication.date_evenement)infos.push(["DATE DE L'ÉVÉNEMENT",formaterDateHeureCaserne(publication.date_evenement)]);
     if(publication.date_preparation)infos.push(["DATE DE PRÉPARATION",formaterDateHeureCaserne(publication.date_preparation)]);
+    if(publication.date_evenement)infos.push(["DATE DE L'ÉVÉNEMENT",formaterDateHeureCaserne(publication.date_evenement)]);
     for(let index=0; index<infos.length; index+=2) {
         const cellules=infos.slice(index,index+2).map(([libelle,valeur])=>{
             doc.setFont("helvetica","normal");doc.setFontSize(10);
@@ -9123,8 +9123,8 @@ function creerFicheEvenementPDF(PDF, publication) {
     if(publication.description){bandeau("INFORMATIONS");paragraphe(publication.description);y+=8;}
     const reponses=Array.isArray(publication.reponses)?publication.reponses:[];
     const parties=[
-        {titre:"ÉVÉNEMENT",contexte:"evenement",date:publication.date_evenement,actif:publication.demande_reponse||reponses.some(r=>r.contexte==="evenement")},
-        {titre:"PRÉPARATION",contexte:"preparation",date:publication.date_preparation,actif:!!publication.date_preparation}
+        {titre:"PRÉPARATION",contexte:"preparation",date:publication.date_preparation,actif:!!publication.date_preparation},
+        {titre:"ÉVÉNEMENT",contexte:"evenement",date:publication.date_evenement,actif:publication.demande_reponse||reponses.some(r=>r.contexte==="evenement")}
     ].filter(p=>p.actif);
     for(const partie of parties){
         const presents=reponses.filter(r=>r.contexte===partie.contexte&&r.reponse==="present")
@@ -9607,11 +9607,11 @@ function cartePublicationCaserne(p, options = {}) {
         <h2>${echapperHTML(titre)}</h2>
         ${p.description ? `<p>${echapperHTML(p.description).replaceAll("\n","<br>")}</p>` : ""}
         ${photos.length ? `<div class="caserne-photos">${photos.map(ph => `<button type="button" onclick='ouvrirPhotoCaserne(${JSON.stringify(ph.photo_url)})'><img src="${echapperHTML(ph.photo_url || "")}" alt="Photo de la publication"></button>`).join("")}</div>` : ""}
-        ${p.demande_reponse ? (estPasse ? blocReponsePublicationPasseeCaserne(p,"evenement","Réponses pour l’événement") : blocReponsePublicationCaserne(p,"evenement","Réponse pour l'événement",retour)) : ""}
         ${p.date_preparation ? `<div class="caserne-preparation-bloc"><strong>Préparation</strong><span>${echapperHTML(formaterDateHeureCaserne(p.date_preparation))}</span>${p.demande_reponse_preparation ? (estPasse ? blocReponsePublicationPasseeCaserne(p,"preparation","Réponses pour la préparation") : blocReponsePublicationCaserne(p,"preparation","Réponse pour la préparation",retour)) : ""}</div>` : ""}
+        ${p.demande_reponse ? (estPasse ? blocReponsePublicationPasseeCaserne(p,"evenement","Réponses pour l’événement") : blocReponsePublicationCaserne(p,"evenement","Réponse pour l'événement",retour)) : ""}
         ${!estPasse ? `<div class="caserne-calendrier-actions">
-            ${boutonCalendrierCaserne(titre, p.date_evenement, p.description || "", 60, "Ajouter l'événement au calendrier")}
             ${p.date_preparation ? boutonCalendrierCaserne(`${titre} · Préparation`, p.date_preparation, p.description || "", 60, "Ajouter la préparation au calendrier") : ""}
+            ${boutonCalendrierCaserne(titre, p.date_evenement, p.description || "", 60, "Ajouter l'événement au calendrier")}
         </div>` : ""}
         ${options.admin ? `<div class="caserne-actions-admin"><button type="button" onclick="CISEquipeEvolution.reponses('${p.id}','${p.type_publication}')">Voir toutes les réponses</button><button type="button" class="caserne-export-pdf bouton-pdf-icone" onclick="exporterPublicationCasernePDF('${p.id}')" aria-label="Exporter en PDF" title="Exporter en PDF">${iconePDFHTML()}</button><button type="button" onclick="CISCaserneAnnonces.annoncer('${p.id}',this)">Envoyer l’annonce</button><button type="button" onclick="modifierPublicationCaserne('${p.id}','${p.type_publication}')">Modifier</button><button type="button" onclick="supprimerPublicationCaserne('${p.id}','${p.type_publication}')">Supprimer</button></div>` : ""}
     </article>`;
@@ -10989,7 +10989,6 @@ function afficherAccueil() {
         obtenirRoleUtilisateur();
 
     const boutons = [];
-    boutons.push(`<button type="button" class="menu-button" onclick="CISSuiviMateriel.ouvrir()"><span><strong>Suivi matériel</strong><small>Hôpital, réarmement et matériel à surveiller</small></span></button>`);
 
 
 
@@ -11135,6 +11134,8 @@ function afficherAccueil() {
 
     }
 
+
+    boutons.push(`<button type="button" class="menu-button" onclick="CISSuiviMateriel.ouvrir()"><span><strong>Suivi matériel</strong><small>Hôpital, réarmement et matériel à surveiller</small></span></button>`);
 
     document.getElementById(
         "app"
@@ -17035,10 +17036,7 @@ function afficherMenuAdministration() {
             <h2>Administration</h2>
 
             <div class="menu-administration">
-                <button class="menu-button" onclick="afficherArchivesControlesPharmacie()">
-                    <span class="menu-icon">📄</span>
-                    <span><strong>Traçabilité Meducore / VSAV</strong><small>Consulter et exporter les feuilles de contrôle</small></span>
-                </button>
+
 
                 ${permissionsRubriqueMateriel.some(p => utilisateurAPermission(p)) ? '<button class="menu-button" onclick="afficherRubriqueMateriel()"><span class="menu-icon">📦</span><span><strong>Matériel</strong><small>Ajouter, gérer et classer le matériel</small></span></button>' : ''}
 
@@ -17072,6 +17070,11 @@ function afficherMenuAdministration() {
                         : ""
                 }
 
+                <button class="menu-button" data-pharma-ordre="tracabilite" onclick="afficherArchivesControlesPharmacie()">
+                    <span class="menu-icon">📄</span>
+                    <span><strong>Traçabilité Meducore / VSAV</strong><small>Consulter et exporter les feuilles de contrôle</small></span>
+                </button>
+
 <button class="menu-button" onclick="ouvrirSuiviVSAVPharma()"><span><strong>Suivi VSAV</strong><small>Matériels à surveiller et remises en état</small></span></button>
             </div>
 
@@ -17082,6 +17085,10 @@ function afficherMenuAdministration() {
     `;
 
     window.CISQR?.injectAdmin();
+    const menuPharma = document.querySelector('.menu-administration');
+    const boutonQR = menuPharma?.querySelector('[data-cisqr-menu]');
+    const boutonTracabilite = menuPharma?.querySelector('[data-pharma-ordre="tracabilite"]');
+    if (boutonQR && boutonTracabilite) menuPharma.insertBefore(boutonQR, boutonTracabilite);
     initialiserStylesReapprovisionnementArchive();
 
 }
