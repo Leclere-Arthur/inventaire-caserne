@@ -1137,7 +1137,7 @@ let minuteurVerificationMiseAJour =
  * Elle permet de détecter une nouvelle version même si seul app.js?v=peremptions-20261031-v5 change.
  */
 const VERSION_APPLICATION_JS =
-    "inventaire-qr-niveaux";
+    "inventaire-aiguille-qr-oublies";
 
 async function verifierNouvelleVersionAppJs() {
 
@@ -22818,14 +22818,15 @@ async function vehInventaireCommencer(id){
     if(!m.materiel_id)continue;
     const actuel=resultat.materiels.find(x=>String(x.id)===String(m.materiel_id));
     if(!actuel)continue;
-    const q=Number(m.quantite_constatee);
+    const autoritatif=(resultat.contexteUnites||[]).some(c=>String(c.id)===String(actuel.id))||(resultat.anomalies||[]).some(a=>String(a.materiel_id)===String(actuel.id)&&a.quantite_constatee!=null);
+    const q=autoritatif?quantiteVSAVDisponible(actuel,{anomalies:resultat.anomalies,hopital:resultat.hopital||[]}):Number(m.quantite_constatee);
     if(!Number.isInteger(q)||q<0)continue;
     const absentes=(m.peremptions_controle||[]).filter(x=>x.action==='absente').map(x=>({
      unite:Number(x.unite),initiale:actuel.dates_peremption?.[Number(x.unite)-1],
      date:actuel.dates_peremption?.[Number(x.unite)-1],action:'absente',identification:'selection_utilisateur'
-    })).filter(x=>x.initiale);
+    })).filter(x=>x.initiale).slice(0,Math.max(0,Number(actuel.quantite)-q));
     if(!controlesPrecedents[actuel.zone_id])controlesPrecedents[actuel.zone_id]={};
-    controlesPrecedents[actuel.zone_id][actuel.id]={hopital_quantite:Number(m.hopital_quantite||0),quantite_constatee:q,etat:q===0?null:null,peremptions_controle:absentes,observation:''};
+    controlesPrecedents[actuel.zone_id][actuel.id]={reference_seulement:autoritatif,hopital_quantite:autoritatif?(resultat.hopital||[]).filter(h=>h.inventaire_id===actuel.id&&h.etape<2).reduce((n,h)=>n+Number(h.quantite),0):Number(m.hopital_quantite||0),quantite_constatee:q,etat:q===0?null:null,peremptions_controle:absentes,observation:''};
    }
   }
   vehInventaireSession={contexteUnites:resultat.contexteUnites||[],identifiantControle:genererUUID(),vehicule:{id:v.id,nom:v.nom,code:v.code},controles:controlesPrecedents,anomalies:resultat.anomalies,participants:personnesAvecAuteur([]),personnels:resultat.personnels};
@@ -22997,11 +22998,20 @@ setInterval(()=>{
   void actualiserHopitalInventaire().catch(e=>console.warn("Actualisation du suivi hôpital",e.message));
 },15000);
 
-function quantiteVSAVDisponible(m,session){const a=(session?.anomalies||[]).find(a=>a.materiel_id===m.id&&a.source==='utilisation_pharmacie');return Math.max(0,Number(a?.quantite_constatee??m.quantite)-(session?.hopital||[]).filter(h=>h.inventaire_id===m.id).reduce((n,h)=>n+Number(h.quantite),0));}
+function quantiteVSAVDisponible(m,session){
+ const lignes=(session?.anomalies||[]).filter(a=>String(a.materiel_id)===String(m.id));
+ const a=lignes.find(a=>a.source==='utilisation_pharmacie')||lignes.find(a=>a.quantite_constatee!=null&&Number.isInteger(Number(a.quantite_constatee)));
+ return Math.max(0,Number(a?.quantite_constatee??m.quantite)-(session?.hopital||[]).filter(h=>String(h.inventaire_id)===String(m.id)&&h.etape<2).reduce((n,h)=>n+Number(h.quantite),0));
+}
 async function vehInventaireOuvrirZone(id){
  if(id==='__technique'){CISTechnique.ouvrir();return;}
  const session=vehInventaireSession,z=vehInventaireZones.find(x=>x.id===id);if(!session||!z)return;
- try{const hopital=await CISSuiviMateriel.lire(session.vehicule.id);if(session!==vehInventaireSession)return;CISSuiviMateriel.appliquer(session,vehInventaireMateriels,hopital);}
+ try{
+  const [hopital,signalements]=await Promise.all([CISSuiviMateriel.lire(session.vehicule.id),obtenirClientSupabase().rpc('inventaires_anomalies',{p_vehicule:session.vehicule.id})]);
+  if(signalements.error)throw signalements.error;if(session!==vehInventaireSession)return;
+  session.anomalies=signalements.data||[];CISSuiviMateriel.appliquer(session,vehInventaireMateriels,hopital);
+  for(const m of vehInventaireMateriels){const c=session.controles[m.zone_id]?.[m.id];if(c?.reference_seulement){const q=quantiteVSAVDisponible(m,session);if(c.quantite_constatee!==q)c.peremptions_controle=[];c.quantite_constatee=q;if(q===0)c.etat=null;}}
+ }
  catch(e){alert("Suivi hôpital indisponible : "+e.message);return;}
  const materiels=vehInventaireMateriels.filter(m=>m.zone_id===id);
  const precedent=session.controles[id]||{},enfants=vehInventaireSousZones(id),parent=vehInventaireZones.find(p=>p.id===z.parent_id);

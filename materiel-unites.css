@@ -1,3 +1,9 @@
 .cis-niveau{margin:14px 0;padding:14px;border:1px solid #cbd5dc;border-radius:12px;background:#f5f8fa;box-sizing:border-box}.cis-niveau>strong{font-size:14px}.cis-niveau svg{display:block;width:220px;max-width:100%;margin:8px auto}.cis-niveau label{display:block;margin-top:12px;font-size:14px}.cis-niveau input[type=range]{display:block;box-sizing:border-box;width:100%;min-width:0;height:34px;accent-color:#176b9b}.cis-niveau input[data-niveau-texte]{display:block;box-sizing:border-box;max-width:100%;width:100%;padding:10px;margin-top:6px;border:1px solid #aab9c4;border-radius:8px;font:inherit;font-size:16px}.cis-unite-erreur{color:#b3202b!important;font-weight:700}.cis-unite-ok{color:#176b45;font-weight:700}[data-controle-unite]>legend{font-weight:700;font-size:14px}[data-controle-unite] input[type=date]{display:block;box-sizing:border-box;width:100%;min-width:0;font:inherit;font-size:16px;padding:10px;margin-top:6px;border:1px solid #aab9c4;border-radius:8px}[data-controle-unite] [data-veh-controle-present][hidden]{display:none!important}
 
 .cis-niveau input[type=range]{padding:0!important;border:0!important;background:transparent!important}
+
+/* Les dates natives iOS ne doivent pas imposer leur largeur intrinsèque. */
+#app [data-controle-unite],#app [data-controle-unite] label{min-width:0;max-width:100%;box-sizing:border-box}
+#app [data-controle-unite] input[type=date],.cisqr-scan-dialog input[type=date]{appearance:none;-webkit-appearance:none;display:block;width:100%!important;max-width:100%!important;min-width:0!important;min-inline-size:0!important;box-sizing:border-box!important;overflow:hidden;font-size:16px!important}
+#app [data-controle-unite] input[type=date]::-webkit-date-and-time-value,.cisqr-scan-dialog input[type=date]::-webkit-date-and-time-value{text-align:left;min-width:0}
+.cis-niveau svg{touch-action:none;user-select:none;-webkit-user-select:none}
