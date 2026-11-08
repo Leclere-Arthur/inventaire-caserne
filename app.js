@@ -743,8 +743,8 @@ let etatPageAvantProfil = null;
 
 /* =========================================================
    HISTORIQUE DE NAVIGATION INTERNE
-   Tous les boutons « Retour » reviennent désormais à la page
-   réellement consultée juste avant, quel que soit l'espace.
+   Les retours des rubriques utilisent leur destination explicite.
+   Le profil et les notifications conservent la page d’origine.
    ========================================================= */
 const historiqueNavigationApplication = [];
 let etatNavigationCourante = null;
@@ -829,11 +829,15 @@ function memoriserTransitionNavigation() {
 function uniformiserRetoursApplication(){
     const app=document.getElementById('app');if(!app)return;
     if(!document.getElementById('cis-style-retour-unifie')){
-        const s=document.createElement('style');s.id='cis-style-retour-unifie';s.textContent=`#app .cis-retour-unifie{appearance:none!important;-webkit-appearance:none!important;display:inline-flex!important;align-items:center!important;justify-content:center!important;gap:8px!important;box-sizing:border-box!important;min-height:48px!important;width:auto!important;max-width:100%!important;padding:12px 18px!important;margin:0 0 18px!important;border:1px solid #d9dfe4!important;border-radius:14px!important;background:#fff!important;color:#20272c!important;box-shadow:0 5px 15px #15202b0b!important;font:inherit!important;font-weight:750!important;line-height:1.25!important;text-align:center!important;text-decoration:none!important;white-space:normal!important;cursor:pointer;touch-action:manipulation}#app .cis-retour-unifie:focus-visible{outline:3px solid #1687ff;outline-offset:3px}#app .cis-retour-unifie:disabled{opacity:.5}`;document.head.appendChild(s);
+        const s=document.createElement('style');s.id='cis-style-retour-unifie';s.textContent=`#app .cis-retour-unifie{appearance:none!important;-webkit-appearance:none!important;display:inline-flex!important;align-items:center!important;justify-content:center!important;gap:8px!important;box-sizing:border-box!important;min-height:48px!important;width:fit-content!important;min-width:0!important;max-width:100%!important;flex:0 0 auto!important;align-self:flex-start!important;justify-self:start!important;padding:12px 18px!important;margin:0 0 18px!important;border:1px solid #d9dfe4!important;border-radius:14px!important;background:#fff!important;color:#20272c!important;box-shadow:0 5px 15px #15202b0b!important;font:inherit!important;font-weight:750!important;line-height:1.25!important;text-align:center!important;text-decoration:none!important;white-space:normal!important;cursor:pointer;touch-action:manipulation}#app .cis-retour-unifie:focus-visible{outline:3px solid #1687ff;outline-offset:3px}#app .cis-retour-unifie:disabled{opacity:.5}`;document.head.appendChild(s);
     }
     for(const b of app.querySelectorAll('button,a')){
-        if(!b.matches(SELECTEUR_RETOUR_CIS)&&!/^\s*(?:←\s*)?Retour(?:\s|$)/i.test(b.textContent))continue;
+        if(!b.matches(SELECTEUR_RETOUR_CIS)&&!/^\s*(?:←\s*)?Retour(?:\s*$|\s+(?:à|au|aux|vers)\s)/i.test(b.textContent))continue;
         b.classList.add('retour-button','cis-retour-unifie');
+        // Certaines pages, dont le profil, imposent la pleine largeur aux boutons.
+        for(const [propriete,valeur] of Object.entries({width:'fit-content','min-width':'0',flex:'0 0 auto','align-self':'flex-start','justify-self':'start'})){
+            if(b.style.getPropertyValue(propriete)!==valeur||b.style.getPropertyPriority(propriete)!=='important')b.style.setProperty(propriete,valeur,'important');
+        }
         if(b.tagName==='BUTTON'&&b.type!=='button')b.type='button';
         if(b.textContent!=='← Retour')b.textContent='← Retour';
         if(b.getAttribute('aria-label')!=='Retour à la page précédente')b.setAttribute('aria-label','Retour à la page précédente');
@@ -848,8 +852,12 @@ function installerHistoriqueNavigationApplication(){
         const b=event.target?.closest?.('button,a');if(!b||!app.contains(b))return;
         if(!restaurationNavigationEnCours)memoriserTransitionNavigation();
         if(b.matches(SELECTEUR_RETOUR_CIS)||b.classList.contains('cis-retour-unifie')){
-            if(!historiqueNavigationApplication.length)return; // Accès direct : laisser fonctionner le retour de secours du module.
-            event.preventDefault();event.stopImmediatePropagation();void retourPagePrecedente(b);return;
+            // Les modules connaissent leur rubrique parente et leurs éventuelles
+            // confirmations. Ne pas remplacer leur action par un ancien écran
+            // de saisie ou une copie de formulaire conservée dans l'historique.
+            // Seuls le profil et les notifications demandent un retour dynamique.
+            // Cela inclut les boutons liés par addEventListener.
+            return;
         }
         if(restaurationNavigationEnCours){++generationRetourNavigation;restaurationNavigationEnCours=false;memoriserTransitionNavigation();}
         const code=String(b.getAttribute('onclick')||'').trim();
@@ -869,7 +877,7 @@ async function retourPagePrecedente(bouton=null){
         vehInventaireSession=null;
     }
     let precedent=retourPendantChargement;
-    if(!precedent)do{precedent=historiqueNavigationApplication.pop();}while(precedent&&(precedent.transitoire||precedent.proprietaire!==String(utilisateurConnecte?.id||'')));
+    if(!precedent)do{precedent=historiqueNavigationApplication.pop();}while(precedent&&(precedent.transitoire||precedent.signature===etatNavigationCourante?.signature||precedent.proprietaire!==String(utilisateurConnecte?.id||'')));
     if(!precedent){afficherPortailPrincipal();return;}
     const numero=++generationRetourNavigation,app=document.getElementById('app');if(!app)return;
     restaurationNavigationEnCours=true;actionOuvertureNavigation=null;etatNavigationCourante=precedent;
