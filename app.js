@@ -1137,7 +1137,7 @@ let minuteurVerificationMiseAJour =
  * Elle permet de détecter une nouvelle version même si seul app.js?v=peremptions-20261031-v5 change.
  */
 const VERSION_APPLICATION_JS =
-    "inventaire-aiguille-qr-oublies";
+    "suivi-vsav-specifique";
 
 async function verifierNouvelleVersionAppJs() {
 
@@ -24354,7 +24354,7 @@ async function envoyerDocumentsEquipeParMail(){
 
 
 
-let suiviVSAVChargement;async function ouvrirSuiviVSAVPharma(){try{if(!window.CISSuiviVSAV){suiviVSAVChargement=suiviVSAVChargement||new Promise((resolve,reject)=>{const s=document.createElement('script');s.src='./suivi-vsav.js?v=pharmacie-vsav-prod-20261030-v1';s.onload=resolve;s.onerror=()=>{suiviVSAVChargement=null;reject(Error('Module Suivi VSAV indisponible.'));};document.head.appendChild(s);});await suiviVSAVChargement;}await CISSuiviVSAV.ouvrir();await afficherSuiviVSAVComplementaire();document.querySelector(".suivi-vsav-actualiser")?.addEventListener("click",afficherSuiviVSAVComplementaire);}catch(e){alert(e.message);}}
+let suiviVSAVChargement;async function ouvrirSuiviVSAVPharma(){try{if(!window.CISSuiviVSAV){suiviVSAVChargement=suiviVSAVChargement||new Promise((resolve,reject)=>{const s=document.createElement('script');s.src='./suivi-vsav.js?v=pharmacie-vsav-prod-20261030-v1';s.onload=resolve;s.onerror=()=>{suiviVSAVChargement=null;reject(Error('Module Suivi VSAV indisponible.'));};document.head.appendChild(s);});await suiviVSAVChargement;}await CISSuiviVSAV.ouvrir();await afficherSuiviVSAVComplementaire();CISSuiviVSAVPresentation.installer();document.querySelector(".suivi-vsav-actualiser")?.addEventListener("click",afficherSuiviVSAVComplementaire);}catch(e){alert(e.message);}}
 
 
 
