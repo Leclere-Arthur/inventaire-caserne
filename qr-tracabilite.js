@@ -115,17 +115,18 @@ async function formulaireAttribution(code,selected){
  // Charger les rattachements actuels pour ne pas proposer une ancienne configuration locale.
  const s=client();if(!s)throw Error('Supabase indisponible.');
  const [fiches,correspondances]=await Promise.all([
-  s.from('materiels').select('id,inventaire_vsav_materiel_id,autres_inventaire_vsav_materiel_ids').in('id',possibles.map(m=>m.id)),
+  s.from('materiels').select('id,inventaire_vsav_materiel_id,autres_inventaire_vsav_materiel_ids,suivi_niveau').in('id',possibles.map(m=>m.id)),
   s.rpc('vsav_correspondances_inventaire')
  ]);
  for(const resultat of [fiches,correspondances])if(resultat.error)throw resultat.error;
  const configurations=new Map((fiches.data||[]).map(m=>[String(m.id),m]));
- const w=document.createElement('div');w.className='cisqr-scan-dialog';w.innerHTML=`<div class="cisqr-scan-card" role="dialog" aria-modal="true"><h2>Attribuer une étiquette</h2><p><code>${esc(code)}</code></p><div class="cisqr-row"><label for="cisqr-material-select">Matériel</label><select id="cisqr-material-select">${possibles.map(m=>`<option value="${esc(m.id)}" ${String(m.id)===String(selected)?'selected':''}>${esc(m.nom)}</option>`).join('')}</select></div><div class="cisqr-row"><label>N° de lot</label><input id="cisqr-n-lot" maxlength="120" placeholder="Facultatif"></div><div class="cisqr-row"><label>Péremption</label><input type="date" id="cisqr-date"></div><div class="cisqr-row"><label for="cisqr-place">Emplacement</label><select id="cisqr-place"><option value="pharmacie">Stock pharmacie</option><option value="vsav">VSAV</option></select></div><div class="cisqr-row" id="cisqr-vsav-wrap" hidden><label for="cisqr-vsav-select">Emplacement dans le VSAV (obligatoire)</label><select id="cisqr-vsav-select"><option value="">Choisir un emplacement</option></select><p id="cisqr-vsav-help" class="cisqr-small"></p></div><p id="cisqr-assign-status" class="cisqr-status" role="status"></p><div class="cisqr-row"><button class="cisqr-main" id="cisqr-assign-ok">Confirmer l'attribution</button><button id="cisqr-assign-cancel">Annuler</button></div></div>`;
+ const w=document.createElement('div');w.className='cisqr-scan-dialog';w.innerHTML=`<div class="cisqr-scan-card" role="dialog" aria-modal="true"><h2>Attribuer une étiquette</h2><p><code>${esc(code)}</code></p><div class="cisqr-row"><label for="cisqr-material-select">Matériel</label><select id="cisqr-material-select">${possibles.map(m=>`<option value="${esc(m.id)}" ${String(m.id)===String(selected)?'selected':''}>${esc(m.nom)}</option>`).join('')}</select></div><div class="cisqr-row"><label>N° de lot</label><input id="cisqr-n-lot" maxlength="120" placeholder="Facultatif"></div><div class="cisqr-row"><label>Péremption</label><input type="date" id="cisqr-date"></div><div class="cisqr-row"><label for="cisqr-place">Emplacement</label><select id="cisqr-place"><option value="pharmacie">Stock pharmacie</option><option value="vsav">VSAV</option></select></div><div class="cisqr-row" id="cisqr-vsav-wrap" hidden><label for="cisqr-vsav-select">Emplacement dans le VSAV (obligatoire)</label><select id="cisqr-vsav-select"><option value="">Choisir un emplacement</option></select><p id="cisqr-vsav-help" class="cisqr-small"></p></div><div id="cisqr-niveau-wrap" hidden></div><p id="cisqr-assign-status" class="cisqr-status" role="status"></p><div class="cisqr-row"><button class="cisqr-main" id="cisqr-assign-ok">Confirmer l'attribution</button><button id="cisqr-assign-cancel">Annuler</button></div></div>`;
  document.body.appendChild(w);
  const produit=w.querySelector('#cisqr-material-select'),lieu=w.querySelector('#cisqr-place'),choix=w.querySelector('#cisqr-vsav-select'),zone=w.querySelector('#cisqr-vsav-wrap'),bouton=w.querySelector('#cisqr-assign-ok');
  let liens=new Set(),options=[];
  function actualiser(){
   const fiche=configurations.get(produit.value);
+  const niveau=w.querySelector('#cisqr-niveau-wrap');niveau.hidden=!fiche?.suivi_niveau;niveau.innerHTML=fiche?.suivi_niveau?CISUnites.jaugeHTML(null):'';
   liens=new Set([fiche?.inventaire_vsav_materiel_id,...(fiche?.autres_inventaire_vsav_materiel_ids||[])].filter(Boolean).map(String));
   options=(correspondances.data||[]).filter(x=>liens.has(String(x.id)));
   choix.innerHTML='<option value="">Choisir un emplacement</option>'+options.map(x=>`<option value="${esc(x.id)}">${esc([x.vehicule,x.zone,x.nom].filter(Boolean).join(' › '))}</option>`).join('');
@@ -141,9 +142,11 @@ async function formulaireAttribution(code,selected){
   if(lieu.value==='vsav'&&liens.size>0&&!options.some(x=>String(x.id)===choix.value)){
    setStatut('cisqr-assign-status','Sélectionne l’emplacement de cet exemplaire dans le VSAV.',true);choix.focus();return;
   }
+  const fiche=configurations.get(produit.value),niveau=fiche?.suivi_niveau?CISUnites.lireJauge(w.querySelector('#cisqr-niveau-wrap')):null;
+  if(fiche?.suivi_niveau&&!CISUnites.valide(niveau)){setStatut('cisqr-assign-status','Renseigne le niveau entre 0 et 100 %.',true);return;}
   bouton.disabled=true;
   try{
-   await rpc('cis_qr_attribuer_precis',{p_code:code,p_materiel:produit.value,p_emplacement:lieu.value,p_lot:w.querySelector('#cisqr-n-lot').value,p_peremption:w.querySelector('#cisqr-date').value||null,p_inventaire:lieu.value==='vsav'&&liens.size>0?choix.value:null});
+   await rpc('cis_qr_attribuer_niveau',{p_code:code,p_materiel:produit.value,p_emplacement:lieu.value,p_lot:w.querySelector('#cisqr-n-lot').value,p_peremption:w.querySelector('#cisqr-date').value||null,p_inventaire:lieu.value==='vsav'&&liens.size>0?choix.value:null,p_niveau:niveau});
    w.remove();alert('QR code attribué.');if(document.getElementById('cisqr-materiels'))await afficherProduits();
   }catch(e){setStatut('cisqr-assign-status',erreur(e),true);bouton.disabled=false;}
  };
@@ -179,17 +182,29 @@ function cisqrDetailMouvement(e){
  if(apres.commentaire)parts.push('Commentaire : '+apres.commentaire);
  return parts;
 }
+async function localiserAncienQR(code,id){
+ try{
+  const s=client(),{data:m,error}=await s.from('materiels').select('inventaire_vsav_materiel_id,autres_inventaire_vsav_materiel_ids').eq('id',id).single();if(error)throw error;
+  const liens=new Set([m.inventaire_vsav_materiel_id,...(m.autres_inventaire_vsav_materiel_ids||[])].filter(Boolean).map(String));
+  const options=(await rpc('vsav_correspondances_inventaire')).filter(x=>liens.has(String(x.id)));
+  if(!options.length)throw Error('Configure d’abord les rattachements VSAV de ce matériel.');
+  const w=document.createElement('div');w.className='cisqr-scan-dialog';w.innerHTML=`<div class="cisqr-scan-card"><h2>Localiser cet exemplaire</h2><p>QR ${esc(code)} — choisis son emplacement réel dans le VSAV.</p><select data-position><option value="">Choisir un emplacement</option>${options.map(o=>`<option value="${esc(o.id)}">${esc([o.vehicule,o.zone,o.nom].filter(Boolean).join(' › '))}</option>`).join('')}</select><p data-statut role="status"></p><div class="cisqr-row"><button type="button" data-confirmer>Confirmer</button><button type="button" data-annuler>Annuler</button></div></div>`;document.body.appendChild(w);
+  w.querySelector('[data-annuler]').onclick=()=>w.remove();w.querySelector('[data-confirmer]').onclick=async()=>{const b=w.querySelector('[data-confirmer]'),position=w.querySelector('[data-position]').value;if(!position){w.querySelector('[data-statut]').textContent='Choisis un emplacement.';return;}b.disabled=true;try{await rpc('cis_unites_localiser_qr',{p_code:code,p_inventaire:position});w.remove();await afficherHistorique(code);}catch(e){w.querySelector('[data-statut]').textContent=erreur(e);b.disabled=false;}};
+ }catch(e){alert(erreur(e));}
+}
 async function afficherHistorique(code){try{
  const h=await rpc('cis_qr_historique',{p_code:code}),f=h.fiche,host=document.getElementById('cisqr-adv-detail');if(!host)return;
  const precis=await rpc('cis_qr_emplacement_lire',{p_code:code});
  const etat=String(f.etat||'').toLowerCase();const statut=etat==='utilisee'?'Utilisé':etat==='attribuee'?'En service':etat==='vierge'?'Vierge':cisqrLieu(etat);
  const events=Array.isArray(h.evenements)?h.evenements:[];
  host.innerHTML=`<p class="cisqr-fiche-repere">FICHE INDIVIDUELLE</p><div class="cisqr-fiche-head"><div><h2>${esc(f.materiel||'Matériel')}</h2><p>Fiche individuelle ${f.unite?'— '+esc(f.unite):''}</p></div><span class="cisqr-etat ${etat==='utilisee'?'cisqr-etat-sorti':etat==='attribuee'?'cisqr-etat-actif':''}">${esc(statut)}</span></div>
- <div class="cisqr-fiche-grid"><div><small>Emplacement</small><strong>${esc(cisqrLieu(f.emplacement))}${precis?.libelle?`<br><span style="font-size:.9em">${esc(precis.libelle)}</span>`:''}</strong></div><div><small>Péremption</small><strong>${esc(cisqrJour(f.date_peremption))}</strong></div><div><small>Numéro de lot</small><strong>${esc(f.numero_lot||'Non renseigné')}</strong></div></div>
+ <div class="cisqr-fiche-grid"><div><small>Emplacement</small><strong>${esc(cisqrLieu(f.emplacement))}${precis?.libelle?`<br><span style="font-size:.9em">${esc(precis.libelle)}</span>`:''}</strong></div><div><small>Péremption</small><strong>${esc(cisqrJour(f.date_peremption))}</strong></div><div><small>Numéro de lot</small><strong>${esc(f.numero_lot||'Non renseigné')}</strong></div>${CISUnites.valide(Number(precis?.niveau_pct))&&precis?.niveau_pct!=null?`<div><small>Dernier niveau relevé</small><strong>${esc(precis.niveau_pct)} %</strong><small>${esc(cisqrDate(precis.niveau_releve_le))}</small></div>`:''}</div>
  <div class="cisqr-ref"><div><small>Référence QR</small><strong>${esc(f.code)}</strong></div><button type="button" id="cisqr-copy-ref">Copier</button></div>
  ${etat==='attribuee'?'<button type="button" id="cisqr-move-unit">Déplacer cet exemplaire</button>':''}
+ ${etat==='attribuee'&&f.emplacement==='vsav'&&!precis?.inventaire_id?'<button type="button" id="cisqr-localiser">Préciser l’emplacement VSAV</button>':''}
  <h3 class="cisqr-historique-titre">Historique du matériel <span>(${events.length})</span></h3>
  <div class="cisqr-timeline">${events.map(e=>{const [titre,icone,classe]=cisqrNature(e.nature),details=cisqrDetailMouvement(e);return `<article class="cisqr-event cisqr-event-${classe}"><div class="cisqr-event-icon">${esc(icone==='check'?'✓':icone==='tag'?'#':icone==='move'?'↔':icone==='plus'?'+':'i')}</div><div class="cisqr-event-body"><div class="cisqr-event-title"><strong>${esc(titre)}</strong><time>${esc(cisqrDate(e.date))}</time></div>${e.numero_intervention?`<p><b>Intervention n° ${esc(e.numero_intervention)}</b></p>`:''}${details.map(d=>`<p>${esc(d)}</p>`).join('')}<small>Par ${esc(e.acteur_nom||cisqrNomUtilisateur(e.acteur_id))}</small></div></article>`;}).join('')||'<p>Aucun mouvement enregistré.</p>'}</div>`;
+ const localiser=host.querySelector('#cisqr-localiser');if(localiser)localiser.onclick=()=>void localiserAncienQR(code,f.materiel_id);
  const deplacer=host.querySelector('#cisqr-move-unit');
  if(deplacer)deplacer.onclick=async()=>{
   const lieu=f.emplacement==='vsav'?'pharmacie':'vsav';
@@ -206,6 +221,8 @@ async function afficherHistorique(code){try{
  }catch(e){setStatut('cisqr-adv-status',erreur(e),true);}}
 async function collecterUnitesQR(id, quantite, rearmement=false) {
  const nom = materiel(id)?.nom || 'Matériel';
+ const {data:configuration,error:erreurConfiguration}=await client().from('materiels').select('suivi_niveau').eq('id',id).single();if(erreurConfiguration)throw erreurConfiguration;
+ const suiviNiveau=configuration.suivi_niveau===true;
  if (quantite > 200) throw Error('Limite de 200 unités QR par matériel et par réapprovisionnement.');
  return new Promise(resolve => {
   const dialog = document.createElement('div');
@@ -214,6 +231,7 @@ async function collecterUnitesQR(id, quantite, rearmement=false) {
     <h2>${esc(nom)}</h2><p data-progression></p>
     <label>Date de péremption <input type="date" data-date></label>
     <label>Lot fabricant (facultatif) <input data-lot maxlength="120"></label>
+    <div data-niveau-unite>${suiviNiveau?CISUnites.jaugeHTML(null):''}</div>
     <p data-etat role="status"></p>
     <button type="button" data-scan>Scanner le QR de cette unité</button>
     <button type="button" data-annuler>Annuler</button>
@@ -234,6 +252,8 @@ async function collecterUnitesQR(id, quantite, rearmement=false) {
    const date = dialog.querySelector('[data-date]').value;
    if (!date) { afficherEtat('Indique la date de péremption.', true); return; }
    const lot = dialog.querySelector('[data-lot]').value.trim();
+   const niveau=suiviNiveau?CISUnites.lireJauge(dialog.querySelector('[data-niveau-unite]')):null;
+   if(suiviNiveau&&!CISUnites.valide(niveau)){afficherEtat('Renseigne le niveau de cette unité entre 0 et 100 %.',true);return;}
    await scanner(async code => {
     try {
      if (!dialog.isConnected) return;
@@ -251,7 +271,9 @@ async function collecterUnitesQR(id, quantite, rearmement=false) {
       afficherEtat('Ce QR est déjà enregistré ou indisponible. Scanne une étiquette QR vierge.', true);
       return;
      }
-     unites.push({code,date,lot});
+     if(suiviNiveau)await rpc('cis_qr_preparer_niveau',{p_code:code,p_materiel:id,p_niveau:niveau});
+     unites.push({code,date,lot,niveau_pct:niveau});
+     if(suiviNiveau)dialog.querySelector('[data-niveau-unite]').innerHTML=CISUnites.jaugeHTML(null);
      if (unites.length === quantite) fin(unites);
      else {
       afficherEtat('QR saisi · ' + code);

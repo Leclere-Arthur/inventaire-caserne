@@ -1137,7 +1137,7 @@ let minuteurVerificationMiseAJour =
  * Elle permet de détecter une nouvelle version même si seul app.js?v=peremptions-20261031-v5 change.
  */
 const VERSION_APPLICATION_JS =
-    "ordre-pharmacie-preparation";
+    "inventaire-qr-niveaux";
 
 async function verifierNouvelleVersionAppJs() {
 
@@ -5599,6 +5599,7 @@ function normaliserMateriel(materiel, index) {
         peut_laisser_hopital: m.peut_laisser_hopital === true,
         masquer_inventaire: m.masquer_inventaire === true,
         mots_cles: lireMotsClesMateriel(m.mots_cles),
+        suivi_niveau: m.suivi_niveau === true,
 
         stock:
             Math.max(
@@ -6943,6 +6944,7 @@ function empreinteMetadonneesMateriel(materiel) {
         peut_laisser_hopital: materiel.peut_laisser_hopital === true,
         masquer_inventaire: materiel.masquer_inventaire === true,
         mots_cles: lireMotsClesMateriel(materiel.mots_cles),
+        suivi_niveau: materiel.suivi_niveau === true,
         minimum: Math.max(0, Math.floor(Number(materiel.minimum || 0))),
         emplacement: String(materiel.emplacement || "")
     });
@@ -7035,7 +7037,7 @@ async function recupererDonneesSupabase() {
         supabase.from("categories").select("id,nom,parent_id,ordre"),
         supabase
             .from("materiels")
-            .select("id,nom,reference,description,stock,minimum,emplacement,gere_stock_pharmacie,autoriser_depassement_stock,inventaire_vsav_materiel_id,autres_inventaire_vsav_materiel_ids,peut_laisser_hopital,masquer_inventaire,mots_cles"),
+            .select("id,nom,reference,description,stock,minimum,emplacement,gere_stock_pharmacie,autoriser_depassement_stock,inventaire_vsav_materiel_id,autres_inventaire_vsav_materiel_ids,peut_laisser_hopital,masquer_inventaire,mots_cles,suivi_niveau"),
         supabase
             .from("materiel_categories")
             .select("materiel_id,categorie_id"),
@@ -7172,6 +7174,7 @@ function convertirDonneesSupabaseEnDonneesApplication(donnees) {
         peut_laisser_hopital: materiel.peut_laisser_hopital === true,
         masquer_inventaire: materiel.masquer_inventaire === true,
         mots_cles: lireMotsClesMateriel(materiel.mots_cles),
+        suivi_niveau: materiel.suivi_niveau === true,
             stock: Math.max(0, Math.floor(Number(materiel.stock || 0))),
             minimum: Math.max(0, Math.floor(Number(materiel.minimum || 0))),
             emplacement: String(materiel.emplacement || ""),
@@ -7574,6 +7577,7 @@ async function envoyerDonneesLocalesVersSupabase() {
         peut_laisser_hopital: materiel.peut_laisser_hopital === true,
         masquer_inventaire: materiel.masquer_inventaire === true,
         mots_cles: lireMotsClesMateriel(materiel.mots_cles),
+        suivi_niveau: materiel.suivi_niveau === true,
             minimum: Math.max(0, Math.floor(Number(materiel.minimum || 0))),
             emplacement: String(materiel.emplacement || ""),
         };
@@ -18956,6 +18960,7 @@ function afficherFormulaireMateriel(
                 >
 
 
+                <p><label><input type="checkbox" id="suivi-niveau-materiel" ${materiel?.suivi_niveau ? 'checked' : ''} style="width:auto"> Contrôler le niveau de chaque unité (0 à 100 %)</label></p>
                 <label for="mots-cles-materiel">Mots-clés de recherche</label>
                 <input type="text" id="mots-cles-materiel" placeholder="Ex. O2, oxygénothérapie, respiration"
                     value="${echapperHTML(lireMotsClesMateriel(materiel?.mots_cles).join(', '))}">
@@ -19251,6 +19256,7 @@ function enregistrerMateriel() {
         .trim();
 
 
+    const suiviNiveau = document.getElementById("suivi-niveau-materiel")?.checked === true;
     const motsCles = lireMotsClesMateriel(document.getElementById("mots-cles-materiel")?.value);
 
     const description =
@@ -19360,6 +19366,7 @@ function enregistrerMateriel() {
         materiel.peut_laisser_hopital = peutLaisserHopital;
         materiel.masquer_inventaire = masquerInventaire;
         materiel.mots_cles = motsCles;
+        materiel.suivi_niveau = suiviNiveau;
         materiel.inventaire_vsav_materiel_id = lienVSAV;
         materiel.autres_inventaire_vsav_materiel_ids = liensVSAV.slice(1);
         materiel.nom =
@@ -19457,6 +19464,7 @@ function enregistrerMateriel() {
         peut_laisser_hopital: peutLaisserHopital,
         masquer_inventaire: masquerInventaire,
         mots_cles: motsCles,
+        suivi_niveau: suiviNiveau,
         autres_inventaire_vsav_materiel_ids: liensVSAV.slice(1),
 
         id:
@@ -22795,7 +22803,8 @@ async function vehInventaireCommencer(id){
    const dernier=await sb.from('cis_inventaires_vehicules').select('details').eq('vehicule_id',id).order('created_at',{ascending:false}).limit(1).abortSignal(ac.signal);
    if(dernier.error)throw dernier.error;
    const hopital=await CISSuiviMateriel.lire(id);
-   return {zones,materiels:m.data||[],anomalies:signalements.data||[],personnels,hopital,dernierInventaire:dernier.data?.[0]?.details||[]};
+   const contexteUnites=await CISUnites.charger(id);
+   return {zones,materiels:m.data||[],anomalies:signalements.data||[],personnels,hopital,contexteUnites,dernierInventaire:dernier.data?.[0]?.details||[]};
   };
   const resultat=await Promise.race([charger(),new Promise((_,rej)=>{timer=setTimeout(()=>{delaiDepasse=true;ac.abort();rej(Error('Le chargement des coffres prend trop de temps. Vérifie la connexion puis réessaie.'));},15000);})]);
   if(!resultat||!active())return;
@@ -22819,7 +22828,7 @@ async function vehInventaireCommencer(id){
     controlesPrecedents[actuel.zone_id][actuel.id]={hopital_quantite:Number(m.hopital_quantite||0),quantite_constatee:q,etat:q===0?null:null,peremptions_controle:absentes,observation:''};
    }
   }
-  vehInventaireSession={vehicule:{id:v.id,nom:v.nom,code:v.code},controles:controlesPrecedents,anomalies:resultat.anomalies,participants:personnesAvecAuteur([]),personnels:resultat.personnels};
+  vehInventaireSession={contexteUnites:resultat.contexteUnites||[],identifiantControle:genererUUID(),vehicule:{id:v.id,nom:v.nom,code:v.code},controles:controlesPrecedents,anomalies:resultat.anomalies,participants:personnesAvecAuteur([]),personnels:resultat.personnels};
   CISSuiviMateriel.appliquer(vehInventaireSession,vehInventaireMateriels,resultat.hopital||[]);
   vehInventaireAfficherZones();
  }catch(e){
@@ -22830,6 +22839,7 @@ async function vehInventaireCommencer(id){
 function vehDatesAControler(m){return (m.dates_peremption||[]).map((date,i)=>({date,unite:i+1})).filter(x=>x.date);}
 function vehDateValide(date){return /^\d{4}-\d{2}-\d{2}$/.test(date)&&Number.isFinite(Date.parse(date+'T00:00:00Z'))&&new Date(date+'T00:00:00Z').toISOString().slice(0,10)===date;}
 function vehPeremptionsHTML(m,valeur){
+ if(CISUnites.actif(m))return CISUnites.html(m,valeur);
  const controles=valeur.peremptions_controle||[];
  return vehDatesAControler(m).map(x=>{
   const c=controles.find(c=>c.unite===x.unite),date=c?.date||x.date;
@@ -22841,6 +22851,7 @@ function vehPeremptionsHTML(m,valeur){
 function vehPeremptionChoix(input){const f=input.closest('[data-peremption-unite]');f.querySelector('[data-peremption-nouvelle]').hidden=input.value!=='modifier';f.querySelector('[data-peremption-erreur]').textContent='';}
 function vehInventaireSynchroniserQuantite(carte){
  if(!carte)return;
+ CISUnites.ajuster(carte);
  const input=carte.querySelector('input[type="number"]'),attendue=Number(carte.dataset.quantiteAttendue);
  const quantite=input&&input.value.trim()!==''?Number(input.value):NaN;
  const valide=Number.isInteger(quantite)&&quantite>=0;
@@ -22882,6 +22893,7 @@ function vehInventaireSynchroniserQuantite(carte){
  }else{const bouton=carte.querySelector('[data-veh-modifier-absentes]');if(bouton)bouton.hidden=true;}
 }
 function vehLirePeremptions(m,carte){
+ if(CISUnites.actif(m))return CISUnites.lire(m,carte);
  const input=carte.querySelector('input[type="number"]'),quantite=input&&input.value.trim()!==''?Number(input.value):NaN;
  if(!Number.isInteger(quantite)||quantite<0)throw Error(m.nom+' : quantité invalide.');
  const dates=vehDatesAControler(m),manque=Math.max(0,Number(m.quantite)-quantite);
@@ -22902,6 +22914,7 @@ function vehLirePeremptions(m,carte){
  });
 }
 function vehPeremptionsCompletes(m,c){
+ if(CISUnites.actif(m))return CISUnites.complet(m,c);
  const quantite=Number(c?.quantite_constatee),attendue=Number(m.quantite);
  if(!c||!Number.isInteger(quantite)||quantite<0)return false;
  if(quantite>0&&!['bon','a_surveiller','hs'].includes(c.etat))return false;
@@ -23005,7 +23018,7 @@ function vehInventaireEnregistrerZone(id){
   if(!Number.isInteger(quantite)||quantite<0){card.classList.add('ouvert');input.focus();alert('Indique une quantité constatée valide pour '+m.nom+'.');return;}
   if(quantite>0&&!etat){card.classList.add('ouvert');alert('Sélectionne le statut du matériel présent : '+m.nom+'.');return;}
   let peremptions;try{peremptions=vehLirePeremptions(m,card);}catch(e){alert(e.message);return;}
-  controles[m.id]={hopital_quantite:(session.hopital||[]).filter(h=>h.inventaire_id===m.id).reduce((n,h)=>n+Number(h.quantite),0),peremptions_controle:peremptions,etat:quantite===0?null:(etat||null),observation:card.querySelector('textarea')?.value?.trim()||"",quantite_constatee:quantite};
+  controles[m.id]={controle_unites:card.__controleUnites||[],hopital_quantite:(session.hopital||[]).filter(h=>h.inventaire_id===m.id).reduce((n,h)=>n+Number(h.quantite),0),peremptions_controle:peremptions,etat:quantite===0?null:(etat||null),observation:card.querySelector('textarea')?.value?.trim()||"",quantite_constatee:quantite};
  }
  session.controles[id]=controles;session.revisionControles=(session.revisionControles||0)+1;
  const zone=vehInventaireZones.find(z=>z.id===id);
@@ -23029,7 +23042,7 @@ async function vehInventaireTerminerInterne(){
  if(!(await afficherConfirmationCIS(avertissement)))return;
  const btn=document.querySelector(".veh-inventaire-contenu > .veh-action");if(btn){btn.disabled=true;btn.textContent="Enregistrement…";}
  try{
-  const sb=obtenirClientSupabase();const payload={vehicule_id:session.vehicule.id,vehicule_nom:session.vehicule.nom,controle_par:profilUtilisateurConnecte?.id,personnes_presentes:personnesAvecAuteur(session.participants),details:vehInventaireZones.map(z=>({zone_id:z.id,parent_zone_id:z.parent_id||null,zone_nom_propre:z.nom,zone_nom:vehInventaireCheminZone(z),cote:z.cote,materiels:vehInventaireMateriels.filter(m=>m.zone_id===z.id).map(m=>({hopital_quantite:(session.hopital||[]).filter(h=>h.inventaire_id===m.id).reduce((n,h)=>n+Number(h.quantite),0),controle_peremptions_version:2,unites_manquantes:Math.max(0,Number(m.quantite)-Number(session.controles[z.id]?.[m.id]?.quantite_constatee??quantiteVSAVDisponible(m,session))),dates_peremption_reference:m.dates_peremption||[],peremptions_controle:session.controles[z.id]?.[m.id]?.peremptions_controle||[],materiel_id:m.id,nom:m.nom,quantite:m.quantite,quantite_constatee:session.controles[z.id]?.[m.id]?.quantite_constatee??quantiteVSAVDisponible(m,session),etat_reference:m.etat_reference,etat:session.controles[z.id]?.[m.id]?.etat||null,observation:[session.controles[z.id]?.[m.id]?.observation||"",...(session.controles[z.id]?.[m.id]?.peremptions_controle||[]).filter(p=>p.action==="absente").map(p=>"Unité "+p.unite+" absente — péremption de référence "+p.initiale.split("-").reverse().join("/")+" (non contrôlée)"),...(session.controles[z.id]?.[m.id]?.peremptions_controle||[]).filter(p=>p.action!=="absente").map(p=>"Péremption unité "+p.unite+" : "+p.date.split("-").reverse().join("/")+(p.date===p.initiale?" (confirmée)":" (modifiée, avant : "+p.initiale.split("-").reverse().join("/")+")"))].filter(Boolean).join("\n")}))}))};
+  const sb=obtenirClientSupabase();const payload={vehicule_id:session.vehicule.id,vehicule_nom:session.vehicule.nom,controle_par:profilUtilisateurConnecte?.id,personnes_presentes:personnesAvecAuteur(session.participants),details:vehInventaireZones.map(z=>({zone_id:z.id,parent_zone_id:z.parent_id||null,zone_nom_propre:z.nom,zone_nom:vehInventaireCheminZone(z),cote:z.cote,materiels:vehInventaireMateriels.filter(m=>m.zone_id===z.id).map(m=>({hopital_quantite:(session.hopital||[]).filter(h=>h.inventaire_id===m.id).reduce((n,h)=>n+Number(h.quantite),0),controle_unites_version:1,controle_unites:session.controles[z.id]?.[m.id]?.controle_unites||[],controle_peremptions_version:2,unites_manquantes:Math.max(0,Number(m.quantite)-Number(session.controles[z.id]?.[m.id]?.quantite_constatee??quantiteVSAVDisponible(m,session))),dates_peremption_reference:m.dates_peremption||[],peremptions_controle:session.controles[z.id]?.[m.id]?.peremptions_controle||[],materiel_id:m.id,nom:m.nom,quantite:m.quantite,quantite_constatee:session.controles[z.id]?.[m.id]?.quantite_constatee??quantiteVSAVDisponible(m,session),etat_reference:m.etat_reference,etat:session.controles[z.id]?.[m.id]?.etat||null,observation:[session.controles[z.id]?.[m.id]?.observation||"",...(session.controles[z.id]?.[m.id]?.controle_unites?.length?[]:(session.controles[z.id]?.[m.id]?.peremptions_controle||[])).filter(p=>p.action==="absente").map(p=>"Unité "+p.unite+" absente — péremption de référence "+p.initiale.split("-").reverse().join("/")+" (non contrôlée)"),...(session.controles[z.id]?.[m.id]?.controle_unites?.length?[]:(session.controles[z.id]?.[m.id]?.peremptions_controle||[])).filter(p=>p.action!=="absente").map(p=>"Péremption unité "+p.unite+" : "+p.date.split("-").reverse().join("/")+(p.date===p.initiale?" (confirmée)":" (modifiée, avant : "+p.initiale.split("-").reverse().join("/")+")"))].filter(Boolean).join("\n")}))}))};
   payload.details.push(CISTechnique.zone(session.technique||{}),CISTechnique.zoneAnnexe(session.annexe||{}));
    payload.id=genererUUID();
    CISSynchronisationFiable.ajouterInventaire(payload);
@@ -23472,7 +23485,7 @@ async function afficherDetailInventaireAdminEquipe(id){
  const etat=m=>m.etat==='bon'?'Bon':m.etat==='a_surveiller'?'À surveiller':m.etat==='hs'?'HS':'Non renseigné';
  document.getElementById('app').innerHTML=`<main class="garde-section"><button class="retour-button" data-navigation-equipe onclick="afficherAdminInventairesEquipe()">← Retour</button><h1>Détail de l’inventaire</h1>
  <div class="garde-admin-card"><strong>${echapperHTML(inventairesAdminNom(r))}</strong><p><strong>Véhicule :</strong> ${echapperHTML(r.vehicule_nom||'Non renseigné')}</p><p><strong>Date :</strong> <span class="${classeDateMenage(r.created_at)}">${inventairesAdminDate(r.created_at)}</span></p><p><strong>Enregistré par :</strong> ${echapperHTML(inventairesAdminAuteur(r))}</p><p><strong>Réalisé par :</strong> ${echapperHTML(nomsParticipantsInventaire(r))}</p><p><strong>Zones contrôlées :</strong> ${zones.length}</p><p><strong>Matériel :</strong> ${materiels.filter(m=>m.etat==='bon').length} Bon · ${materiels.filter(m=>m.etat==='a_surveiller').length} À surveiller · ${materiels.filter(m=>m.etat==='hs').length} HS</p></div>
- ${zones.map(z=>z.type==='annexe'?CISTechnique.resumeAnnexe(z):z.type==='technique'?CISTechnique.resume(z):`<h2 class="garde-sous-titre">${echapperHTML(z.zone_nom||'Zone')}</h2>${(Array.isArray(z.materiels)?z.materiels:[]).map(m=>`<div class="garde-stat-ligne"><strong>${echapperHTML(m.nom||'Matériel')} × ${Number(m.quantite)||1}${m.quantite_constatee!=null&&Number(m.quantite_constatee)!==Number(m.quantite)?` <span style="color:#b42323;font-weight:900">— QUANTITÉ CONSTATÉE : ${Number(m.quantite_constatee)} (prévu : ${Number(m.quantite)})</span>`:''}</strong><small class="inventaire-etat inventaire-etat-${['bon','a_surveiller','hs'].includes(m.etat)?m.etat:'inconnu'}">${echapperHTML(etat(m))}</small>${m.observation?`<p>Observation : ${echapperHTML(m.observation)}</p>`:''}</div>`).join('')||'<div class="garde-stat-ligne">Aucun matériel.</div>'}`).join('')||'<div class="garde-stat-ligne">Aucune zone enregistrée.</div>'}
+ ${zones.map(z=>z.type==='annexe'?CISTechnique.resumeAnnexe(z):z.type==='technique'?CISTechnique.resume(z):`<h2 class="garde-sous-titre">${echapperHTML(z.zone_nom||'Zone')}</h2>${(Array.isArray(z.materiels)?z.materiels:[]).map(m=>`<div class="garde-stat-ligne"><strong>${echapperHTML(m.nom||'Matériel')} × ${Number(m.quantite)||1}${m.quantite_constatee!=null&&Number(m.quantite_constatee)!==Number(m.quantite)?` <span style="color:#b42323;font-weight:900">— QUANTITÉ CONSTATÉE : ${Number(m.quantite_constatee)} (prévu : ${Number(m.quantite)})</span>`:''}</strong><small class="inventaire-etat inventaire-etat-${['bon','a_surveiller','hs'].includes(m.etat)?m.etat:'inconnu'}">${echapperHTML(etat(m))}</small>${m.controle_unites?.length?`<p style="white-space:pre-line">${echapperHTML(CISUnites.resume(m.controle_unites))}</p>`:''}${m.observation?`<p>Observation : ${echapperHTML(m.observation)}</p>`:''}</div>`).join('')||'<div class="garde-stat-ligne">Aucun matériel.</div>'}`).join('')||'<div class="garde-stat-ligne">Aucune zone enregistrée.</div>'}
  </main>${navigationPrincipale('','accueil')}`;
  actualiserInterfaceBureau();window.scrollTo({top:0,behavior:'auto'});
 }
@@ -23966,7 +23979,7 @@ function creerRapportInventaireEquipePDF(PDF,r,personnes){
    const nameLines=doc.splitTextToSize(name,125);
    const obs=m.observation?doc.splitTextToSize('Observation : '+clean(m.observation),W-2*margin-12):[];
    const height=Math.max(9,3.5+nameLines.length*3.7+obs.length*3.6+(ecartQuantite?5:0));
-   ensure(height+2);
+   ensure(height+2+(m.controle_unites?.length?28:0));
    doc.setFillColor(247,249,251);doc.roundedRect(margin,y,W-2*margin,height,1.5,1.5,'F');
    doc.setFillColor(...c);doc.roundedRect(margin+2,y+1.5,2.5,height-3,1,1,'F');
    doc.setTextColor(42,53,65);doc.setFontSize(8.5);doc.setFont('helvetica','bold');doc.text(nameLines,margin+8,y+5.8);
@@ -23974,6 +23987,7 @@ function creerRapportInventaireEquipePDF(PDF,r,personnes){
    if(obs.length){doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(88,97,107);doc.text(obs,margin+8,y+5.8+nameLines.length*3.7);}
     if(ecartQuantite){doc.setFont('helvetica','bold');doc.setFontSize(8);doc.setTextColor(190,35,35);doc.text(ligneQuantite,margin+8,y+5.8+nameLines.length*3.7+obs.length*3.6);}
    y+=height+2;
+   for(const unite of (m.controle_unites||[])){if(y+28>276){newPage();wrapped((m.nom||'Matériel')+' (suite)',margin+6,W-2*margin-12,9,[35,45,58],true);y+=2;}ensure(28);y+=CISUnites.pdf(doc,unite,margin+6,y,W-2*margin-6);}
   }
   y+=2;
  }

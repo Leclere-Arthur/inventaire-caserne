@@ -2,19 +2,20 @@
 importScripts("./notifications-history.js?v=pharmacie-vsav-prod-20261030-v1");
 
 // Nouvelle version : force le renouvellement du cache applicatif sans effacer les données locales.
-const CACHE_NAME = "cis-ordre-pharmacie-preparation";
+const CACHE_NAME = "cis-inventaire-qr-niveaux";
 const FICHIERS_APPLICATION = [
+ "./materiel-unites.js?v=1","./materiel-unites.css?v=1",
  "./caserne-annonces.js?v=1",
  "./recherche-clavier.js?v=1",
  "./compteurs-rubriques.js?v=coherence-rubriques",
  "./suivi-materiel.js?v=compteurs-rubriques",
  "./vsav-retour-emplacements.js?v=suivi-hopital",
- "./qr-tracabilite.js?v=attribution-vsav-emplacement","./qr-tracabilite.css?v=formulaires-listes-vsav",
+ "./qr-tracabilite.js?v=inventaire-qr-niveaux","./qr-tracabilite.css?v=formulaires-listes-vsav",
  "./maintenance-client.js","./interface-personnelle.js?v=profil","./equipe-evolution.js",
  "./peremptions-controle.js?v=1","./inventaire-technique.js?v=sous-coffres-prod-20261031-v1","./inventaire-technique.css",
  "./","./index.html","./scan-peremption.js?v=auto-datamatrix-v16","./vendor/zxing-reader.js","./vendor/zxing_reader.wasm",
  "./vsav-sans-stock.js?v=compteurs-rubriques","./suivi-vsav.js?v=pharmacie-vsav-prod-20261030-v1",
- "./app.js?v=ordre-pharmacie-preparation","./pharmacie-categories.js?v=cis-qr-prod-v6",
+ "./app.js?v=inventaire-qr-niveaux","./pharmacie-categories.js?v=cis-qr-prod-v6",
  "./formations-commun.js","./formations.js?v=compteurs-rubriques","./formations.css",
  "./travail-equipe.js?v=travail-droits-v1","./fiche-garde.js?v=sous-coffres-prod-20261031-v1","./fiche-garde-pdf.js","./fiche-garde.css","./fiche-fin-garde-modele.pdf",
  "./pilotage-suivi.js","./pilotage-mesures.js","./messages-application.js","./nettoyage-sync.js","./notifications-history.js",
