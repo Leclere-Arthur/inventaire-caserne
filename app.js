@@ -1027,28 +1027,43 @@ const CISSynchronisationFiable = (() => {
                 if (!sb) throw Error('Connexion Supabase indisponible.');
                 const session = await obtenirSessionPrincipaleValide(sb);
                 if (String(session.user?.id || '') !== id) throw Error('Le compte connecté ne correspond plus à celui de cet inventaire.');
+                let refus=false;
                 for (const ligne of lire(id)) {
                     enCours = ligne;
                     if (utilisateur() !== id) return false;
-                    // Lire avant l'insertion : une réponse perdue ne provoque ni doublon
-                    // ni nouvelle exécution des contrôles QR sur une archive déjà créée.
-                    const avant = await sb.from('cis_inventaires_vehicules').select('id').eq('id',ligne.id).maybeSingle().abortSignal(delaiEnvoi(15000));
-                    if (avant.error) throw avant.error;
-                    if (!avant.data?.id) {
-                        const {error} = await sb.from('cis_inventaires_vehicules').insert(ligne.payload).abortSignal(delaiEnvoi(20000));
-                        if (error) {
-                            const verification = await sb.from('cis_inventaires_vehicules').select('id').eq('id',ligne.id).maybeSingle().abortSignal(delaiEnvoi(15000));
-                            if (verification.error || String(verification.data?.id||'') !== String(ligne.id)) throw error;
+                    const courante=lire(id).find(x=>x.id===ligne.id);
+                    if(!courante)continue;
+                    if(courante.en_recontrole||courante.a_recontroler){refus=true;continue;}
+                    try {
+                        const avant = await sb.from('cis_inventaires_vehicules').select('id').eq('id',ligne.id).maybeSingle().abortSignal(delaiEnvoi(15000));
+                        if (avant.error) throw avant.error;
+                        if (!avant.data?.id) {
+                            const {error} = await sb.from('cis_inventaires_vehicules').insert(ligne.payload).abortSignal(delaiEnvoi(20000));
+                            if (error) {
+                                const verification = await sb.from('cis_inventaires_vehicules').select('id').eq('id',ligne.id).maybeSingle().abortSignal(delaiEnvoi(15000));
+                                if (verification.error || String(verification.data?.id||'') !== String(ligne.id)) throw error;
+                            }
                         }
+                        if (utilisateur() !== id) return false;
+                        const preuve = await sb.from('cis_inventaires_vehicules').select('id').eq('id',ligne.id).maybeSingle().abortSignal(delaiEnvoi(15000));
+                        if (preuve.error || String(preuve.data?.id || '') !== String(ligne.id)) throw preuve.error || Error('Confirmation serveur non reçue.');
+                        sauver(lire(id).filter(x => x.id !== ligne.id), id);
+                        window.dispatchEvent(new CustomEvent('cis-inventaire-confirme',{detail:{id:ligne.id}}));
+                    } catch(e) {
+                        if(utilisateur()!==id)return false;
+                        const copies=lire(id),c=copies.find(x=>x.id===ligne.id);
+                        if(c){c.erreur=detailErreur(e);c.dernier_essai=new Date().toISOString();
+                            c.a_recontroler=/contrôle unitaire QR\/niveau|chaque unité présente ou absente|fiche du QR a changé|QR.*doit être scanné|Scanne chaque étiquette|QR ne correspond plus/i.test(e?.message||'');
+                            sauver(copies,id);
+                        }
+                        refus=true;
+                        // Une validation refusée ne bloque pas les autres inventaires.
+                        // Une panne réseau ou une session perdue interrompt l'envoi.
+                        if(!e?.code||/^(08|28|PGRST30)/.test(e.code))throw e;
                     }
-                    if (utilisateur() !== id) return false;
-                    const preuve = await sb.from('cis_inventaires_vehicules').select('id').eq('id',ligne.id).maybeSingle().abortSignal(delaiEnvoi(15000));
-                    if (preuve.error || String(preuve.data?.id || '') !== String(ligne.id)) throw preuve.error || Error('Confirmation serveur non reçue.');
-                    sauver(lire(id).filter(x => x.id !== ligne.id), id);
-                    window.dispatchEvent(new CustomEvent('cis-inventaire-confirme',{detail:{id:ligne.id}}));
                 }
-                prochaineReprise=0;
-                return true;
+                prochaineReprise=refus?Date.now()+30000:0;
+                return !refus;
             } catch (e) {
                 prochaineReprise=Date.now()+30000;
                 if(utilisateur()===id){
@@ -1061,6 +1076,26 @@ const CISSynchronisationFiable = (() => {
         })();
         try { return await travailInventaire; } finally { travailInventaire = null; }
     }
+    async function debuterRecontrole(id) {
+        if(travailInventaire)await travailInventaire;
+        const copies=lire(),ligne=copies.find(x=>String(x.id)===String(id));
+        if(!ligne)throw Error('Cet inventaire a déjà été envoyé. Consulte l’historique.');
+        const compte=utilisateur();ligne.en_recontrole=true;sauver(copies,compte);
+        const sb=await assurerBibliothequeSupabaseDisponible();
+        const {data,error}=await sb.from('cis_inventaires_vehicules').select('id').eq('id',id).maybeSingle().abortSignal(delaiEnvoi(15000));
+        if(utilisateur()!==compte)throw Error('Le compte connecté a changé.');
+        if(error)throw error;
+        if(data?.id){sauver(lire().filter(x=>x.id!==id));throw Error('Cet inventaire est déjà enregistré dans Supabase. Consulte l’historique.');}
+        return JSON.parse(JSON.stringify(ligne.payload));
+    }
+    function remplacerApresRecontrole(id,payload) {
+        const copies=lire(),ligne=copies.find(x=>x.id===id);
+        if(!ligne?.en_recontrole)throw Error('Copie à reprendre introuvable. L’inventaire initial est conservé.');
+        if(payload.id!==id)throw Error('La référence de la reprise a changé.');
+        if(!ligne.payload_initial)ligne.payload_initial=JSON.parse(JSON.stringify(ligne.payload));
+        ligne.payload=payload;ligne.en_recontrole=false;ligne.a_recontroler=false;delete ligne.erreur;
+        ligne.recontrole_le=new Date().toISOString();sauver(copies);
+    }
     async function attendre(promise, duree = 12000) {
         let timer;
         try { return await Promise.race([promise, new Promise(resolve => {timer=setTimeout(()=>resolve(false),duree);})]); }
@@ -1072,7 +1107,7 @@ const CISSynchronisationFiable = (() => {
     window.addEventListener('focus',reprendre);
     document.addEventListener('visibilitychange',()=>{if (!document.hidden) reprendre();});
     setInterval(reprendre, 5000);
-    return {afficher,masquer,ajouterInventaire,synchroniserInventaires,attendre,reprendre,lire,erreurInventaire};
+    return {afficher,masquer,ajouterInventaire,synchroniserInventaires,attendre,reprendre,lire,erreurInventaire,debuterRecontrole,remplacerApresRecontrole};
 })();
 
 
@@ -1160,7 +1195,7 @@ let minuteurVerificationMiseAJour =
  * Elle permet de détecter une nouvelle version même si seul app.js?v=peremptions-20261031-v5 change.
  */
 const VERSION_APPLICATION_JS =
-    "inventaires-confirmation-serveur";
+    "inventaires-reprise-controles";
 
 async function verifierNouvelleVersionAppJs() {
 
@@ -22860,6 +22895,42 @@ async function vehInventaireCommencer(id){
   vehInventaireAfficher(`<div data-veh-inventaire-erreur="${vehInventaireHTML(id)}"><button class="retour-button veh-retour" onclick="vehInventaireOuvrirVehicule('${id}')">← Retour</button><h1>${vehInventaireHTML(v.nom)}</h1><p role="status">${vehInventaireHTML(delaiDepasse?'Le serveur ne répond pas. Vérifie la connexion puis réessaie.':e.message||'Chargement impossible.')}</p><button type="button" class="veh-action" onclick="vehInventaireCommencer('${id}')">Réessayer</button></div>`);
  }finally{clearTimeout(timer);observation.disconnect();if(vehInventaireChargementActif===ac)vehInventaireChargementActif=null;}
 }
+async function vehInventaireReprendreEnvoi(id){
+ const compte=String(utilisateurConnecte?.id||'');
+ try{
+  if(vehInventaireSession&&!(await afficherConfirmationCIS('Quitter la saisie actuelle pour reprendre cet inventaire en attente ?')))return;
+  const payload=await CISSynchronisationFiable.debuterRecontrole(id);
+  if(String(utilisateurConnecte?.id||'')!==compte)throw Error('Le compte connecté a changé.');
+  vehInventaireSession=null;
+  const sb=obtenirClientSupabase(),{data,error}=await sb.from('cis_vehicules').select('id,nom,code,actif').eq('id',payload.vehicule_id).eq('actif',true).single();
+  if(error)throw error;
+  if(String(utilisateurConnecte?.id||'')!==compte)throw Error('Le compte connecté a changé.');
+  if(!vehInventaireCatalogue.some(v=>v.id===data.id))vehInventaireCatalogue.push(data);
+  await vehInventaireCommencer(data.id);
+  const session=vehInventaireSession;if(!session||session.vehicule.id!==data.id||String(utilisateurConnecte?.id||'')!==compte)return;
+  session.repriseEnvoiId=id;
+  session.participants=personnesAvecAuteur(payload.personnes_presentes||[]);
+  let nb=0;
+  for(const z of payload.details||[]){
+   if(z.type==='technique'){session.technique={...z};continue;}
+   if(z.type==='annexe'){session.annexe={...z};continue;}
+   for(const ancien of (Array.isArray(z.materiels)?z.materiels:[])){
+    const actuel=vehInventaireMateriels.find(m=>m.id===ancien.materiel_id);if(!actuel)continue;
+    if(CISUnites.actif(actuel)){nb++;continue;}
+    // Restore ordinary answers only when the configured item is unchanged.
+    // Tracked units are checked again against today's QR/expiry/quantity context.
+    if(Number(actuel.quantite)!==Number(ancien.quantite))continue;
+    const references=ancien.dates_peremption_reference||[];
+    if(JSON.stringify(actuel.dates_peremption||[])!==JSON.stringify(references))continue;
+    if(!session.controles[actuel.zone_id])session.controles[actuel.zone_id]={};
+    session.controles[actuel.zone_id][actuel.id]={...ancien,reference_seulement:false,quantite_constatee:ancien.quantite_constatee??ancien.quantite};
+   }
+  }
+  vehInventaireAfficherZones();
+  alert('Inventaire repris : les réponses compatibles sont restaurées. Vérifie les zones incomplètes'+(nb?', dont '+nb+' matériel(s) avec contrôle QR/niveau à refaire':'')+'. La copie initiale reste conservée. La reprise sera datée de sa nouvelle validation.');
+ }catch(e){alert('Reprise impossible : '+(e.message||e)+'. La copie en attente est conservée.');}
+}
+window.vehInventaireReprendreEnvoi=vehInventaireReprendreEnvoi;
 function vehDatesAControler(m){return (m.dates_peremption||[]).map((date,i)=>({date,unite:i+1})).filter(x=>x.date);}
 function vehDateValide(date){return /^\d{4}-\d{2}-\d{2}$/.test(date)&&Number.isFinite(Date.parse(date+'T00:00:00Z'))&&new Date(date+'T00:00:00Z').toISOString().slice(0,10)===date;}
 function vehPeremptionsHTML(m,valeur){
@@ -23089,10 +23160,11 @@ async function vehInventaireTerminerInterne(){
  try{
   const sb=obtenirClientSupabase();const payload={vehicule_id:session.vehicule.id,vehicule_nom:session.vehicule.nom,controle_par:profilUtilisateurConnecte?.id,personnes_presentes:personnesAvecAuteur(session.participants),details:vehInventaireZones.map(z=>({zone_id:z.id,parent_zone_id:z.parent_id||null,zone_nom_propre:z.nom,zone_nom:vehInventaireCheminZone(z),cote:z.cote,materiels:vehInventaireMateriels.filter(m=>m.zone_id===z.id).map(m=>({hopital_quantite:(session.hopital||[]).filter(h=>h.inventaire_id===m.id).reduce((n,h)=>n+Number(h.quantite),0),controle_unites_version:1,controle_unites:session.controles[z.id]?.[m.id]?.controle_unites||[],controle_peremptions_version:2,unites_manquantes:Math.max(0,Number(m.quantite)-Number(session.controles[z.id]?.[m.id]?.quantite_constatee??quantiteVSAVDisponible(m,session))),dates_peremption_reference:m.dates_peremption||[],peremptions_controle:session.controles[z.id]?.[m.id]?.peremptions_controle||[],materiel_id:m.id,nom:m.nom,quantite:m.quantite,quantite_constatee:session.controles[z.id]?.[m.id]?.quantite_constatee??quantiteVSAVDisponible(m,session),etat_reference:m.etat_reference,etat:session.controles[z.id]?.[m.id]?.etat||null,observation:[session.controles[z.id]?.[m.id]?.observation||"",...(session.controles[z.id]?.[m.id]?.controle_unites?.length?[]:(session.controles[z.id]?.[m.id]?.peremptions_controle||[])).filter(p=>p.action==="absente").map(p=>"Unité "+p.unite+" absente — péremption de référence "+p.initiale.split("-").reverse().join("/")+" (non contrôlée)"),...(session.controles[z.id]?.[m.id]?.controle_unites?.length?[]:(session.controles[z.id]?.[m.id]?.peremptions_controle||[])).filter(p=>p.action!=="absente").map(p=>"Péremption unité "+p.unite+" : "+p.date.split("-").reverse().join("/")+(p.date===p.initiale?" (confirmée)":" (modifiée, avant : "+p.initiale.split("-").reverse().join("/")+")"))].filter(Boolean).join("\n")}))}))};
   payload.details.push(CISTechnique.zone(session.technique||{}),CISTechnique.zoneAnnexe(session.annexe||{}));
-   payload.id=session.envoiId||genererUUID();
+   payload.id=session.repriseEnvoiId||session.envoiId||genererUUID();
    payload.created_at=session.envoiCreeLe||new Date().toISOString();
+   if(session.repriseEnvoiId)CISSynchronisationFiable.remplacerApresRecontrole(session.repriseEnvoiId,payload);
+   else CISSynchronisationFiable.ajouterInventaire(payload);
    session.envoiId=payload.id;session.envoiCreeLe=payload.created_at;
-   CISSynchronisationFiable.ajouterInventaire(payload);
    CISSynchronisationFiable.afficher('Synchronisation de l’inventaire véhicule…');
    const confirme=await CISSynchronisationFiable.synchroniserInventaires();
    CISSynchronisationFiable.masquer();
