@@ -42,7 +42,7 @@ function sauvegarder() {
  try{localStorage.setItem(cle(owner),JSON.stringify({etats,demandes}));}catch(_){}
 }
 function taches(type) {
- if(type==="pharmacie")return union(etats.hopital,etats.stock,utilisateurAPermission("acces_administration")?union(etats.rearmement,etats.surveillance,etats.complementaire):[]);
+ if(type==="pharmacie")return union(etats.hopital,utilisateurAPermission("acces_administration")?etats.stock:[],utilisateurAPermission("acces_administration")?union(etats.rearmement,etats.surveillance,etats.complementaire):[]);
  if(type==="suivi")return etats.hopital;
  if(type==="vsav")return utilisateurAPermission("acces_administration")?union(etats.rearmement,etats.surveillance,etats.complementaire):[];
  if(type==="equipe")return etats.formation;
@@ -83,7 +83,7 @@ function dessiner() {
   // A pseudo-element keeps the existing title/description children intact.
   Array.from(element.children).filter(n=>n.classList.contains("cis-compteur-bulle")).forEach(n=>n.remove());
   const type=cible(element);
-  const nombre=type&&owner?taches(type).length:0;
+  const nombre=type&&owner?(type==="stock"&&!utilisateurAPermission("acces_administration")?0:taches(type).length):0;
   if(!nombre){
    element.classList.remove("cis-compteur-support");
    element.removeAttribute("data-compteur-nombre");
@@ -131,12 +131,12 @@ function referencesStockEnAlerte(materiels,consommations) {
 }
 function stockLocal() {
  if(typeof profilUtilisateurConnecte!=="undefined"&&String(profilUtilisateurConnecte?.id||"")!==uid())return null;
- if(!utilisateurAPermission("acces_historique"))return [];
+ if(!utilisateurAPermission("acces_historique")||!utilisateurAPermission("acces_administration"))return [];
  if(typeof materiels==="undefined"||!materiels.length||typeof historique==="undefined")return null;
  return referencesStockEnAlerte(materiels,historique.flatMap(i=>i.consommations||[]));
 }
 async function stock() {
- if(!utilisateurAPermission("acces_historique"))return [];
+ if(!utilisateurAPermission("acces_historique")||!utilisateurAPermission("acces_administration"))return [];
  const local=stockLocal();
  if(local!==null)return local;
  const [materiels,consommations]=await Promise.all([
@@ -180,7 +180,7 @@ async function actualiser(forcer=false) {
  const compte=owner;
  if(!compte)return;
  if(!navigator.onLine){
-  if(utilisateurAPermission("acces_historique")&&typeof materiels!=="undefined"&&materiels.length){
+  if(utilisateurAPermission("acces_historique")&&utilisateurAPermission("acces_administration")&&typeof materiels!=="undefined"&&materiels.length){
    if(typeof historique!=="undefined")
     etats.stock=referencesStockEnAlerte(materiels,historique.flatMap(i=>i.consommations||[]));
    sauvegarder();dessiner();
