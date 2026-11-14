@@ -7640,9 +7640,9 @@ async function envoyerDonneesLocalesVersSupabase() {
         autoriser_depassement_stock: materiel.autoriser_depassement_stock === true,
             inventaire_vsav_materiel_id: materiel.inventaire_vsav_materiel_id || null,
         autres_inventaire_vsav_materiel_ids: Array.isArray(materiel.autres_inventaire_vsav_materiel_ids) ? materiel.autres_inventaire_vsav_materiel_ids : [],
-        peut_laisser_hopital: materiel.peut_laisser_hopital === true,
+        // Champ géré par les modifications explicites de fiche : ne pas écraser depuis le cache local.
         masquer_inventaire: materiel.masquer_inventaire === true,
-        mots_cles: lireMotsClesMateriel(materiel.mots_cles),
+        // Les mots-clés ne doivent pas être remplacés par une copie locale obsolète.
         suivi_niveau: materiel.suivi_niveau === true,
             minimum: Math.max(0, Math.floor(Number(materiel.minimum || 0))),
             emplacement: String(materiel.emplacement || ""),
