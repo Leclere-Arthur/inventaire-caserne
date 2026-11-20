@@ -2,7 +2,7 @@
 importScripts("./notifications-history.js?v=pharmacie-vsav-prod-20261030-v1");
 
 // Nouvelle version : force le renouvellement du cache applicatif sans effacer les données locales.
-const CACHE_NAME = "cis-stock-bulles-admin-v2";
+const CACHE_NAME = "cis-caserne-pdf-unifie-v1";
 const FICHIERS_APPLICATION = [
  "./preavis-peremption.js?v=1",
  "./inventaires-en-attente.js?v=2",

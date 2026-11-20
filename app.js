@@ -9256,6 +9256,37 @@ async function exporterPublicationCasernePDF(publicationId, modeMail=false) {
     }
 }
 
+// Présentation commune aux fiches Événement/Sport de l'Espace Caserne.
+// Ne modifie pas les données, les filtres ni le contenu des exports.
+function couleurPDFCaserne() {
+    return {
+        principal:[36,61,83], sombre:[29,52,72], clair:[242,246,249],
+        texte:[29,52,72], gris:[110,119,130], ligne:[220,226,232], blanc:[255,255,255]
+    };
+}
+function ajouterEntetePDFCaserne(doc, titre, sousTitre="") {
+    const c=couleurPDFCaserne();
+    doc.setFont("helvetica","bold");doc.setTextColor(...c.texte);doc.setFontSize(10);
+    doc.text("CIS LE CHESNE",14,19);
+    doc.setFontSize(8);doc.text("ENTRETIENS INDIVIDUELS",196,19,{align:"right"});
+    doc.setDrawColor(...c.ligne);doc.line(14,24,196,24);
+    doc.setFontSize(15);doc.setTextColor(...c.texte);
+    const lignes=doc.splitTextToSize(texteCompatiblePDF(titre),182);
+    doc.text(lignes,14,34);
+    const y=34+(lignes.length-1)*6;
+    if(sousTitre){doc.setFont("helvetica","normal");doc.setFontSize(9);doc.setTextColor(...c.gris);doc.text(texteCompatiblePDF(sousTitre),14,y+7);}
+    return y+(sousTitre?15:8);
+}
+function ajouterPiedDePagePDFCaserne(doc) {
+    const c=couleurPDFCaserne(),pages=doc.getNumberOfPages();
+    for(let page=1;page<=pages;page++){
+        doc.setPage(page);doc.setDrawColor(...c.ligne);doc.line(14,282,196,282);
+        doc.setFont("helvetica","normal");doc.setFontSize(7);doc.setTextColor(...c.gris);
+        doc.text("CIS LE CHESNE | DOCUMENT DE SUIVI",14,288);
+        doc.text(`Page ${page} / ${pages}`,196,288,{align:"right"});
+    }
+}
+
 async function exporterEntretienPDF(entretienId, modeMail=false) {
     if (!utilisateurEstSPVAdmin() && !utilisateurAPermission("acces_entretien_individuel_admin")) {
         alert("Export PDF réservé aux administrateurs.");
@@ -9289,8 +9320,8 @@ async function exporterEntretienPDF(entretienId, modeMail=false) {
 
         const jsPDF = await obtenirBibliothequesPDF();
         const doc = new jsPDF({orientation:"portrait", unit:"mm", format:"a4"});
-        const c = couleurPDF();
-        let y = ajouterEntetePDF(doc, titreEntretien.toUpperCase(), "Rendez-vous réservés pour ce planning");
+        const c = couleurPDFCaserne();
+        let y = ajouterEntetePDFCaserne(doc, titreEntretien.toUpperCase(), "Rendez-vous réservés pour ce planning");
         const groupes = new Map();
         triees.forEach(r => {
             const d = new Date(r.date_heure);
@@ -9302,7 +9333,7 @@ async function exporterEntretienPDF(entretienId, modeMail=false) {
         for (const lignes of groupes.values()) {
             if (y > 248) {
                 doc.addPage();
-                y = ajouterEntetePDF(doc, titreEntretien.toUpperCase(), "Suite du planning");
+                y = ajouterEntetePDFCaserne(doc, titreEntretien.toUpperCase(), "Suite du planning");
             }
             const premier = new Date(lignes[0].date_heure);
             const libelleJour = premier.toLocaleDateString("fr-FR", {weekday:"long", day:"2-digit", month:"long", year:"numeric"});
@@ -9331,7 +9362,7 @@ async function exporterEntretienPDF(entretienId, modeMail=false) {
             });
             y = doc.lastAutoTable.finalY + 8;
         }
-        ajouterPiedDePagePDF(doc);
+        ajouterPiedDePagePDFCaserne(doc);
         if(modeMail)return pieceJointeDocumentMail(doc.output("blob"), nomFichierPDF(`entretien-${titreEntretien}`));
         await enregistrerPDFSansApercuNavigateur(doc, nomFichierPDF(`entretien-${titreEntretien}`));
     } catch (erreur) {
@@ -9356,8 +9387,8 @@ async function exporterEntretiensPDF( modeMail=false) {
 
         const jsPDF = await obtenirBibliothequesPDF();
         const doc = new jsPDF({orientation:"portrait", unit:"mm", format:"a4"});
-        const c = couleurPDF();
-        let y = ajouterEntetePDF(doc, "PLANNING DES ENTRETIENS", "Liste chronologique des rendez-vous reserves");
+        const c = couleurPDFCaserne();
+        let y = ajouterEntetePDFCaserne(doc, "PLANNING DES ENTRETIENS", "Liste chronologique des rendez-vous reserves");
 
         const groupes = new Map();
         triees.forEach(function(r) {
@@ -9370,7 +9401,7 @@ async function exporterEntretiensPDF( modeMail=false) {
         for (const [jour, lignes] of groupes.entries()) {
             if (y > 248) {
                 doc.addPage();
-                y = ajouterEntetePDF(doc, "PLANNING DES ENTRETIENS", "Suite du planning");
+                y = ajouterEntetePDFCaserne(doc, "PLANNING DES ENTRETIENS", "Suite du planning");
             }
             const premier = new Date(lignes[0].date_heure);
             const libelleJour = premier.toLocaleDateString("fr-FR", {weekday:"long", day:"2-digit", month:"long", year:"numeric"});
@@ -9402,7 +9433,7 @@ async function exporterEntretiensPDF( modeMail=false) {
             y = doc.lastAutoTable.finalY + 8;
         }
 
-        ajouterPiedDePagePDF(doc);
+        ajouterPiedDePagePDFCaserne(doc);
         if(modeMail)return pieceJointeDocumentMail(doc.output("blob"), nomFichierPDF("planning-entretiens"));
         await enregistrerPDFSansApercuNavigateur(doc, nomFichierPDF("planning-entretiens"));
     } catch (erreur) {
