@@ -51,11 +51,13 @@ window.CISControleVLHR={
   // Annexe 21 : identité dans la cellule de GAUCHE du document (x 43 à 176 px),
   // signature manuscrite exclusivement dans la cellule de DROITE (x 709 à 1150 px).
   // Coordonnées A4 paysage : 4 pixels du modèle = 1 mm.
-  const identite=[d.signature||'',d.grade||'',d.qualite||''].filter(Boolean);
-  doc.setFont('helvetica','normal');doc.setFontSize(5.8);doc.setTextColor(0,0,0);
-  const lignesIdentite=[];
-  identite.forEach(t=>doc.splitTextToSize(String(t),30).forEach(l=>lignesIdentite.push(l)));
-  doc.text(lignesIdentite.slice(0,3),44,187.8,{lineHeightFactor:1.05});
+  // Une seule ligne en gras dans la case d'identité, à gauche du document.
+  const identite=[d.signature,d.grade,d.qualite].map(v=>String(v||'').trim()).filter(Boolean).join('  —  ');
+  doc.setFont('helvetica','bold');doc.setTextColor(0,0,0);
+  let tailleIdentite=7.3;
+  doc.setFontSize(tailleIdentite);
+  while(tailleIdentite>4.5 && doc.getTextWidth(identite)>127){tailleIdentite-=0.2;doc.setFontSize(tailleIdentite);}
+  doc.text(identite,44,189.4,{maxWidth:127});
   // Image contenue dans la zone de signature, sans étirement ni débordement.
   if(d.signature_png && /^data:image\/(png|jpeg);base64,/.test(d.signature_png)){
    try{
@@ -64,7 +66,7 @@ window.CISControleVLHR={
     const maxW=43,maxH=8.2,ratio=prop.width/prop.height;
     const iw=Math.min(maxW,maxH*ratio),ih=iw/ratio;
     // Zone signature de la colonne droite, à droite du libellé « Signature : ».
-    const x=228+(maxW-iw)/2,y=185.4+(maxH-ih)/2;
+    const x=282-iw,y=192.8-ih;
     doc.addImage(d.signature_png,type,x,y,iw,ih,undefined,'FAST');
    }catch(e){console.warn('Signature illisible',e);}
   }
@@ -88,7 +90,7 @@ window.CISControleVLHR.ouvrir=function(id){
  const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
  const today=new Date(),date=[today.getFullYear(),String(today.getMonth()+1).padStart(2,'0'),String(today.getDate()).padStart(2,'0')].join('-');
  const rows=this.points.map(([k,t])=>`<section class="veh-card"><strong>${esc(t)}</strong><div class="veh-etat"><label><input type="radio" name="ct-${k}" value="ok"> OK</label><label><input type="radio" name="ct-${k}" value="non"> Non</label></div><input class="veh-note" id="ct-obs-${k}" placeholder="Observation / action menée (facultatif)"></section>`).join('');
- vehInventaireAfficher(`<div class="veh-inventaire-contenu"><button class="retour-button veh-retour" onclick="vehInventaireOuvrirVehicule('${esc(id)}')">← Retour</button><h1>Contrôle technique — VLHR</h1><p>Annexe 21 — seule la colonne droite sera renseignée.</p><label>Date du contrôle <input id="ct-date" type="date" value="${date}"></label><label>SIS appartenance <input id="ct-sis" class="veh-note" value="SDIS 08"></label><label>Immatriculation <input id="ct-immat" class="veh-note" value="BV-136-SH" placeholder="Immatriculation du VLHR"></label>${rows}<label>Observations générales<textarea id="ct-observations" class="veh-note"></textarea></label><label>Nom et prénom du vérificateur<input id="ct-signature" class="veh-note" value="${esc([typeof profilUtilisateurConnecte!=='undefined'?profilUtilisateurConnecte?.prenom:null,typeof profilUtilisateurConnecte!=='undefined'?profilUtilisateurConnecte?.nom:null].filter(Boolean).join(' '))}"></label><label>Grade<input id="ct-grade" class="veh-note" placeholder="Grade"></label><label>Qualité<input id="ct-qualite" class="veh-note" placeholder="Qualité / fonction"></label><button id="ct-save" class="veh-action" onclick="CISControleVLHR.enregistrer('${esc(id)}')">Enregistrer le contrôle technique</button><p id="ct-status" role="status"></p><div id="ct-actions" hidden><button class="veh-action" onclick="CISControleVLHR.telecharger()">Télécharger le PDF officiel</button><button class="veh-action" onclick="CISControleVLHR.envoyer()">Me l'envoyer par mail</button></div></div>`);
+ vehInventaireAfficher(`<div class="veh-inventaire-contenu"><button class="retour-button veh-retour" onclick="vehInventaireOuvrirVehicule('${esc(id)}')">← Retour</button><h1>Contrôle technique — VLHR</h1><p>Annexe 21 — seule la colonne droite sera renseignée.</p><label>Date du contrôle <input id="ct-date" type="date" value="${date}"></label><label>SIS appartenance <input id="ct-sis" class="veh-note" value="SDIS 08"></label><label>Immatriculation <input id="ct-immat" class="veh-note" value="BV-136-SH" placeholder="Immatriculation du VLHR"></label>${rows}<label>Observations générales<textarea id="ct-observations" class="veh-note"></textarea></label><label>Nom et prénom du vérificateur<input id="ct-signature" class="veh-note" value="${esc([typeof profilUtilisateurConnecte!=='undefined'?profilUtilisateurConnecte?.prenom:null,typeof profilUtilisateurConnecte!=='undefined'?profilUtilisateurConnecte?.nom:null].filter(Boolean).join(' '))}"></label><label>Grade<input id="ct-grade" class="veh-note" placeholder="Grade"></label><label>Qualité<input id="ct-qualite" class="veh-note" placeholder="Qualité / fonction"></label><button id="ct-save" class="veh-action" style="margin-top:16px" onclick="CISControleVLHR.enregistrer('${esc(id)}')">Enregistrer le contrôle technique</button><p id="ct-status" role="status"></p><div id="ct-actions" hidden style="margin-top:16px"><button class="veh-action" style="margin-top:12px" onclick="CISControleVLHR.telecharger()">Télécharger le PDF officiel</button><button class="veh-action" style="margin-top:12px" onclick="CISControleVLHR.envoyer()">Me l'envoyer par mail</button></div></div>`);
 };
 window.CISControleVLHR.enregistrer=async function(id){
  const $=x=>document.getElementById(x),status=$('ct-status'),btn=$('ct-save');if(!btn||btn.disabled)return;

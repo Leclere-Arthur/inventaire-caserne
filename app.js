@@ -24157,7 +24157,7 @@ async function afficherChoixPDFEquipe(type){
   // Les contrôles techniques sont conservés dans leur table dédiée, mais présentés comme des inventaires.
   const {data:ctRows,error:ctError}=await sb.from('cis_controles_techniques_vlhr').select('*').order('date_controle',{ascending:false}).limit(500);
   if(ctError)throw Error('Chargement des contrôles techniques : '+ctError.message);
-  const controles=(ctRows||[]).map(r=>({...r,_controleTechniqueVLHR:true,created_at:r.date_controle||r.date_creation,vehicule_nom:r.vehicule_nom||'VLHR',numero_ctech:'CTECH-'+String(r.id).replace(/-/g,'').slice(0,8).toUpperCase()}));
+  const controles=(ctRows||[]).map(r=>({...r,_controleTechniqueVLHR:true,created_at:r.date_creation||r.date_controle,vehicule_nom:r.vehicule_nom||'VLHR',numero_ctech:'CTECH-'+String(r.id).replace(/-/g,'').slice(0,8).toUpperCase()}));
   records.push(...controles);
   records.sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
   if(!form.isConnected)return;choixInventairesPDFEquipe=records;
