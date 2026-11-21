@@ -1,8 +1,8 @@
 /* Annexe 21 : modèle officiel inchangé, saisie exclusivement sur la colonne droite. */
 window.CISControleVLHR={
  points:[['radio','Contrôle de la radio'],['tons','Contrôle du 2 Tons'],['gyro','Contrôle Gyrophare et Feux de pénétration'],['joint','Joint de porte et visualisation poignée'],['vitres','Fermeture complète des vitres et état du pare-brise'],['toit','Présence numéro de toit'],['extincteur','Présence Extincteur'],['masques','Masques de fuite (2)'],['pression','Pression des pneumatiques'],['roues','État des Roues']],
- estControle(r){return Array.isArray(r?.details)&&r.details.some(x=>x.type==='controle_technique_vlhr');},
- donnees(r){return r.details.find(x=>x.type==='controle_technique_vlhr');},
+ estControle(r){return r?.type==='controle_technique_vlhr'||(Array.isArray(r?.details)&&r.details.some(x=>x.type==='controle_technique_vlhr'));},
+ donnees(r){return r?.type==='controle_technique_vlhr'?r:r?.details?.find(x=>x.type==='controle_technique_vlhr');},
  async pdf(r){
   const PDF=window.jspdf?.jsPDF;if(!PDF)throw Error('Bibliothèque PDF indisponible.');
   const image=await new Promise((resolve,reject)=>{const img=new Image();img.onload=()=>resolve(img);img.onerror=()=>reject(Error('Modèle officiel indisponible.'));img.src='./controle-technique-vlhr-modele.png';});
@@ -34,9 +34,19 @@ window.CISControleVLHR.enregistrer=async function(id){
  const details=[{type:'controle_technique_vlhr',date:$('ct-date').value,sis:$('ct-sis').value.trim(),immatriculation:$('ct-immat').value.trim(),observations:$('ct-observations').value.trim(),signature:$('ct-signature').value.trim(),reponses}];
  if(!details[0].date||!details[0].immatriculation){status.textContent='Date et immatriculation obligatoires.';return;}
  btn.disabled=true;status.textContent='Enregistrement en cours…';
- try{const sb=obtenirClientSupabase();const payload={id:crypto.randomUUID(),created_at:new Date().toISOString(),vehicule_id:id,vehicule_nom:v.nom,controle_par:profilUtilisateurConnecte?.id||utilisateurConnecte?.id,personnes_presentes:[{id:profilUtilisateurConnecte?.id||utilisateurConnecte?.id,nom:details[0].signature||"Vérificateur"}],details};
- const {error}=await sb.from('cis_inventaires_vehicules').insert(payload);if(error)throw error;
- this.dernier=payload;status.textContent='Contrôle enregistré. Le PDF peut être téléchargé ou envoyé par mail.';$('ct-actions').hidden=false;
+ try{
+  const sb=obtenirClientSupabase();
+  const userId=profilUtilisateurConnecte?.id||utilisateurConnecte?.id;
+  if(!userId)throw Error('Connecte-toi à nouveau pour enregistrer le contrôle.');
+  const d=details[0];
+  const payload={vehicule_id:String(id),vehicule_nom:v.nom,utilisateur_id:userId,
+   date_controle:d.date+'T12:00:00',sis_appartenance:d.sis,immatriculation:d.immatriculation,
+   controles:this.points.map(([cle,libelle])=>({cle,libelle,...d.reponses[cle]})),
+   observations:d.observations,verificateur_nom:d.signature,verificateur_grade:null};
+  const {data,error}=await sb.from('cis_controles_techniques_vlhr').insert(payload).select('*').single();
+  if(error)throw error;
+  this.dernier={...d,id:data.id,type:'controle_technique_vlhr',date:d.date};
+  status.textContent='Contrôle enregistré. Le PDF peut être téléchargé ou envoyé par mail.';$('ct-actions').hidden=false;
  }catch(e){status.textContent='Échec de l’enregistrement : '+e.message;btn.disabled=false;}
 };
 window.CISControleVLHR.telecharger=async function(){try{if(!this.dernier)throw Error('Enregistre d’abord le contrôle.');(await this.pdf(this.dernier)).save('controle-technique-VLHR-'+this.donnees(this.dernier).date+'.pdf');}catch(e){alert(e.message);}};
@@ -47,6 +57,7 @@ window.CISControleVLHR.envoyer=async function(){
  const doc=await this.pdf(this.dernier),base64=doc.output('datauristring').split(',')[1];
  const {data,error}=await appelerFonctionPrincipale(sb,'envoi-documents',{body:{request_id:crypto.randomUUID(),documents:[{name:'controle-technique-VLHR.pdf',filename:'controle-technique-VLHR.pdf',content:base64,type:'vehicules',rubrique:'Inventaires véhicules'}]}});
  if(error||!data?.ok)throw Error(data?.error||error?.message||'Envoi non confirmé.');
+ if(data.email && data.email.toLowerCase()!==email.toLowerCase())throw Error('Le service a confirmé un destinataire différent : '+data.email);
  alert('Document envoyé à '+email);
  }catch(e){alert('Envoi impossible : '+e.message);}
 };
