@@ -69,8 +69,17 @@ async function charger(onglet) {
  try {
   if(onglet==="rearmer") {
    const rows=await rpc("cis_suivi_rearmements_lire");
+   // Les manques issus des inventaires VSAV sont conservés dans une table
+   // distincte des réarmements d'intervention. Afficher les deux sources.
+   const sb=obtenirClientSupabase();
+   const complements=await sb.from('cis_vsav_suivi_complementaire')
+    .select('id,vehicule_nom,zone_nom,nom,nature,detail,date')
+    .eq('nature','manquant').is('resolu_at',null)
+    .order('date',{ascending:false}).limit(200);
    if(!box.isConnected||generation!==seq)return;
-   box.innerHTML='<h2>Matériel à réarmer</h2>'+((rows||[]).map(r=>`<article class="suivi-materiel-card"><h3>${esc(r.nom)}</h3><p>Intervention ${esc(r.numero)} · ${esc(r.restant)} unité(s) à remettre</p>${(r.emplacements_manquants||[]).filter(x=>!x.remis).map(x=>`<p>${esc(x.libelle)}${x.qr?" · QR "+esc(x.qr):""}</p>`).join("")}</article>`).join("")||"<p>Aucun réarmement en attente.</p>");
+   const classiques=(rows||[]).map(r=>`<article class="suivi-materiel-card"><h3>${esc(r.nom)}</h3><p>Intervention ${esc(r.numero)} · ${esc(r.restant)} unité(s) à remettre</p>${(r.emplacements_manquants||[]).filter(x=>!x.remis).map(x=>`<p>${esc(x.libelle)}${x.qr?" · QR "+esc(x.qr):""}</p>`).join("")}</article>`).join('');
+   const manquants=(complements.data||[]).map(r=>`<article class="suivi-materiel-card"><h3>${esc(r.nom)}</h3><p><strong>Manquant lors de l'inventaire</strong> · ${esc(r.vehicule_nom||'VSAV')} · ${esc(r.zone_nom||'')}</p><p>${esc(r.detail||'')}</p></article>`).join('');
+   box.innerHTML='<h2>Matériel à réarmer</h2>'+(classiques+manquants||'<p>Aucun réarmement en attente.</p>')+(complements.error?`<p role="alert">Impossible de charger les manques d’inventaire : ${esc(complements.error.message)}</p>`:'');
    if(utilisateurAPermission("acces_administration")) {
     const b=document.createElement("button");b.textContent="Effectuer un réarmement";b.onclick=()=>void ouvrirSuiviVSAVPharma();box.append(b);
    }

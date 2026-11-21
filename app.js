@@ -1065,6 +1065,10 @@ const CISSynchronisationFiable = (() => {
                             sauver(copies,id);
                         }
                         refus=true;
+                        // 23505 signifie que l'ID est déjà utilisé sur le serveur.
+                        // Une lecture RLS peut masquer la ligne : ne jamais effacer
+                        // la copie locale sur cette seule erreur.
+                        if(e?.code==='23505')console.warn('Inventaire probablement déjà enregistré, mais invisible pour ce compte. Vérifier la politique SELECT/RLS de cis_inventaires_vehicules pour cet utilisateur. ID :',ligne.id);
                         // Une validation refusée ne bloque pas les autres inventaires.
                         // Une panne réseau ou une session perdue interrompt l'envoi.
                         if(!e?.code||/^(08|28|PGRST30)/.test(e.code))throw e;
