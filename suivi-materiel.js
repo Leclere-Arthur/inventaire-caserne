@@ -68,21 +68,30 @@ async function charger(onglet) {
  box.textContent="Chargement…";box.setAttribute("role","tabpanel");
  try {
   if(onglet==="rearmer") {
-   const rows=await rpc("cis_suivi_rearmements_lire");
-   // Les manques issus des inventaires VSAV sont conservés dans une table
-   // distincte des réarmements d'intervention. Afficher les deux sources.
+   // Les deux sources sont independantes : une erreur sur les rearmements
+   // d'intervention ne doit jamais masquer les manques/HS du suivi VSAV.
    const sb=obtenirClientSupabase();
-   const complements=await sb.from('cis_vsav_suivi_complementaire')
-    .select('id,vehicule_nom,zone_nom,nom,nature,detail,date')
-    .eq('nature','manquant').is('resolu_at',null)
-    .order('date',{ascending:false}).limit(200);
+   const [classiquesResult,complementsResult]=await Promise.allSettled([
+    rpc("cis_suivi_rearmements_lire"),
+    sb.from("cis_vsav_suivi_complementaire")
+      .select("id,vehicule_nom,zone_nom,nom,nature,detail,date")
+      .is("resolu_at",null)
+      .in("nature",["manquant","hs"])
+      .order("date",{ascending:false}).limit(500)
+   ]);
    if(!box.isConnected||generation!==seq)return;
-   const classiques=(rows||[]).map(r=>`<article class="suivi-materiel-card"><h3>${esc(r.nom)}</h3><p>Intervention ${esc(r.numero)} · ${esc(r.restant)} unité(s) à remettre</p>${(r.emplacements_manquants||[]).filter(x=>!x.remis).map(x=>`<p>${esc(x.libelle)}${x.qr?" · QR "+esc(x.qr):""}</p>`).join("")}</article>`).join('');
-   const manquants=(complements.data||[]).map(r=>`<article class="suivi-materiel-card"><h3>${esc(r.nom)}</h3><p><strong>Manquant lors de l'inventaire</strong> · ${esc(r.vehicule_nom||'VSAV')} · ${esc(r.zone_nom||'')}</p><p>${esc(r.detail||'')}</p></article>`).join('');
-   box.innerHTML='<h2>Matériel à réarmer</h2>'+(classiques+manquants||'<p>Aucun réarmement en attente.</p>')+(complements.error?`<p role="alert">Impossible de charger les manques d’inventaire : ${esc(complements.error.message)}</p>`:'');
-   if(utilisateurAPermission("acces_administration")) {
-    const b=document.createElement("button");b.textContent="Effectuer un réarmement";b.onclick=()=>void ouvrirSuiviVSAVPharma();box.append(b);
-   }
+   const erreurs=[];
+   const rows=classiquesResult.status==="fulfilled" ? (classiquesResult.value||[]) : [];
+   if(classiquesResult.status==="rejected")erreurs.push("Réarmements d'intervention : "+classiquesResult.reason?.message);
+   const complement=complementsResult.status==="fulfilled" ? complementsResult.value : null;
+   if(complementsResult.status==="rejected")erreurs.push("Suivi VSAV : "+complementsResult.reason?.message);
+   if(complement?.error)erreurs.push("Suivi VSAV : "+complement.error.message);
+   const classiques=rows.map(r=>`<article class="suivi-materiel-card"><h3>${esc(r.nom)}</h3><p>Intervention ${esc(r.numero)} · ${esc(r.restant)} unité(s) à remettre</p>${(r.emplacements_manquants||[]).filter(x=>!x.remis).map(x=>`<p>${esc(x.libelle)}${x.qr?" · QR "+esc(x.qr):""}</p>`).join("")}</article>`).join("");
+   const manquants=(complement?.data||[]).map(r=>`<article class="suivi-materiel-card"><h3>${esc(r.nom)}</h3><p><strong>${r.nature==="hs"?"Hors service":"Manquant lors de l'inventaire"}</strong> · ${esc(r.vehicule_nom||"VSAV")}${r.zone_nom?" · "+esc(r.zone_nom):""}</p><p>${esc(r.detail||"")}</p></article>`).join("");
+   // Consultation seule, pour TOUS les comptes, administrateurs compris.
+   // Les actions de réarmement restent dans le Suivi VSAV administratif.
+   box.innerHTML="<h2>Matériel à réarmer</h2>"+(classiques+manquants||"<p>Aucun matériel à réarmer.</p>")+
+    erreurs.map(e=>`<p role="alert">${esc(e)}</p>`).join("");
    return;
   }
   if(onglet==="surveiller") {

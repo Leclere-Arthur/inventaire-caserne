@@ -1,8 +1,9 @@
+// VSAV read-only suivi update 2026-11-21
 "use strict";
 importScripts("./notifications-history.js?v=pharmacie-vsav-prod-20261030-v1");
 
 // Nouvelle version : force le renouvellement du cache applicatif sans effacer les données locales.
-const CACHE_NAME = "cis-vsav-manquants-20261121";
+const CACHE_NAME = "cis-vsav-readonly-v2-20261121";
 const FICHIERS_APPLICATION = [
  "./preavis-peremption.js?v=1",
  "./inventaires-en-attente.js?v=2",
@@ -11,7 +12,7 @@ const FICHIERS_APPLICATION = [
  "./caserne-annonces.js?v=1",
  "./recherche-clavier.js?v=1",
  "./compteurs-rubriques.js?v=stock-admin-v2",
- "./suivi-materiel.js?v=vsav-manquants-20261121",
+ "./suivi-materiel.js?v=vsav-readonly-v2-20261121",
  "./vsav-retour-emplacements.js?v=suivi-hopital",
  "./qr-tracabilite.js?v=inventaire-qr-niveaux","./qr-tracabilite.css?v=formulaires-listes-vsav",
  "./maintenance-client.js","./interface-personnelle.js?v=profil","./equipe-evolution.js",
