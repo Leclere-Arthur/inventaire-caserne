@@ -23541,7 +23541,7 @@ let inventairesAdminCache=[];
 const inventairesAdminDate=v=>{const d=new Date(v);return Number.isNaN(d.getTime())?'Date inconnue':d.toLocaleString('fr-FR')};
 const inventairesAdminZones=r=>Array.isArray(r.details)?r.details:[];
 const inventairesAdminMateriels=r=>inventairesAdminZones(r).flatMap(z=>Array.isArray(z.materiels)?z.materiels:[]);
-const inventairesAdminNom=r=>r.numero_inventaire!=null?'INV-'+String(r.numero_inventaire).padStart(6,'0'):'Inventaire '+String(r.id||'').slice(0,8);
+const inventairesAdminNom=r=>r._ctech?'CTECH-'+String(r.id).replace(/-/g,'').slice(0,8).toUpperCase():r.numero_inventaire!=null?'INV-'+String(r.numero_inventaire).padStart(6,'0'):'Inventaire '+String(r.id||'').slice(0,8);
 function inventairesAdminAuteur(r){
  const u=utilisateursEspaceGarde.find(x=>String(x.id)===String(r.controle_par));
  return u?([u.prenom,u.nom].filter(Boolean).join(' ')||u.identifiant):'Utilisateur non identifié';
@@ -23558,6 +23558,11 @@ async function afficherAdminInventairesEquipe(){
  if(!document.getElementById('admin-inventaires-chargement'))return;
  if(resultat.error){document.getElementById('admin-inventaires-chargement').textContent='Historique indisponible : '+resultat.error.message;return;}
  inventairesAdminCache=resultat.data||[];
+ // Les contrôles techniques ont leur propre table et ne sont pas des inventaires classiques.
+ const ctResult=await sb.from('cis_controles_techniques_vlhr').select('id,vehicule_nom,utilisateur_id,date_controle,date_creation,verificateur_nom').order('date_controle',{ascending:false}).limit(500);
+ if(ctResult.error){console.warn('Contrôles techniques VLHR indisponibles',ctResult.error);}
+ else inventairesAdminCache.push(...(ctResult.data||[]).map(r=>({...r,_ctech:true,controle_par:r.utilisateur_id,created_at:r.date_controle||r.date_creation,vehicule_nom:r.vehicule_nom||'VLHR'})));
+ inventairesAdminCache.sort((x,y)=>new Date(y.created_at)-new Date(x.created_at));
  if(!utilisateursEspaceGarde.length){try{utilisateursEspaceGarde=await chargerUtilisateursEspaceGarde();}catch(e){console.warn('Noms des contrôleurs indisponibles',e);}}
  if(!document.getElementById('admin-inventaires-chargement'))return;
  const vehicules=[...new Set(inventairesAdminCache.map(r=>r.vehicule_nom).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'fr'));
@@ -23590,14 +23595,19 @@ async function cartesInventairesProgressives(lot){
  if(!utilisateurAPermission('acces_admin_menage'))throw new Error('Accès non autorisé.');
  const sb=obtenirClientSupabase();if(!sb)throw new Error('Connexion indisponible.');
  // Les gros détails des coffres et du matériel sont lus pour ce lot uniquement.
- const {data,error}=await sb.from('cis_inventaires_vehicules').select('id,details').in('id',lot.map(r=>r.id));
+ const normaux=lot.filter(r=>!r._ctech);
+ const {data,error}=normaux.length?await sb.from('cis_inventaires_vehicules').select('id,details').in('id',normaux.map(r=>r.id)):{data:[],error:null};
  if(error)throw error;
  const parId=new Map((data||[]).map(r=>[String(r.id),r]));
- const lignes=lot.filter(r=>parId.has(String(r.id))).map(r=>({...r,...parId.get(String(r.id))}));
+ const lignes=lot.filter(r=>r._ctech||parId.has(String(r.id))).map(r=>r._ctech?r:({...r,...parId.get(String(r.id))}));
  const enrichies=new Map(lignes.map(r=>[String(r.id),r]));
  inventairesAdminCache=inventairesAdminCache.map(r=>enrichies.get(String(r.id))||r);
- return lignes.map(r=>{const materiels=inventairesAdminMateriels(r),bon=materiels.filter(m=>m.etat==='bon').length,surv=materiels.filter(m=>m.etat==='a_surveiller').length,hs=materiels.filter(m=>m.etat==='hs').length;return `<div class="garde-admin-card"><button type="button" onclick="afficherDetailInventaireAdminEquipe('${echapperHTML(String(r.id))}')"><strong>${echapperHTML(inventairesAdminNom(r))} · ${echapperHTML(r.vehicule_nom||'Véhicule')}</strong><br><small class="${classeDateMenage(r.created_at)}">${inventairesAdminDate(r.created_at)}</small> · <small>${echapperHTML(inventairesAdminAuteur(r))}</small><br><small>${inventairesAdminZones(r).length} zone(s) · ${bon} Bon · ${surv} À surveiller · ${hs} HS</small></button></div>`}).join('');
+ return lignes.map(r=>{if(r._ctech)return `<div class="garde-admin-card"><strong>${echapperHTML(inventairesAdminNom(r))} · ${echapperHTML(r.vehicule_nom||'VLHR')}</strong><br><small>${inventairesAdminDate(r.created_at)}</small> · <small>${echapperHTML(r.verificateur_nom||inventairesAdminAuteur(r))}</small><p><button type="button" class="equipe-action-button" onclick="telechargerCTECHInventaireAdmin('${echapperHTML(String(r.id))}')">Télécharger le PDF officiel</button></p></div>`;const materiels=inventairesAdminMateriels(r),bon=materiels.filter(m=>m.etat==='bon').length,surv=materiels.filter(m=>m.etat==='a_surveiller').length,hs=materiels.filter(m=>m.etat==='hs').length;return `<div class="garde-admin-card"><button type="button" onclick="afficherDetailInventaireAdminEquipe('${echapperHTML(String(r.id))}')"><strong>${echapperHTML(inventairesAdminNom(r))} · ${echapperHTML(r.vehicule_nom||'Véhicule')}</strong><br><small class="${classeDateMenage(r.created_at)}">${inventairesAdminDate(r.created_at)}</small> · <small>${echapperHTML(inventairesAdminAuteur(r))}</small><br><small>${inventairesAdminZones(r).length} zone(s) · ${bon} Bon · ${surv} À surveiller · ${hs} HS</small></button></div>`}).join('');
 }
+async function telechargerCTECHInventaireAdmin(id){
+ try{const sb=obtenirClientSupabase();const {data,error}=await sb.from('cis_controles_techniques_vlhr').select('*').eq('id',id).single();if(error)throw error;if(!window.CISControleVLHR)throw Error('Module de contrôle technique indisponible.');const doc=await CISControleVLHR.pdf(CISControleVLHR.depuisTable(data));doc.save('CTECH-'+String(id).replace(/-/g,'').slice(0,8).toUpperCase()+'-VLHR.pdf');}catch(e){alert('Téléchargement impossible : '+(e.message||e));}
+}
+window.telechargerCTECHInventaireAdmin=telechargerCTECHInventaireAdmin;
 function initialiserStyleEtatsInventaireAdmin(){
  if(document.getElementById('style-etats-inventaire-admin'))return;
  const style=document.createElement('style');style.id='style-etats-inventaire-admin';
