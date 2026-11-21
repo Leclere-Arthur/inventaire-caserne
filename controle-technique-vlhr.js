@@ -13,9 +13,9 @@ window.CISControleVLHR={
   // Coordonnées mesurées sur l'Annexe 21 A4 paysage (colonne droite uniquement).
   write(d.date?new Date(d.date+'T12:00:00').toLocaleDateString('fr-FR'):'',263,32,24,8);
   write(d.sis||'',263,42,24,8);write(d.immatriculation||'',263,52,24,8);
-  const rows=[65.3,69.5,74.3,82.1,88.2,94.2,98.2,115.5,168.4,174.5];
-  this.points.forEach(([key],i)=>{const a=d.reponses?.[key];if(!a)return;doc.setFont('helvetica','bold');doc.setFontSize(9);doc.text('X',a.etat==='ok'?214.5:221.4,rows[i]);if(a.observation)write(a.observation,264,rows[i],31,6);});
-  write(d.observations||'',43,182.5,240,7);write(d.signature||'',180,190.3,100,7);
+  const rows=[65.9,70.1,75.5,82.3,89.3,94.8,98.8,116.4,169.1,174.8];
+  this.points.forEach(([key],i)=>{const a=d.reponses?.[key];if(!a)return;doc.setFont('helvetica','bold');doc.setFontSize(9);doc.text('X',a.etat==='ok'?214.5:221.4,rows[i],{align:'center'});if(a.observation)write(a.observation,264,rows[i],31,6);});
+  write(d.observations||'',180,182.6,100,7);write(d.signature||'',195,190.2,90,7);
   return doc;
  }
 };
@@ -25,7 +25,7 @@ window.CISControleVLHR.ouvrir=function(id){
  const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
  const today=new Date(),date=[today.getFullYear(),String(today.getMonth()+1).padStart(2,'0'),String(today.getDate()).padStart(2,'0')].join('-');
  const rows=this.points.map(([k,t])=>`<section class="veh-card"><strong>${esc(t)}</strong><div class="veh-etat"><label><input type="radio" name="ct-${k}" value="ok"> OK</label><label><input type="radio" name="ct-${k}" value="non"> Non</label></div><input class="veh-note" id="ct-obs-${k}" placeholder="Observation / action menée (facultatif)"></section>`).join('');
- vehInventaireAfficher(`<div class="veh-inventaire-contenu"><button class="retour-button veh-retour" onclick="vehInventaireOuvrirVehicule('${esc(id)}')">← Retour</button><h1>Contrôle technique — VLHR</h1><p>Annexe 21 — seule la colonne droite sera renseignée.</p><label>Date du contrôle <input id="ct-date" type="date" value="${date}"></label><label>SIS appartenance <input id="ct-sis" class="veh-note" value="SDIS 08"></label><label>Immatriculation <input id="ct-immat" class="veh-note" placeholder="Immatriculation du VLHR"></label>${rows}<label>Observations générales<textarea id="ct-observations" class="veh-note"></textarea></label><label>Nom, prénom, grade et qualité du vérificateur<input id="ct-signature" class="veh-note"></label><button id="ct-save" class="veh-action" onclick="CISControleVLHR.enregistrer('${esc(id)}')">Enregistrer le contrôle technique</button><p id="ct-status" role="status"></p><div id="ct-actions" hidden><button class="veh-action" onclick="CISControleVLHR.telecharger()">Télécharger le PDF officiel</button><button class="veh-action" onclick="CISControleVLHR.envoyer()">Me l'envoyer par mail</button></div></div>`);
+ vehInventaireAfficher(`<div class="veh-inventaire-contenu"><button class="retour-button veh-retour" onclick="vehInventaireOuvrirVehicule('${esc(id)}')">← Retour</button><h1>Contrôle technique — VLHR</h1><p>Annexe 21 — seule la colonne droite sera renseignée.</p><label>Date du contrôle <input id="ct-date" type="date" value="${date}"></label><label>SIS appartenance <input id="ct-sis" class="veh-note" value="SDIS 08"></label><label>Immatriculation <input id="ct-immat" class="veh-note" value="BV-136-SH" placeholder="Immatriculation du VLHR"></label>${rows}<label>Observations générales<textarea id="ct-observations" class="veh-note"></textarea></label><label>Nom, prénom, grade et qualité du vérificateur<input id="ct-signature" class="veh-note"></label><button id="ct-save" class="veh-action" onclick="CISControleVLHR.enregistrer('${esc(id)}')">Enregistrer le contrôle technique</button><p id="ct-status" role="status"></p><div id="ct-actions" hidden><button class="veh-action" onclick="CISControleVLHR.telecharger()">Télécharger le PDF officiel</button><button class="veh-action" onclick="CISControleVLHR.envoyer()">Me l'envoyer par mail</button></div></div>`);
 };
 window.CISControleVLHR.enregistrer=async function(id){
  const $=x=>document.getElementById(x),status=$('ct-status'),btn=$('ct-save');if(!btn||btn.disabled)return;
