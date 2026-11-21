@@ -23542,10 +23542,10 @@ let inventairesAdminCache=[];
 const inventairesAdminDate=v=>{const d=new Date(v);return Number.isNaN(d.getTime())?'Date inconnue':d.toLocaleString('fr-FR')};
 const inventairesAdminZones=r=>Array.isArray(r.details)?r.details:[];
 const inventairesAdminMateriels=r=>inventairesAdminZones(r).flatMap(z=>Array.isArray(z.materiels)?z.materiels:[]);
-const inventairesAdminNom=r=>r.numero_inventaire!=null?'INV-'+String(r.numero_inventaire).padStart(6,'0'):'Inventaire '+String(r.id||'').slice(0,8);
+const inventairesAdminNom=r=>r._controleTechniqueVLHR?('CTECH-'+String(r.id).replace(/-/g,'').slice(0,8).toUpperCase()):r.numero_inventaire!=null?'INV-'+String(r.numero_inventaire).padStart(6,'0'):'Inventaire '+String(r.id||'').slice(0,8);
 function inventairesAdminAuteur(r){
  const u=utilisateursEspaceGarde.find(x=>String(x.id)===String(r.controle_par));
- return u?([u.prenom,u.nom].filter(Boolean).join(' ')||u.identifiant):'Utilisateur non identifié';
+ return u?([u.prenom,u.nom].filter(Boolean).join(' ')||u.identifiant):(r._controleTechniqueVLHR?r.verificateur_nom||'Vérificateur':'Utilisateur non identifié');
 }
 async function afficherAdminInventairesEquipe(){
  if(!utilisateurAPermission('acces_admin_menage')){alert('Accès non autorisé.');return;}
@@ -23559,6 +23559,11 @@ async function afficherAdminInventairesEquipe(){
  if(!document.getElementById('admin-inventaires-chargement'))return;
  if(resultat.error){document.getElementById('admin-inventaires-chargement').textContent='Historique indisponible : '+resultat.error.message;return;}
  inventairesAdminCache=resultat.data||[];
+ // Contrôles techniques stockés séparément : les afficher dans le même historique.
+ const {data:ctInventaires,error:ctErreur}=await sb.from('cis_controles_techniques_vlhr').select('id,vehicule_nom,utilisateur_id,verificateur_nom,date_creation,date_controle').order('date_creation',{ascending:false}).limit(500);
+ if(ctErreur)console.warn('Contrôles techniques non accessibles',ctErreur);
+ else inventairesAdminCache.push(...(ctInventaires||[]).map(r=>({...r,_controleTechniqueVLHR:true,controle_par:r.utilisateur_id,created_at:r.date_creation||r.date_controle,vehicule_nom:r.vehicule_nom||'VLHR'})));
+ inventairesAdminCache.sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
  if(!utilisateursEspaceGarde.length){try{utilisateursEspaceGarde=await chargerUtilisateursEspaceGarde();}catch(e){console.warn('Noms des contrôleurs indisponibles',e);}}
  if(!document.getElementById('admin-inventaires-chargement'))return;
  const vehicules=[...new Set(inventairesAdminCache.map(r=>r.vehicule_nom).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'fr'));
@@ -23591,13 +23596,14 @@ async function cartesInventairesProgressives(lot){
  if(!utilisateurAPermission('acces_admin_menage'))throw new Error('Accès non autorisé.');
  const sb=obtenirClientSupabase();if(!sb)throw new Error('Connexion indisponible.');
  // Les gros détails des coffres et du matériel sont lus pour ce lot uniquement.
- const {data,error}=await sb.from('cis_inventaires_vehicules').select('id,details').in('id',lot.map(r=>r.id));
+ const classiques=lot.filter(r=>!r._controleTechniqueVLHR);
+ const {data,error}=classiques.length?await sb.from('cis_inventaires_vehicules').select('id,details').in('id',classiques.map(r=>r.id)):{data:[],error:null};
  if(error)throw error;
  const parId=new Map((data||[]).map(r=>[String(r.id),r]));
- const lignes=lot.filter(r=>parId.has(String(r.id))).map(r=>({...r,...parId.get(String(r.id))}));
+ const lignes=lot.filter(r=>r._controleTechniqueVLHR||parId.has(String(r.id))).map(r=>r._controleTechniqueVLHR?r:({...r,...parId.get(String(r.id))}));
  const enrichies=new Map(lignes.map(r=>[String(r.id),r]));
  inventairesAdminCache=inventairesAdminCache.map(r=>enrichies.get(String(r.id))||r);
- return lignes.map(r=>{const materiels=inventairesAdminMateriels(r),bon=materiels.filter(m=>m.etat==='bon').length,surv=materiels.filter(m=>m.etat==='a_surveiller').length,hs=materiels.filter(m=>m.etat==='hs').length;return `<div class="garde-admin-card"><button type="button" onclick="afficherDetailInventaireAdminEquipe('${echapperHTML(String(r.id))}')"><strong>${echapperHTML(inventairesAdminNom(r))} · ${echapperHTML(r.vehicule_nom||'Véhicule')}</strong><br><small class="${classeDateMenage(r.created_at)}">${inventairesAdminDate(r.created_at)}</small> · <small>${echapperHTML(inventairesAdminAuteur(r))}</small><br><small>${inventairesAdminZones(r).length} zone(s) · ${bon} Bon · ${surv} À surveiller · ${hs} HS</small></button></div>`}).join('');
+ return lignes.map(r=>{if(r._controleTechniqueVLHR)return `<div class="garde-admin-card"><button type="button" onclick="afficherDetailInventaireAdminEquipe('${echapperHTML(String(r.id))}')"><strong>${echapperHTML(inventairesAdminNom(r))} · VLHR</strong><br><small>${inventairesAdminDate(r.created_at)}</small> · <small>${echapperHTML(inventairesAdminAuteur(r))}</small><br><small>Contrôle technique — Télécharger le PDF</small></button></div>`;const materiels=inventairesAdminMateriels(r),bon=materiels.filter(m=>m.etat==='bon').length,surv=materiels.filter(m=>m.etat==='a_surveiller').length,hs=materiels.filter(m=>m.etat==='hs').length;return `<div class="garde-admin-card"><button type="button" onclick="afficherDetailInventaireAdminEquipe('${echapperHTML(String(r.id))}')"><strong>${echapperHTML(inventairesAdminNom(r))} · ${echapperHTML(r.vehicule_nom||'Véhicule')}</strong><br><small class="${classeDateMenage(r.created_at)}">${inventairesAdminDate(r.created_at)}</small> · <small>${echapperHTML(inventairesAdminAuteur(r))}</small><br><small>${inventairesAdminZones(r).length} zone(s) · ${bon} Bon · ${surv} À surveiller · ${hs} HS</small></button></div>`}).join('');
 }
 function initialiserStyleEtatsInventaireAdmin(){
  if(document.getElementById('style-etats-inventaire-admin'))return;
@@ -23609,6 +23615,13 @@ function initialiserStyleEtatsInventaireAdmin(){
 async function afficherDetailInventaireAdminEquipe(id){
  if(!utilisateurAPermission('acces_admin_menage')){alert('Accès non autorisé.');return;}
  let r=inventairesAdminCache.find(x=>String(x.id)===String(id));
+ if(r?._controleTechniqueVLHR){
+  initialiserStyleEspaceGardeUtilisateur();
+  document.getElementById('app').innerHTML=`<main class="garde-section"><button class="retour-button" onclick="afficherAdminInventairesEquipe()">← Retour</button><h1>${echapperHTML(inventairesAdminNom(r))}</h1><div class="garde-admin-card"><strong>VLHR — Contrôle technique</strong><p>${inventairesAdminDate(r.created_at)}</p><p>${echapperHTML(inventairesAdminAuteur(r))}</p><button class="veh-action" id="ctech-admin-download">Télécharger le PDF officiel</button></div></main>${navigationPrincipale('','accueil')}`;
+  document.getElementById('ctech-admin-download').onclick=async()=>{try{const {data,error}=await obtenirClientSupabase().from('cis_controles_techniques_vlhr').select('*').eq('id',id).single();if(error)throw error;await CISControleVLHR.pdf(CISControleVLHR.depuisTable(data)).then(doc=>doc.save(inventairesAdminNom(r)+'-VLHR.pdf'));}catch(e){alert('PDF indisponible : '+(e.message||e));}};
+  actualiserInterfaceBureau();return;
+ }
+
  // Un retour du profil peut restaurer une carte dont le détail n'est plus en cache.
  if(!r||!Array.isArray(r.details)){
   try{
