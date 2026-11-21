@@ -47,7 +47,15 @@ window.CISControleVLHR={
   this.points.forEach(([key],i)=>{const a=d.reponses?.[key];if(!a)return;doc.setFont('helvetica','bold');doc.setFontSize(9);doc.text('X',a.etat==='ok'?214.5:221.4,rows[i],{align:'center'});if(a.observation)observationDansCase(a.observation,i);});
   // Si une observation est trop longue pour sa cellule, conserver son texte intégral en annexe.
 
-  write(d.observations||'',180,182.6,100,7);write(d.signature||'',195,190.2,90,7);
+  write(d.observations||'',180,182.6,100,7);
+  // Identité dans la case de gauche, signature manuscrite dans celle de droite.
+  const identite=[d.signature||'',d.grade||'',d.qualite||''].filter(Boolean).join(' — ');
+  doc.setFont('helvetica','normal');doc.setFontSize(6);
+  const lignesIdentite=doc.splitTextToSize(identite,65).slice(0,3);
+  doc.text(lignesIdentite,181,190);
+  if(d.signature_png && /^data:image\/(png|jpeg);base64,/.test(d.signature_png)){
+   try{doc.addImage(d.signature_png,d.signature_png.startsWith('data:image/png')?'PNG':'JPEG',255,185,36,12,undefined,'FAST');}catch(e){console.warn('Signature illisible',e);}
+  }
   if(detailsSupplementaires.length){
    doc.addPage();doc.setFont('helvetica','bold');doc.setFontSize(13);
    doc.text('Annexe au contrôle technique VLHR — observations complètes',15,18);
@@ -68,13 +76,13 @@ window.CISControleVLHR.ouvrir=function(id){
  const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
  const today=new Date(),date=[today.getFullYear(),String(today.getMonth()+1).padStart(2,'0'),String(today.getDate()).padStart(2,'0')].join('-');
  const rows=this.points.map(([k,t])=>`<section class="veh-card"><strong>${esc(t)}</strong><div class="veh-etat"><label><input type="radio" name="ct-${k}" value="ok"> OK</label><label><input type="radio" name="ct-${k}" value="non"> Non</label></div><input class="veh-note" id="ct-obs-${k}" placeholder="Observation / action menée (facultatif)"></section>`).join('');
- vehInventaireAfficher(`<div class="veh-inventaire-contenu"><button class="retour-button veh-retour" onclick="vehInventaireOuvrirVehicule('${esc(id)}')">← Retour</button><h1>Contrôle technique — VLHR</h1><p>Annexe 21 — seule la colonne droite sera renseignée.</p><label>Date du contrôle <input id="ct-date" type="date" value="${date}"></label><label>SIS appartenance <input id="ct-sis" class="veh-note" value="SDIS 08"></label><label>Immatriculation <input id="ct-immat" class="veh-note" value="BV-136-SH" placeholder="Immatriculation du VLHR"></label>${rows}<label>Observations générales<textarea id="ct-observations" class="veh-note"></textarea></label><label>Nom, prénom, grade et qualité du vérificateur<input id="ct-signature" class="veh-note"></label><button id="ct-save" class="veh-action" onclick="CISControleVLHR.enregistrer('${esc(id)}')">Enregistrer le contrôle technique</button><p id="ct-status" role="status"></p><div id="ct-actions" hidden><button class="veh-action" onclick="CISControleVLHR.telecharger()">Télécharger le PDF officiel</button><button class="veh-action" onclick="CISControleVLHR.envoyer()">Me l'envoyer par mail</button></div></div>`);
+ vehInventaireAfficher(`<div class="veh-inventaire-contenu"><button class="retour-button veh-retour" onclick="vehInventaireOuvrirVehicule('${esc(id)}')">← Retour</button><h1>Contrôle technique — VLHR</h1><p>Annexe 21 — seule la colonne droite sera renseignée.</p><label>Date du contrôle <input id="ct-date" type="date" value="${date}"></label><label>SIS appartenance <input id="ct-sis" class="veh-note" value="SDIS 08"></label><label>Immatriculation <input id="ct-immat" class="veh-note" value="BV-136-SH" placeholder="Immatriculation du VLHR"></label>${rows}<label>Observations générales<textarea id="ct-observations" class="veh-note"></textarea></label><label>Nom et prénom du vérificateur<input id="ct-signature" class="veh-note" value="${esc([typeof profilUtilisateurConnecte!=='undefined'?profilUtilisateurConnecte?.prenom:null,typeof profilUtilisateurConnecte!=='undefined'?profilUtilisateurConnecte?.nom:null].filter(Boolean).join(' '))}"></label><label>Grade<input id="ct-grade" class="veh-note" placeholder="Grade"></label><label>Qualité<input id="ct-qualite" class="veh-note" placeholder="Qualité / fonction"></label><button id="ct-save" class="veh-action" onclick="CISControleVLHR.enregistrer('${esc(id)}')">Enregistrer le contrôle technique</button><p id="ct-status" role="status"></p><div id="ct-actions" hidden><button class="veh-action" onclick="CISControleVLHR.telecharger()">Télécharger le PDF officiel</button><button class="veh-action" onclick="CISControleVLHR.envoyer()">Me l'envoyer par mail</button></div></div>`);
 };
 window.CISControleVLHR.enregistrer=async function(id){
  const $=x=>document.getElementById(x),status=$('ct-status'),btn=$('ct-save');if(!btn||btn.disabled)return;
  const reponses={};for(const [k,t] of this.points){const radio=document.querySelector(`input[name="ct-${k}"]:checked`);if(!radio){status.textContent='Complète le contrôle : '+t;return;}reponses[k]={etat:radio.value,observation:$('ct-obs-'+k).value.trim()};}
  const v=vehInventaireCatalogue.find(x=>String(x.id)===String(id));
- const details=[{type:'controle_technique_vlhr',date:$('ct-date').value,sis:$('ct-sis').value.trim(),immatriculation:$('ct-immat').value.trim(),observations:$('ct-observations').value.trim(),signature:$('ct-signature').value.trim(),reponses}];
+ const details=[{type:'controle_technique_vlhr',date:$('ct-date').value,sis:$('ct-sis').value.trim(),immatriculation:$('ct-immat').value.trim(),observations:$('ct-observations').value.trim(),signature:$('ct-signature').value.trim(),grade:$('ct-grade').value.trim(),qualite:$('ct-qualite').value.trim(),reponses}];
  if(!details[0].date||!details[0].immatriculation){status.textContent='Date et immatriculation obligatoires.';return;}
  btn.disabled=true;status.textContent='Enregistrement en cours…';
  try{
@@ -82,10 +90,15 @@ window.CISControleVLHR.enregistrer=async function(id){
   const userId=profilUtilisateurConnecte?.id||utilisateurConnecte?.id;
   if(!userId)throw Error('Connecte-toi à nouveau pour enregistrer le contrôle.');
   const d=details[0];
+  // Conserver une copie de la signature du profil au moment du contrôle.
+  const {data:signatureProfil,error:erreurSignature}=await sb.from('cis_signatures_spv').select('signature_png').eq('user_id',userId).maybeSingle();
+  if(erreurSignature)throw erreurSignature;
+  if(!signatureProfil?.signature_png)throw Error('Enregistre d’abord ta signature dans ton profil.');
+  d.signature_png=signatureProfil.signature_png;
   const payload={vehicule_id:String(id),vehicule_nom:v.nom,utilisateur_id:userId,
    date_controle:d.date+'T12:00:00',sis_appartenance:d.sis,immatriculation:d.immatriculation,
-   controles:this.points.map(([cle,libelle])=>({cle,libelle,...d.reponses[cle]})),
-   observations:d.observations,verificateur_nom:d.signature,verificateur_grade:null};
+   controles:[...this.points.map(([cle,libelle])=>({cle,libelle,...d.reponses[cle]})),{cle:'identite_signature',grade:d.grade,qualite:d.qualite,signature_png:d.signature_png}],
+   observations:d.observations,verificateur_nom:d.signature,verificateur_grade:d.grade};
   const {data,error}=await sb.from('cis_controles_techniques_vlhr').insert(payload).select('*').single();
   if(error)throw error;
   this.dernier={...d,id:data.id,type:'controle_technique_vlhr',date:d.date};
@@ -123,5 +136,5 @@ window.CISControleVLHR.chargerPDF=async function(){
 
 window.CISControleVLHR.depuisTable=function(r){
  const reponses={};for(const c of Array.isArray(r.controles)?r.controles:[]){if(c?.cle)reponses[c.cle]={etat:c.etat,observation:c.observation||''};}
- return {type:'controle_technique_vlhr',date:String(r.date_controle||'').slice(0,10),sis:r.sis_appartenance||'',immatriculation:r.immatriculation||'',observations:r.observations||'',signature:[r.verificateur_nom,r.verificateur_grade].filter(Boolean).join(' '),reponses};
+ return {type:'controle_technique_vlhr',date:String(r.date_controle||'').slice(0,10),sis:r.sis_appartenance||'',immatriculation:r.immatriculation||'',observations:r.observations||'',signature:r.verificateur_nom||'',grade:r.verificateur_grade||'',qualite:r.controles?.find(x=>x.cle==='identite_signature')?.qualite||'',signature_png:r.controles?.find(x=>x.cle==='identite_signature')?.signature_png||'',reponses};
 };
