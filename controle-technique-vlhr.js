@@ -34,7 +34,7 @@ window.CISControleVLHR.enregistrer=async function(id){
  const details=[{type:'controle_technique_vlhr',date:$('ct-date').value,sis:$('ct-sis').value.trim(),immatriculation:$('ct-immat').value.trim(),observations:$('ct-observations').value.trim(),signature:$('ct-signature').value.trim(),reponses}];
  if(!details[0].date||!details[0].immatriculation){status.textContent='Date et immatriculation obligatoires.';return;}
  btn.disabled=true;status.textContent='Enregistrement en cours…';
- try{const sb=obtenirClientSupabase();const payload={id:crypto.randomUUID(),created_at:new Date().toISOString(),vehicule_id:id,vehicule_nom:v.nom,controle_par:profilUtilisateurConnecte?.id||utilisateurConnecte?.id,personnes_presentes:1,details};
+ try{const sb=obtenirClientSupabase();const payload={id:crypto.randomUUID(),created_at:new Date().toISOString(),vehicule_id:id,vehicule_nom:v.nom,controle_par:profilUtilisateurConnecte?.id||utilisateurConnecte?.id,personnes_presentes:[{id:profilUtilisateurConnecte?.id||utilisateurConnecte?.id,nom:details[0].signature||"Vérificateur"}],details};
  const {error}=await sb.from('cis_inventaires_vehicules').insert(payload);if(error)throw error;
  this.dernier=payload;status.textContent='Contrôle enregistré. Le PDF peut être téléchargé ou envoyé par mail.';$('ct-actions').hidden=false;
  }catch(e){status.textContent='Échec de l’enregistrement : '+e.message;btn.disabled=false;}
