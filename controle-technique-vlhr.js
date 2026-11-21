@@ -4,7 +4,7 @@ window.CISControleVLHR={
  estControle(r){return r?.type==='controle_technique_vlhr'||(Array.isArray(r?.details)&&r.details.some(x=>x.type==='controle_technique_vlhr'));},
  donnees(r){return r?.type==='controle_technique_vlhr'?r:r?.details?.find(x=>x.type==='controle_technique_vlhr');},
  async pdf(r){
-  const PDF=window.jspdf?.jsPDF;if(!PDF)throw Error('Bibliothèque PDF indisponible.');
+  const PDF=await this.chargerPDF();
   const image=await new Promise((resolve,reject)=>{const img=new Image();img.onload=()=>resolve(img);img.onerror=()=>reject(Error('Modèle officiel indisponible.'));img.src='./controle-technique-vlhr-modele.png';});
   const doc=new PDF({orientation:'landscape',unit:'mm',format:'a4'}),d=this.donnees(r),w=297,h=210;
   doc.addImage(image,'PNG',0,0,w,h);
@@ -60,4 +60,20 @@ window.CISControleVLHR.envoyer=async function(){
  if(data.email && data.email.toLowerCase()!==email.toLowerCase())throw Error('Le service a confirmé un destinataire différent : '+data.email);
  alert('Document envoyé à '+email);
  }catch(e){alert('Envoi impossible : '+e.message);}
+};
+
+window.CISControleVLHR.chargerPDF=async function(){
+ if(window.jspdf?.jsPDF)return window.jspdf.jsPDF;
+ if(!this._chargementPDF){
+  this._chargementPDF=(async()=>{
+   for(const url of ['https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js','https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js']){
+    try{
+     await new Promise((resolve,reject)=>{const s=document.createElement('script');s.src=url;s.onload=resolve;s.onerror=()=>reject(Error('Chargement impossible'));document.head.appendChild(s);});
+     if(window.jspdf?.jsPDF)return window.jspdf.jsPDF;
+    }catch(e){console.warn('Bibliothèque PDF',e);}
+   }
+   throw Error('Bibliothèque PDF indisponible. Vérifie la connexion Internet et réessaie.');
+  })().finally(()=>{this._chargementPDF=null;});
+ }
+ return this._chargementPDF;
 };
