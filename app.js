@@ -9256,37 +9256,6 @@ async function exporterPublicationCasernePDF(publicationId, modeMail=false) {
     }
 }
 
-// Présentation commune aux fiches Événement/Sport de l'Espace Caserne.
-// Ne modifie pas les données, les filtres ni le contenu des exports.
-function couleurPDFCaserne() {
-    return {
-        principal:[36,61,83], sombre:[29,52,72], clair:[242,246,249],
-        texte:[29,52,72], gris:[110,119,130], ligne:[220,226,232], blanc:[255,255,255]
-    };
-}
-function ajouterEntetePDFCaserne(doc, titre, sousTitre="") {
-    const c=couleurPDFCaserne();
-    doc.setFont("helvetica","bold");doc.setTextColor(...c.texte);doc.setFontSize(10);
-    doc.text("CIS LE CHESNE",14,19);
-    doc.setFontSize(8);doc.text("ENTRETIENS INDIVIDUELS",196,19,{align:"right"});
-    doc.setDrawColor(...c.ligne);doc.line(14,24,196,24);
-    doc.setFontSize(15);doc.setTextColor(...c.texte);
-    const lignes=doc.splitTextToSize(texteCompatiblePDF(titre),182);
-    doc.text(lignes,14,34);
-    const y=34+(lignes.length-1)*6;
-    if(sousTitre){doc.setFont("helvetica","normal");doc.setFontSize(9);doc.setTextColor(...c.gris);doc.text(texteCompatiblePDF(sousTitre),14,y+7);}
-    return y+(sousTitre?15:8);
-}
-function ajouterPiedDePagePDFCaserne(doc) {
-    const c=couleurPDFCaserne(),pages=doc.getNumberOfPages();
-    for(let page=1;page<=pages;page++){
-        doc.setPage(page);doc.setDrawColor(...c.ligne);doc.line(14,282,196,282);
-        doc.setFont("helvetica","normal");doc.setFontSize(7);doc.setTextColor(...c.gris);
-        doc.text("CIS LE CHESNE | DOCUMENT DE SUIVI",14,288);
-        doc.text(`Page ${page} / ${pages}`,196,288,{align:"right"});
-    }
-}
-
 async function exporterEntretienPDF(entretienId, modeMail=false) {
     if (!utilisateurEstSPVAdmin() && !utilisateurAPermission("acces_entretien_individuel_admin")) {
         alert("Export PDF réservé aux administrateurs.");
@@ -9320,8 +9289,8 @@ async function exporterEntretienPDF(entretienId, modeMail=false) {
 
         const jsPDF = await obtenirBibliothequesPDF();
         const doc = new jsPDF({orientation:"portrait", unit:"mm", format:"a4"});
-        const c = couleurPDFCaserne();
-        let y = ajouterEntetePDFCaserne(doc, titreEntretien.toUpperCase(), "Rendez-vous réservés pour ce planning");
+        const c = couleurPDF();
+        let y = ajouterEntetePDF(doc, titreEntretien.toUpperCase(), "Rendez-vous réservés pour ce planning");
         const groupes = new Map();
         triees.forEach(r => {
             const d = new Date(r.date_heure);
@@ -9333,7 +9302,7 @@ async function exporterEntretienPDF(entretienId, modeMail=false) {
         for (const lignes of groupes.values()) {
             if (y > 248) {
                 doc.addPage();
-                y = ajouterEntetePDFCaserne(doc, titreEntretien.toUpperCase(), "Suite du planning");
+                y = ajouterEntetePDF(doc, titreEntretien.toUpperCase(), "Suite du planning");
             }
             const premier = new Date(lignes[0].date_heure);
             const libelleJour = premier.toLocaleDateString("fr-FR", {weekday:"long", day:"2-digit", month:"long", year:"numeric"});
@@ -9362,7 +9331,7 @@ async function exporterEntretienPDF(entretienId, modeMail=false) {
             });
             y = doc.lastAutoTable.finalY + 8;
         }
-        ajouterPiedDePagePDFCaserne(doc);
+        ajouterPiedDePagePDF(doc);
         if(modeMail)return pieceJointeDocumentMail(doc.output("blob"), nomFichierPDF(`entretien-${titreEntretien}`));
         await enregistrerPDFSansApercuNavigateur(doc, nomFichierPDF(`entretien-${titreEntretien}`));
     } catch (erreur) {
@@ -9387,8 +9356,8 @@ async function exporterEntretiensPDF( modeMail=false) {
 
         const jsPDF = await obtenirBibliothequesPDF();
         const doc = new jsPDF({orientation:"portrait", unit:"mm", format:"a4"});
-        const c = couleurPDFCaserne();
-        let y = ajouterEntetePDFCaserne(doc, "PLANNING DES ENTRETIENS", "Liste chronologique des rendez-vous reserves");
+        const c = couleurPDF();
+        let y = ajouterEntetePDF(doc, "PLANNING DES ENTRETIENS", "Liste chronologique des rendez-vous reserves");
 
         const groupes = new Map();
         triees.forEach(function(r) {
@@ -9401,7 +9370,7 @@ async function exporterEntretiensPDF( modeMail=false) {
         for (const [jour, lignes] of groupes.entries()) {
             if (y > 248) {
                 doc.addPage();
-                y = ajouterEntetePDFCaserne(doc, "PLANNING DES ENTRETIENS", "Suite du planning");
+                y = ajouterEntetePDF(doc, "PLANNING DES ENTRETIENS", "Suite du planning");
             }
             const premier = new Date(lignes[0].date_heure);
             const libelleJour = premier.toLocaleDateString("fr-FR", {weekday:"long", day:"2-digit", month:"long", year:"numeric"});
@@ -9433,7 +9402,7 @@ async function exporterEntretiensPDF( modeMail=false) {
             y = doc.lastAutoTable.finalY + 8;
         }
 
-        ajouterPiedDePagePDFCaserne(doc);
+        ajouterPiedDePagePDF(doc);
         if(modeMail)return pieceJointeDocumentMail(doc.output("blob"), nomFichierPDF("planning-entretiens"));
         await enregistrerPDFSansApercuNavigateur(doc, nomFichierPDF("planning-entretiens"));
     } catch (erreur) {
@@ -22876,7 +22845,7 @@ async function afficherInventaireVehiculeEspaceGarde(){
 }
 async function vehInventaireOuvrirVehicule(id){
  const v=vehInventaireCatalogue.find(x=>x.id===id);if(!v)return;
- vehInventaireAfficher(`<button class="retour-button veh-retour" onclick="afficherInventaireVehiculeEspaceGarde()">← Véhicules</button><h1>${vehInventaireHTML(v.nom)}</h1><div class="veh-card"><p>Contrôler chaque coffre et son matériel, puis terminer l'enregistrement.</p><button class="veh-action" onclick="vehInventaireCommencer('${v.id}')">Réaliser l'inventaire</button>${/VLHR/i.test(v.nom+" "+(v.code||""))?`<button class="veh-action" style="margin-top:12px" onclick="CISControleVLHR.ouvrir('${v.id}')">Réaliser le contrôle technique</button>`:""}</div>`);
+ vehInventaireAfficher(`<button class="retour-button veh-retour" onclick="afficherInventaireVehiculeEspaceGarde()">← Véhicules</button><h1>${vehInventaireHTML(v.nom)}</h1><div class="veh-card"><p>Contrôler chaque coffre et son matériel, puis terminer l'enregistrement.</p><button class="veh-action" onclick="vehInventaireCommencer('${v.id}')">Réaliser l'inventaire</button></div>`);
 }
 async function vehInventaireCommencer(id){
  const v=vehInventaireCatalogue.find(x=>x.id===id);if(!v)return;
@@ -24184,6 +24153,12 @@ async function afficherChoixPDFEquipe(type){
  try{
   const sb=obtenirClientSupabase();const records=[];
   for(let debut=0;;debut+=500){const {data,error}=await sb.from('cis_inventaires_vehicules').select('*').order('created_at',{ascending:false}).order('id').range(debut,debut+499);if(error)throw error;records.push(...(data||[]));if((data?.length||0)<500)break;}
+  // Les contrôles techniques sont conservés dans leur table dédiée, mais présentés comme des inventaires.
+  const {data:ctRows,error:ctError}=await sb.from('cis_controles_techniques_vlhr').select('*').order('date_controle',{ascending:false}).limit(500);
+  if(ctError)throw Error('Chargement des contrôles techniques : '+ctError.message);
+  const controles=(ctRows||[]).map(r=>({...r,_controleTechniqueVLHR:true,created_at:r.date_controle||r.date_creation,vehicule_nom:r.vehicule_nom||'VLHR',numero_ctech:'CTECH-'+String(r.id).replace(/-/g,'').slice(0,8).toUpperCase()}));
+  records.push(...controles);
+  records.sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
   if(!form.isConnected)return;choixInventairesPDFEquipe=records;
   const vehicules=[...new Set(records.map(r=>r.vehicule_nom||'Véhicule non renseigné'))].sort((a,b)=>a.localeCompare(b,'fr'));
   form.innerHTML=records.length?`<label>Véhicule<select id="equipe-pdf-vehicule" onchange="actualiserInventairesPDFEquipe()"><option value="">Sélectionner un véhicule</option>${vehicules.map(v=>`<option value="${echapperHTML(v)}">${echapperHTML(v)}</option>`).join('')}</select></label><label>Inventaire enregistré<select id="equipe-pdf-inventaire" disabled onchange="document.getElementById('equipe-pdf-telecharger').disabled=!this.value"><option value="">Sélectionner d’abord un véhicule</option></select></label><button type="button" id="equipe-pdf-telecharger" class="equipe-action-button" disabled onclick="telechargerInventairePDFSelectionne()">Télécharger cet inventaire</button>`:'Aucun inventaire enregistré.';
@@ -24192,12 +24167,29 @@ async function afficherChoixPDFEquipe(type){
 function actualiserInventairesPDFEquipe(){
  const v=document.getElementById('equipe-pdf-vehicule')?.value,select=document.getElementById('equipe-pdf-inventaire'),btn=document.getElementById('equipe-pdf-telecharger');if(!select||!btn)return;
  const rows=v?choixInventairesPDFEquipe.filter(r=>(r.vehicule_nom||'Véhicule non renseigné')===v):[];
- select.innerHTML='<option value="">Sélectionner un inventaire</option>'+rows.map(r=>`<option value="${echapperHTML(String(r.id))}">${echapperHTML(inventairesAdminNom(r)+' — '+new Date(r.created_at).toLocaleString('fr-FR'))}</option>`).join('');select.disabled=!rows.length;btn.disabled=true;
+ select.innerHTML='<option value="">Sélectionner un inventaire</option>'+rows.map(r=>`<option value="${echapperHTML(String(r.id))}">${echapperHTML((r._controleTechniqueVLHR?r.numero_ctech:inventairesAdminNom(r))+' — '+new Date(r.created_at).toLocaleString('fr-FR'))}</option>`).join('');select.disabled=!rows.length;btn.disabled=true;
 }
 function telechargerInventairePDFSelectionne(){
  const id=document.getElementById('equipe-pdf-inventaire')?.value,v=document.getElementById('equipe-pdf-vehicule')?.value;
  if(!id||!choixInventairesPDFEquipe.some(r=>String(r.id)===id&&(r.vehicule_nom||'Véhicule non renseigné')===v))return alert('Sélectionne un véhicule et un inventaire.');
+ const ct=choixInventairesPDFEquipe.find(r=>String(r.id)===id&&r._controleTechniqueVLHR);
+ if(ct)return telechargerControleTechniqueEquipe(ct);
  return exporterEquipePDF('vehicules',id);
+}
+async function telechargerControleTechniqueEquipe(r){
+ const statut=document.getElementById('equipe-pdf-statut');
+ const estApple=/iPad|iPhone|iPod/.test(navigator.userAgent)||(/Macintosh/.test(navigator.userAgent)&&navigator.maxTouchPoints>1);
+ const apercu=estApple?window.open('about:blank','_blank'):null;
+ try{
+  if(!window.CISControleVLHR?.depuisTable)throw Error('Module de contrôle technique indisponible.');
+  if(statut)statut.textContent='Création du PDF officiel…';
+  const donnees=window.CISControleVLHR.depuisTable(r);
+  const doc=await window.CISControleVLHR.pdf(donnees);
+  const nom=(r.numero_ctech||'CTECH')+'-VLHR.pdf';
+  if(estApple){const blob=doc.output('blob');const url=URL.createObjectURL(blob);if(apercu)apercu.location.href=url;else window.open(url,'_blank');setTimeout(()=>URL.revokeObjectURL(url),120000);}
+  else doc.save(nom);
+  if(statut)statut.textContent='Document '+nom+' prêt.';
+ }catch(e){if(apercu)apercu.close();if(statut)statut.textContent='Erreur PDF : '+e.message;alert('Téléchargement impossible : '+e.message);}
 }
 function basculerPeriodePDFEquipe(){
  const custom=document.getElementById('equipe-pdf-mode')?.value==='custom';

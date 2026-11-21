@@ -77,3 +77,8 @@ window.CISControleVLHR.chargerPDF=async function(){
  }
  return this._chargementPDF;
 };
+
+window.CISControleVLHR.depuisTable=function(r){
+ const reponses={};for(const c of Array.isArray(r.controles)?r.controles:[]){if(c?.cle)reponses[c.cle]={etat:c.etat,observation:c.observation||''};}
+ return {type:'controle_technique_vlhr',date:String(r.date_controle||'').slice(0,10),sis:r.sis_appartenance||'',immatriculation:r.immatriculation||'',observations:r.observations||'',signature:[r.verificateur_nom,r.verificateur_grade].filter(Boolean).join(' '),reponses};
+};
