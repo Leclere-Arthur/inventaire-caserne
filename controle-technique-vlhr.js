@@ -1,0 +1,52 @@
+/* Annexe 21 : modèle officiel inchangé, saisie exclusivement sur la colonne droite. */
+window.CISControleVLHR={
+ points:[['radio','Contrôle de la radio'],['tons','Contrôle du 2 Tons'],['gyro','Contrôle Gyrophare et Feux de pénétration'],['joint','Joint de porte et visualisation poignée'],['vitres','Fermeture complète des vitres et état du pare-brise'],['toit','Présence numéro de toit'],['extincteur','Présence Extincteur'],['masques','Masques de fuite (2)'],['pression','Pression des pneumatiques'],['roues','État des Roues']],
+ estControle(r){return Array.isArray(r?.details)&&r.details.some(x=>x.type==='controle_technique_vlhr');},
+ donnees(r){return r.details.find(x=>x.type==='controle_technique_vlhr');},
+ async pdf(r){
+  const PDF=window.jspdf?.jsPDF;if(!PDF)throw Error('Bibliothèque PDF indisponible.');
+  const image=await new Promise((resolve,reject)=>{const img=new Image();img.onload=()=>resolve(img);img.onerror=()=>reject(Error('Modèle officiel indisponible.'));img.src='./controle-technique-vlhr-modele.png';});
+  const doc=new PDF({orientation:'landscape',unit:'mm',format:'a4'}),d=this.donnees(r),w=297,h=210;
+  doc.addImage(image,'PNG',0,0,w,h);
+  const val=v=>String(v||'').replace(/[\r\n]+/g,' ').trim();
+  const write=(s,x,y,max=25,size=7)=>{doc.setFont('helvetica','normal');doc.setFontSize(size);doc.setTextColor(0,0,0);doc.text(doc.splitTextToSize(val(s),max).slice(0,2),x,y);};
+  // Coordonnées mesurées sur l'Annexe 21 A4 paysage (colonne droite uniquement).
+  write(d.date?new Date(d.date+'T12:00:00').toLocaleDateString('fr-FR'):'',263,32,24,8);
+  write(d.sis||'',263,42,24,8);write(d.immatriculation||'',263,52,24,8);
+  const rows=[65.3,69.5,74.3,80.6,88.2,94.2,98.2,116.5,174.5,179.5];
+  this.points.forEach(([key],i)=>{const a=d.reponses?.[key];if(!a)return;doc.setFont('helvetica','bold');doc.setFontSize(9);doc.text('X',a.etat==='ok'?220.3:227.4,rows[i]);if(a.observation)write(a.observation,264,rows[i],31,6);});
+  write(d.observations||'',180,187.2,108,7);write(d.signature||'',182,201.2,80,7);
+  return doc;
+ }
+};
+
+window.CISControleVLHR.ouvrir=function(id){
+ const v=(typeof vehInventaireCatalogue!=="undefined"?vehInventaireCatalogue:[]).find(x=>String(x.id)===String(id));if(!v)return;
+ const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+ const today=new Date(),date=[today.getFullYear(),String(today.getMonth()+1).padStart(2,'0'),String(today.getDate()).padStart(2,'0')].join('-');
+ const rows=this.points.map(([k,t])=>`<section class="veh-card"><strong>${esc(t)}</strong><div class="veh-etat"><label><input type="radio" name="ct-${k}" value="ok"> OK</label><label><input type="radio" name="ct-${k}" value="non"> Non</label></div><input class="veh-note" id="ct-obs-${k}" placeholder="Observation / action menée (facultatif)"></section>`).join('');
+ vehInventaireAfficher(`<div class="veh-inventaire-contenu"><button class="retour-button veh-retour" onclick="vehInventaireOuvrirVehicule('${esc(id)}')">← Retour</button><h1>Contrôle technique — VLHR</h1><p>Annexe 21 — seule la colonne droite sera renseignée.</p><label>Date du contrôle <input id="ct-date" type="date" value="${date}"></label><label>SIS appartenance <input id="ct-sis" class="veh-note" value="SDIS 08"></label><label>Immatriculation <input id="ct-immat" class="veh-note" placeholder="Immatriculation du VLHR"></label>${rows}<label>Observations générales<textarea id="ct-observations" class="veh-note"></textarea></label><label>Nom, prénom, grade et qualité du vérificateur<input id="ct-signature" class="veh-note"></label><button id="ct-save" class="veh-action" onclick="CISControleVLHR.enregistrer('${esc(id)}')">Enregistrer le contrôle technique</button><p id="ct-status" role="status"></p><div id="ct-actions" hidden><button class="veh-action" onclick="CISControleVLHR.telecharger()">Télécharger le PDF officiel</button><button class="veh-action" onclick="CISControleVLHR.envoyer()">Me l'envoyer par mail</button></div></div>`);
+};
+window.CISControleVLHR.enregistrer=async function(id){
+ const $=x=>document.getElementById(x),status=$('ct-status'),btn=$('ct-save');if(!btn||btn.disabled)return;
+ const reponses={};for(const [k,t] of this.points){const radio=document.querySelector(`input[name="ct-${k}"]:checked`);if(!radio){status.textContent='Complète le contrôle : '+t;return;}reponses[k]={etat:radio.value,observation:$('ct-obs-'+k).value.trim()};}
+ const v=vehInventaireCatalogue.find(x=>String(x.id)===String(id));
+ const details=[{type:'controle_technique_vlhr',date:$('ct-date').value,sis:$('ct-sis').value.trim(),immatriculation:$('ct-immat').value.trim(),observations:$('ct-observations').value.trim(),signature:$('ct-signature').value.trim(),reponses}];
+ if(!details[0].date||!details[0].immatriculation){status.textContent='Date et immatriculation obligatoires.';return;}
+ btn.disabled=true;status.textContent='Enregistrement en cours…';
+ try{const sb=obtenirClientSupabase();const payload={id:crypto.randomUUID(),created_at:new Date().toISOString(),vehicule_id:id,vehicule_nom:v.nom,controle_par:profilUtilisateurConnecte?.id||utilisateurConnecte?.id,personnes_presentes:1,details};
+ const {error}=await sb.from('cis_inventaires_vehicules').insert(payload);if(error)throw error;
+ this.dernier=payload;status.textContent='Contrôle enregistré. Le PDF peut être téléchargé ou envoyé par mail.';$('ct-actions').hidden=false;
+ }catch(e){status.textContent='Échec de l’enregistrement : '+e.message;btn.disabled=false;}
+};
+window.CISControleVLHR.telecharger=async function(){try{if(!this.dernier)throw Error('Enregistre d’abord le contrôle.');(await this.pdf(this.dernier)).save('controle-technique-VLHR-'+this.donnees(this.dernier).date+'.pdf');}catch(e){alert(e.message);}};
+window.CISControleVLHR.envoyer=async function(){
+ try{if(!this.dernier)throw Error('Enregistre d’abord le contrôle.');
+ const sb=obtenirClientSupabase();const {data:profil,error:pe}=await sb.from('profils_utilisateurs').select('email_contact').eq('id',utilisateurConnecte.id).single();if(pe)throw pe;
+ const email=String(profil?.email_contact||'').trim();if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))throw Error('Adresse mail absente du profil.');
+ const doc=await this.pdf(this.dernier),base64=doc.output('datauristring').split(',')[1];
+ const {data,error}=await appelerFonctionPrincipale(sb,'envoi-documents',{body:{request_id:crypto.randomUUID(),documents:[{name:'controle-technique-VLHR.pdf',filename:'controle-technique-VLHR.pdf',content:base64,type:'vehicules',rubrique:'Inventaires véhicules'}]}});
+ if(error||!data?.ok)throw Error(data?.error||error?.message||'Envoi non confirmé.');
+ alert('Document envoyé à '+email);
+ }catch(e){alert('Envoi impossible : '+e.message);}
+};

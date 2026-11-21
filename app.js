@@ -22876,7 +22876,7 @@ async function afficherInventaireVehiculeEspaceGarde(){
 }
 async function vehInventaireOuvrirVehicule(id){
  const v=vehInventaireCatalogue.find(x=>x.id===id);if(!v)return;
- vehInventaireAfficher(`<button class="retour-button veh-retour" onclick="afficherInventaireVehiculeEspaceGarde()">← Véhicules</button><h1>${vehInventaireHTML(v.nom)}</h1><div class="veh-card"><p>Contrôler chaque coffre et son matériel, puis terminer l'enregistrement.</p><button class="veh-action" onclick="vehInventaireCommencer('${v.id}')">Réaliser l'inventaire</button></div>`);
+ vehInventaireAfficher(`<button class="retour-button veh-retour" onclick="afficherInventaireVehiculeEspaceGarde()">← Véhicules</button><h1>${vehInventaireHTML(v.nom)}</h1><div class="veh-card"><p>Contrôler chaque coffre et son matériel, puis terminer l'enregistrement.</p><button class="veh-action" onclick="vehInventaireCommencer('${v.id}')">Réaliser l'inventaire</button>${/VLHR/i.test(v.nom+" "+(v.code||""))?`<button class="veh-action" style="margin-top:12px" onclick="CISControleVLHR.ouvrir('${v.id}')">Réaliser le contrôle technique</button>`:""}</div>`);
 }
 async function vehInventaireCommencer(id){
  const v=vehInventaireCatalogue.find(x=>x.id===id);if(!v)return;
